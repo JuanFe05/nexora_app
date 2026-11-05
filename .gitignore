@@ -1,4 +1,20 @@
-# Python-generated files
+# ---------------------------------------------------------------------------
+# Secretos y configuracion local
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials.json
+service-account*.json
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
 __pycache__/
 *.py[oc]
 build/
@@ -6,8 +22,71 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
+# Entornos virtuales
 .venv
+venv/
 
-# Local environment
-.env
+# Cachés de herramientas
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# ---------------------------------------------------------------------------
+# Agentes de IA: configuracion local, sesiones, historiales y cachés
+# ---------------------------------------------------------------------------
+.pi/
+.atl/
+.gentle/
+.gentle-ai/
+.claude/
+CLAUDE.local.md
+.cursor/
+.codex/
+.gemini/
+.windsurf/
+.codeium/
+.qwen/
+.kiro/
+.trae/
+.continue/
+.aider*
+.agents/
+.config/agents/
+
+# Copilot: solo la configuracion privada, nunca .github/ completo
+.github/copilot-instructions.local.md
+.github/instructions.local/
+.copilot/
+
+# Engram: memoria y bases locales
+.engram/
+engram.db
+*.engram.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# ---------------------------------------------------------------------------
+# Sistema operativo y editores
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
+
+# ---------------------------------------------------------------------------
+# Temporales y artefactos locales
+# ---------------------------------------------------------------------------
+tmp/
+temp/
+*.log
+*.bak
+*.orig

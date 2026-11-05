@@ -9,13 +9,26 @@ Monolito modular en Python 3.14 con FastAPI, SQLAlchemy 2.x asincrono, PostgreSQ
 
 ## Puesta en marcha
 
+Todo el stack en contenedores (desde la raiz del repositorio):
+
+```bash
+cp .env.template .env
+docker compose up -d --build   # postgres -> migrate -> api
+```
+
+Desarrollo con recarga en caliente, con la base en Docker y la API local:
+
 ```bash
 cd backend
-uv sync --all-groups          # instala dependencias
-docker compose up -d          # PostgreSQL de desarrollo (5434) y de pruebas (5433)
-uv run alembic upgrade head   # aplica las migraciones
-uv run python main.py         # API en http://127.0.0.1:8000 (OpenAPI en /docs)
+uv sync --all-groups                      # instala dependencias
+(cd .. && docker compose up -d postgres)  # PostgreSQL de desarrollo en el puerto 5434
+uv run alembic upgrade head               # aplica las migraciones
+uv run python main.py                     # API en http://127.0.0.1:8000 (OpenAPI en /docs)
 ```
+
+La imagen (`backend/Dockerfile`) es multi-stage: instala las dependencias desde `uv.lock` con uv
+y ejecuta la API con el usuario sin privilegios `nexora`. La configuracion llega siempre por
+variables de entorno, nunca horneada en la imagen.
 
 ## Calidad
 
@@ -26,12 +39,41 @@ uv run ruff format src tests  # formato
 uv run mypy                   # tipado estatico
 ```
 
-Las pruebas de integracion necesitan el contenedor `postgres-test` (puerto 5433) y aplican las
-migraciones desde una base vacia en cada ejecucion.
+Las pruebas de integracion necesitan el contenedor `postgres-test` (puerto 5433), que vive bajo
+un profile para no levantarse en produccion:
+
+```bash
+(cd .. && docker compose --profile test up -d postgres-test)
+```
+
+Aplican las migraciones desde una base vacia en cada ejecucion. La conexion sale de
+`NEXORA_TEST_DATABASE_URL`: primero la variable de entorno (lo que usa CI) y, si no esta, el
+`.env` de la raiz.
 
 ## Variables de entorno
 
-Todas usan el prefijo `NEXORA_` y pueden definirse en `backend/.env` (no versionado).
+La plantilla completa es `.env.template` en la raiz; se copia a `.env` (no versionado), que leen
+tanto Docker Compose como Pydantic Settings. Las variables de la aplicacion usan el prefijo
+`NEXORA_`; las de infraestructura configuran el compose.
+
+### Infraestructura (Docker Compose)
+
+| Variable | Valor por defecto | Descripcion |
+| --- | --- | --- |
+| `POSTGRES_USER` | `nexora` | Usuario de PostgreSQL |
+| `POSTGRES_PASSWORD` | — (obligatoria) | Clave de PostgreSQL |
+| `POSTGRES_DB` | `nexora` | Base de datos de la aplicacion |
+| `POSTGRES_TEST_DB` | `nexora_test` | Base de datos de pruebas |
+| `POSTGRES_HOST_PORT` | `5434` | Puerto publicado de la base (en produccion, `127.0.0.1:5434` o ninguno) |
+| `POSTGRES_TEST_HOST_PORT` | `5433` | Puerto publicado de la base de pruebas |
+| `API_HOST_PORT` | `8000` | Puerto publicado de la API |
+| `API_WORKERS` | `1` | Procesos de uvicorn (en produccion, segun CPU) |
+| `RESTART_POLICY` | `unless-stopped` | Politica de reinicio de los servicios |
+| `NEXORA_IMAGE_TAG` | `local` | Etiqueta de la imagen del backend |
+
+### Aplicacion
+
+Todas usan el prefijo `NEXORA_`.
 
 | Variable | Valor por defecto | Descripcion |
 | --- | --- | --- |
