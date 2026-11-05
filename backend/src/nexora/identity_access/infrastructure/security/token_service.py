@@ -6,6 +6,7 @@ El algoritmo se toma siempre de la configuracion, nunca del encabezado del token
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID, uuid4
 
 import jwt
@@ -37,19 +38,19 @@ class JwtTokenService:
     def decode_access_token(self, token: str) -> AccessTokenClaims:
         payload = self._decode(token, ACCESS_TOKEN_TYPE)
         return AccessTokenClaims(
-            user_id=UUID(payload["sub"]),
-            session_id=UUID(payload["sid"]),
-            token_id=UUID(payload["jti"]),
-            expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
+            user_id=UUID(str(payload["sub"])),
+            session_id=UUID(str(payload["sid"])),
+            token_id=UUID(str(payload["jti"])),
+            expires_at=datetime.fromtimestamp(float(payload["exp"]), tz=UTC),
         )
 
     def decode_refresh_token(self, token: str) -> RefreshTokenClaims:
         payload = self._decode(token, REFRESH_TOKEN_TYPE)
         return RefreshTokenClaims(
-            user_id=UUID(payload["sub"]),
-            session_id=UUID(payload["sid"]),
-            token_id=UUID(payload["jti"]),
-            expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
+            user_id=UUID(str(payload["sub"])),
+            session_id=UUID(str(payload["sid"])),
+            token_id=UUID(str(payload["jti"])),
+            expires_at=datetime.fromtimestamp(float(payload["exp"]), tz=UTC),
         )
 
     def _issue(
@@ -79,7 +80,7 @@ class JwtTokenService:
         )
         return IssuedToken(value=value, token_id=token_id, expires_at=expires_at)
 
-    def _decode(self, token: str, expected_type: str) -> dict[str, object]:
+    def _decode(self, token: str, expected_type: str) -> dict[str, Any]:
         try:
             payload = jwt.decode(
                 token,
@@ -94,7 +95,4 @@ class JwtTokenService:
 
         if payload.get("token_type") != expected_type:
             raise InvalidToken("Tipo de token inesperado")
-        try:
-            return dict(payload)
-        except (TypeError, ValueError) as error:  # pragma: no cover - payload siempre es dict
-            raise InvalidToken from error
+        return dict(payload)

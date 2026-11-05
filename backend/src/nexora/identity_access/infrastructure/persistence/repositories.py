@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import CursorResult, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nexora.identity_access.domain.entities.session import Session
@@ -78,7 +79,7 @@ class SqlAlchemySessionRepository:
             )
             .values(refresh_token_jti=new_jti, expires_at=expires_at, last_activity_at=now)
         )
-        result = await self._session.execute(stmt)
+        result = cast("CursorResult[Any]", await self._session.execute(stmt))
         return bool(result.rowcount)
 
     async def revoke(self, session_id: UUID, now: datetime) -> None:

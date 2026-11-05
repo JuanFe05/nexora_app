@@ -27,26 +27,26 @@ def set_auth_cookies(
     refresh_expires_at: datetime,
     csrf_token: str,
 ) -> None:
-    common = {
-        "domain": settings.cookie_domain,
-        "secure": settings.cookie_secure,
-        "samesite": settings.cookie_samesite,
-        "path": settings.cookie_path,
-    }
     response.set_cookie(
         settings.refresh_cookie_name,
         refresh_token,
-        httponly=True,
         expires=refresh_expires_at,
-        **common,
+        path=settings.cookie_path,
+        domain=settings.cookie_domain,
+        secure=settings.cookie_secure,
+        httponly=True,
+        samesite=settings.cookie_samesite,
     )
     # El front necesita leer el token CSRF para reenviarlo por cabecera: no puede ser HttpOnly.
     response.set_cookie(
         settings.csrf_cookie_name,
         csrf_token,
-        httponly=False,
         expires=refresh_expires_at,
-        **common,
+        path=settings.cookie_path,
+        domain=settings.cookie_domain,
+        secure=settings.cookie_secure,
+        httponly=False,
+        samesite=settings.cookie_samesite,
     )
 
 

@@ -64,16 +64,18 @@ Rama: `feature/develop`. Estado: en implementacion.
 
 ## Tasks
 
-| ID | Specs | Ruta | Commit |
-| --- | --- | --- | --- |
-| T1 | S1, S2 | inline | |
-| T2 | S3, S4, S11, S12 | inline | |
-| T3 | S2, S8, S13 | inline | |
-| T4 | S1, S5, S6, S11 | inline | |
-| T5 | S8, S9, S13 | inline | |
-| T6 | S5, S6, S7, S9, S13 | inline | |
-| T7 | S4, S10, S14 | inline | |
-| T8 | S12, S13 | inline | |
+| ID | Specs | Ruta | Commit | Estado |
+| --- | --- | --- | --- | --- |
+| T1 Base del backend | S1, S2 | inline | `31c7b4e` | hecho |
+| T2 Esquema iam + Alembic | S3, S4, S11, S12 | inline | `d3064b6` | hecho |
+| T3 Dominio, puertos y LoginUseCase | S2, S8, S13 | inline | `c197a0a` | hecho |
+| T4 Infraestructura (repos, Argon2id, JWT) | S1, S5, S6, S11 | inline | `88f2316` | hecho |
+| T5/T6a Casos de uso refresh/logout/me | S5, S6, S7, S13 | inline | `7df54cd` | hecho |
+| T5/T6b Endpoints HTTP y CSRF | S8, S9, S10, S13 | inline | `c89842f` | hecho |
+| T7/T8 Documentacion y verificacion final | S12, S13, S14 | inline | pendiente de commit | hecho |
+
+Cada fila es una rebanada de trabajo revisable y commiteada por separado en `feature/develop`.
+Push, pull request y merge quedan como decision del usuario.
 
 ## Log
 
@@ -88,6 +90,10 @@ Rama: `feature/develop`. Estado: en implementacion.
   correo, sin `create_all()`, sin abstracciones por formalismo.
 - **L2** Fase 2 aprobada por el usuario con la respuesta "dale con tus recomendaciones", fijando las
   cuatro decisiones de S15.
+- **L4** Verificacion final: 85 pruebas en verde (unitarias, de integracion y de API contra
+  PostgreSQL real), `ruff check`/`ruff format --check` limpios, `mypy` estricto sin errores,
+  migracion verificada desde base vacia y en ciclo upgrade/downgrade/upgrade, OpenAPI generado
+  con las cuatro rutas de `/api/v1/auth` y sin filtrar `hash_contrasena` ni `refresh_token_jti`.
 - **L3** Exploracion Fase 1: repositorio greenfield, sin `AGENTS.md`, sin dependencias en
   `pyproject.toml`/`uv.lock`, sin FastAPI/SQLAlchemy/Alembic, sin `bootstrap`, `shared_kernel` ni
   `audit`, `identity_access` solo con carpetas vacias no versionadas. Engram no disponible

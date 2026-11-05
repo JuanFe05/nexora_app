@@ -1,0 +1,38 @@
+# Modulo identity_access (IAM)
+
+Contexto acotado de identidad y acceso de NEXORA: usuarios, credenciales, roles, permisos,
+asignaciones y sesiones. Esta primera entrega implementa el flujo vertical de autenticacion.
+
+## Documentos
+
+- [arquitectura.md](arquitectura.md): capas, dependencias y decisiones.
+- [modelo-datos.md](modelo-datos.md): las seis tablas del esquema `iam` y sus reglas.
+- [flujos-autenticacion.md](flujos-autenticacion.md): login, refresh, logout y `me`.
+- [contratos-api.md](contratos-api.md): endpoints, entradas y salidas.
+- [seguridad.md](seguridad.md): controles aplicados y limitaciones conocidas.
+
+## Requisitos funcionales cubiertos
+
+| Requisito | Estado |
+| --- | --- |
+| Login con `nombre_usuario` o `correo` | Implementado |
+| Error generico ante credenciales invalidas | Implementado |
+| Usuario inactivo no puede autenticarse | Implementado |
+| Access token JWT de 10 minutos (configurable) | Implementado |
+| Refresh token de 7 dias en cookie HttpOnly (configurable) | Implementado |
+| Rotacion atomica del refresh token | Implementado |
+| Deteccion de reutilizacion y revocacion de la sesion | Implementado |
+| Revocacion inmediata verificada por `sid` en cada request | Implementado |
+| Permisos efectivos por union de roles activos | Implementado |
+| `require_permission` reutilizable | Implementado |
+| Limitacion de intentos de login | Implementado (en memoria del proceso) |
+| CRUD de usuarios, roles y permisos | Fuera de alcance de esta entrega |
+| Restablecimiento administrativo supervisado | Fuera de alcance de esta entrega |
+
+## Requisitos no funcionales
+
+- Monolito modular: `identity_access` no expone su infraestructura a otros modulos; el unico
+  punto de entrada externo es su router y, a futuro, sus casos de uso.
+- Persistencia asincrona de punta a punta (SQLAlchemy 2.x + psycopg async).
+- El esquema evoluciona solo con Alembic; nunca con `create_all()`.
+- Sin datos reales de pacientes ni credenciales personales en pruebas.
