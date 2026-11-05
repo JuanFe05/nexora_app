@@ -9,11 +9,13 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
 from alembic.config import Config
+from dotenv import dotenv_values
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
@@ -24,10 +26,24 @@ from nexora.bootstrap.app import create_app
 from nexora.bootstrap.settings import Settings
 from nexora.identity_access.infrastructure.security.password_hasher import Argon2PasswordHasher
 
-TEST_DATABASE_URL = os.getenv(
-    "NEXORA_TEST_DATABASE_URL",
-    "postgresql+psycopg://nexora:nexora@localhost:5433/nexora_test",
-)
+#: El .env de la raiz es la fuente de configuracion local; la variable de entorno lo sobreescribe
+#: (es lo que usa CI). El valor por defecto solo cubre un arranque sin configurar.
+_ROOT_ENV = Path(__file__).resolve().parents[2].parent / ".env"
+_DEFAULT_TEST_DATABASE_URL = "postgresql+psycopg://nexora:nexora@localhost:5433/nexora_test"
+
+
+def _test_database_url() -> str:
+    from_environment = os.getenv("NEXORA_TEST_DATABASE_URL")
+    if from_environment:
+        return from_environment
+    if _ROOT_ENV.exists():
+        from_file = dotenv_values(_ROOT_ENV).get("NEXORA_TEST_DATABASE_URL")
+        if from_file:
+            return from_file
+    return _DEFAULT_TEST_DATABASE_URL
+
+
+TEST_DATABASE_URL = _test_database_url()
 PASSWORD = "Secreta123*"
 ORIGIN = "http://localhost:5173"
 

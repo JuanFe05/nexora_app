@@ -7,12 +7,18 @@ variables de entorno con el prefijo `NEXORA_`. Nunca se hardcodean en los casos 
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "testing", "production"]
+
+#: El .env vive en la raiz del repositorio, junto al docker-compose.yml. Se resuelve por ruta
+#: absoluta para que funcione igual al ejecutar desde la raiz o desde backend/.
+_BACKEND_DIR = Path(__file__).resolve().parents[3]
+_REPO_ROOT = _BACKEND_DIR.parent
 
 #: Algoritmos de firma aceptados. El algoritmo jamas se toma del encabezado del token.
 ALLOWED_JWT_ALGORITHMS = frozenset({"HS256", "HS384", "HS512"})
@@ -24,7 +30,7 @@ DEVELOPMENT_JWT_SECRET = "development-only-secret-change-me"  # noqa: S105
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="NEXORA_",
-        env_file=".env",
+        env_file=(_REPO_ROOT / ".env", _BACKEND_DIR / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
