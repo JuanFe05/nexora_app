@@ -72,7 +72,8 @@ Rama: `feature/develop`. Estado: en implementacion.
 | T4 Infraestructura (repos, Argon2id, JWT) | S1, S5, S6, S11 | inline | `88f2316` | hecho |
 | T5/T6a Casos de uso refresh/logout/me | S5, S6, S7, S13 | inline | `7df54cd` | hecho |
 | T5/T6b Endpoints HTTP y CSRF | S8, S9, S10, S13 | inline | `c89842f` | hecho |
-| T7/T8 Documentacion y verificacion final | S12, S13, S14 | inline | pendiente de commit | hecho |
+| T7/T8 Documentacion y verificacion final | S12, S13, S14 | inline | `e3e6a36` | hecho |
+| T9 Correcciones de la verificacion independiente | S5, S6, S8, S9 | inline | ver ultimo commit | hecho |
 
 Cada fila es una rebanada de trabajo revisable y commiteada por separado en `feature/develop`.
 Push, pull request y merge quedan como decision del usuario.
@@ -90,6 +91,16 @@ Push, pull request y merge quedan como decision del usuario.
   correo, sin `create_all()`, sin abstracciones por formalismo.
 - **L2** Fase 2 aprobada por el usuario con la respuesta "dale con tus recomendaciones", fijando las
   cuatro decisiones de S15.
+- **L5** Verificacion independiente (`gentle-ai-verify`) sobre el rango 31c7b4e..e3e6a36: dos
+  defectos bloqueantes y una fragilidad, corregidos y fijados con pruebas de regresion en
+  `tests/integration/test_auth_security_regressions.py`:
+  (1) S5, la cookie CSRF compartia el `Path=/api/v1/auth` de la cookie de refresh y el front no
+  podia leerla; ahora usa `csrf_cookie_path` (`/` por defecto) y el logout la borra en esa ruta;
+  (2) S8/S9, un `identificador` de solo espacios escapaba como HTTP 500; ahora el schema lo
+  rechaza con 422 sin crear sesion;
+  (3) S6, un claim obligatorio ausente o malformado escapaba como `KeyError`; ahora `sid` es
+  obligatorio y cualquier claim invalido produce `InvalidToken`.
+  Ademas, aviso preexistente corregido: produccion ya no acepta el secreto JWT de desarrollo.
 - **L4** Verificacion final: 85 pruebas en verde (unitarias, de integracion y de API contra
   PostgreSQL real), `ruff check`/`ruff format --check` limpios, `mypy` estricto sin errores,
   migracion verificada desde base vacia y en ciclo upgrade/downgrade/upgrade, OpenAPI generado

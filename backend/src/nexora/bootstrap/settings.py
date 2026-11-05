@@ -17,6 +17,9 @@ Environment = Literal["development", "testing", "production"]
 #: Algoritmos de firma aceptados. El algoritmo jamas se toma del encabezado del token.
 ALLOWED_JWT_ALGORITHMS = frozenset({"HS256", "HS384", "HS512"})
 
+#: Secreto publico de desarrollo. Produccion debe reemplazarlo si o si.
+DEVELOPMENT_JWT_SECRET = "development-only-secret-change-me"  # noqa: S105
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -33,7 +36,7 @@ class Settings(BaseSettings):
     database_echo: bool = False
     allowed_origins: tuple[str, ...] = ("http://localhost:5173",)
 
-    jwt_secret: SecretStr = SecretStr("development-only-secret-change-me")
+    jwt_secret: SecretStr = SecretStr(DEVELOPMENT_JWT_SECRET)
     jwt_algorithm: str = "HS256"
     jwt_issuer: str = "nexora"
     jwt_audience: str = "nexora-app"
@@ -45,6 +48,8 @@ class Settings(BaseSettings):
     csrf_header_name: str = "X-CSRF-Token"
     cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     cookie_domain: str | None = None
+    #: La cookie CSRF debe ser legible desde cualquier ruta del front, no solo desde /api/v1/auth.
+    csrf_cookie_path: str = "/"
 
     login_max_attempts: int = 5
     login_attempt_window_seconds: int = 300
@@ -60,7 +65,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _require_strong_secret_in_production(self) -> Settings:
-        if self.environment == "production" and len(self.jwt_secret.get_secret_value()) < 32:
+        if self.environment != "production":
+            return self
+        secret = self.jwt_secret.get_secret_value()
+        if secret == DEVELOPMENT_JWT_SECRET:
+            raise ValueError("NEXORA_JWT_SECRET no puede ser el secreto de desarrollo")
+        if len(secret) < 32:
             raise ValueError("NEXORA_JWT_SECRET debe tener al menos 32 caracteres en produccion")
         return self
 

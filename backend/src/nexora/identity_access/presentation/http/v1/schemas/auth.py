@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 
 class LoginRequest(BaseModel):
@@ -16,6 +16,15 @@ class LoginRequest(BaseModel):
 
     identificador: str = Field(min_length=1, max_length=255)
     contrasena: SecretStr = Field(min_length=1, max_length=128)
+
+    @field_validator("identificador")
+    @classmethod
+    def _identificador_no_vacio(cls, value: str) -> str:
+        """Un identificador de solo espacios es una entrada invalida, no una credencial."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("El identificador no puede estar vacio")
+        return normalized
 
 
 class UsuarioResponse(BaseModel):

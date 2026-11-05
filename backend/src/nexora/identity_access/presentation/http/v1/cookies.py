@@ -37,12 +37,13 @@ def set_auth_cookies(
         httponly=True,
         samesite=settings.cookie_samesite,
     )
-    # El front necesita leer el token CSRF para reenviarlo por cabecera: no puede ser HttpOnly.
+    # El front necesita leer el token CSRF para reenviarlo por cabecera: ni HttpOnly ni
+    # restringido a /api/v1/auth, porque lo lee desde cualquier ruta de la aplicacion.
     response.set_cookie(
         settings.csrf_cookie_name,
         csrf_token,
         expires=refresh_expires_at,
-        path=settings.cookie_path,
+        path=settings.csrf_cookie_path,
         domain=settings.cookie_domain,
         secure=settings.cookie_secure,
         httponly=False,
@@ -51,11 +52,15 @@ def set_auth_cookies(
 
 
 def clear_auth_cookies(response: Response, settings: Settings) -> None:
-    for name in (settings.refresh_cookie_name, settings.csrf_cookie_name):
+    paths = {
+        settings.refresh_cookie_name: settings.cookie_path,
+        settings.csrf_cookie_name: settings.csrf_cookie_path,
+    }
+    for name, path in paths.items():
         response.delete_cookie(
             name,
             domain=settings.cookie_domain,
-            path=settings.cookie_path,
+            path=path,
             secure=settings.cookie_secure,
             samesite=settings.cookie_samesite,
         )

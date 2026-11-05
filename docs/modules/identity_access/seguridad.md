@@ -8,11 +8,11 @@
 | Respuesta uniforme | Un unico `401 "Credenciales invalidas"` y verificacion de hash senuelo |
 | Validacion de JWT | Algoritmo tomado de la configuracion (nunca del encabezado), firma, `iss`, `aud`, `exp`, `iat`, `sub`, `jti` requeridos y `token_type` esperado |
 | Cookies | `HttpOnly`, `Secure` en produccion, `SameSite` configurable, `Path=/api/v1/auth` |
-| CSRF | Double submit: cookie legible + cabecera `X-CSRF-Token`, comparadas con `secrets.compare_digest`, mas validacion de `Origin` |
+| CSRF | Double submit: cookie legible en `/` (`NEXORA_CSRF_COOKIE_PATH`) + cabecera `X-CSRF-Token`, comparadas con `secrets.compare_digest`, mas validacion de `Origin` |
 | Revocacion inmediata | Cada request protegido verifica la sesion por `sid` en base de datos |
 | Rotacion y reuso | Rotacion atomica por JTI; un refresh reutilizado revoca la sesion |
 | Fuerza bruta | Bloqueo temporal por IP + identificador |
-| Secretos | `NEXORA_JWT_SECRET` por entorno; en produccion se exige 32+ caracteres |
+| Secretos | `NEXORA_JWT_SECRET` por entorno; en produccion se exige 32+ caracteres y se rechaza el secreto de desarrollo |
 | Minimizacion | Las respuestas nunca incluyen `hash_contrasena`, `refresh_token_jti` ni el JWT de refresh |
 | Logs | No se registran contrasenas, hashes, JWT, cookies ni secretos |
 

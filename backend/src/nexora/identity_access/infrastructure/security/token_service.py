@@ -37,20 +37,16 @@ class JwtTokenService:
 
     def decode_access_token(self, token: str) -> AccessTokenClaims:
         payload = self._decode(token, ACCESS_TOKEN_TYPE)
+        user_id, session_id, token_id, expires_at = self._read_claims(payload)
         return AccessTokenClaims(
-            user_id=UUID(str(payload["sub"])),
-            session_id=UUID(str(payload["sid"])),
-            token_id=UUID(str(payload["jti"])),
-            expires_at=datetime.fromtimestamp(float(payload["exp"]), tz=UTC),
+            user_id=user_id, session_id=session_id, token_id=token_id, expires_at=expires_at
         )
 
     def decode_refresh_token(self, token: str) -> RefreshTokenClaims:
         payload = self._decode(token, REFRESH_TOKEN_TYPE)
+        user_id, session_id, token_id, expires_at = self._read_claims(payload)
         return RefreshTokenClaims(
-            user_id=UUID(str(payload["sub"])),
-            session_id=UUID(str(payload["sid"])),
-            token_id=UUID(str(payload["jti"])),
-            expires_at=datetime.fromtimestamp(float(payload["exp"]), tz=UTC),
+            user_id=user_id, session_id=session_id, token_id=token_id, expires_at=expires_at
         )
 
     def _issue(
@@ -88,7 +84,7 @@ class JwtTokenService:
                 algorithms=[self._settings.jwt_algorithm],
                 issuer=self._settings.jwt_issuer,
                 audience=self._settings.jwt_audience,
-                options={"require": ["exp", "iat", "sub", "jti", "iss", "aud"]},
+                options={"require": ["exp", "iat", "sub", "sid", "jti", "iss", "aud"]},
             )
         except jwt.PyJWTError as error:
             raise InvalidToken from error
@@ -96,3 +92,16 @@ class JwtTokenService:
         if payload.get("token_type") != expected_type:
             raise InvalidToken("Tipo de token inesperado")
         return dict(payload)
+
+    @staticmethod
+    def _read_claims(payload: dict[str, Any]) -> tuple[UUID, UUID, UUID, datetime]:
+        """Un claim ausente o malformado es un token invalido, no un error interno."""
+        try:
+            return (
+                UUID(str(payload["sub"])),
+                UUID(str(payload["sid"])),
+                UUID(str(payload["jti"])),
+                datetime.fromtimestamp(float(payload["exp"]), tz=UTC),
+            )
+        except (KeyError, TypeError, ValueError, OverflowError) as error:
+            raise InvalidToken("Claims invalidos") from error
