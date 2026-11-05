@@ -9,7 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr, field_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "testing", "production"]
@@ -57,6 +57,12 @@ class Settings(BaseSettings):
             allowed = ", ".join(sorted(ALLOWED_JWT_ALGORITHMS))
             raise ValueError(f"jwt_algorithm debe ser uno de: {allowed}")
         return value
+
+    @model_validator(mode="after")
+    def _require_strong_secret_in_production(self) -> Settings:
+        if self.environment == "production" and len(self.jwt_secret.get_secret_value()) < 32:
+            raise ValueError("NEXORA_JWT_SECRET debe tener al menos 32 caracteres en produccion")
+        return self
 
     @property
     def is_production(self) -> bool:
