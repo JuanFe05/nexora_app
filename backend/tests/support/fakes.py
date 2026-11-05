@@ -5,10 +5,17 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from nexora.identity_access.application.ports.security import IssuedToken
+from nexora.identity_access.application.ports.security import (
+    AccessTokenClaims,
+    IssuedToken,
+    RefreshTokenClaims,
+)
 from nexora.identity_access.domain.entities.session import Session
 from nexora.identity_access.domain.entities.user import User
-from nexora.identity_access.domain.exceptions.identity import AuthenticationThrottled
+from nexora.identity_access.domain.exceptions.identity import (
+    AuthenticationThrottled,
+    InvalidToken,
+)
 from nexora.identity_access.domain.value_objects.enums import UserStatus
 from nexora.identity_access.domain.value_objects.login_identifier import LoginIdentifier
 
@@ -157,7 +164,7 @@ class FakeAccessRepository:
 
 
 class FakeTokenService:
-    """Tokens deterministas: `<tipo>:<sid>:<jti>`."""
+    """Tokens deterministas con el formato `<tipo>:<user_id>:<sid>:<jti>`."""
 
     def __init__(self, access_ttl_seconds: int = 600, refresh_ttl_days: int = 7) -> None:
         self.access_ttl_seconds = access_ttl_seconds
@@ -167,7 +174,7 @@ class FakeTokenService:
     def issue_access_token(self, *, user_id: UUID, session_id: UUID, now: datetime) -> IssuedToken:
         token_id = uuid4()
         issued = IssuedToken(
-            value=f"access:{session_id}:{token_id}",
+            value=f"access:{user_id}:{session_id}:{token_id}",
             token_id=token_id,
             expires_at=now + timedelta(seconds=self.access_ttl_seconds),
         )
@@ -177,12 +184,33 @@ class FakeTokenService:
     def issue_refresh_token(self, *, user_id: UUID, session_id: UUID, now: datetime) -> IssuedToken:
         token_id = uuid4()
         issued = IssuedToken(
-            value=f"refresh:{session_id}:{token_id}",
+            value=f"refresh:{user_id}:{session_id}:{token_id}",
             token_id=token_id,
             expires_at=now + timedelta(days=self.refresh_ttl_days),
         )
         self.issued.append(issued)
         return issued
+
+    def decode_access_token(self, token: str) -> AccessTokenClaims:
+        user_id, session_id, token_id, expires_at = self._parse(token, "access")
+        return AccessTokenClaims(
+            user_id=user_id, session_id=session_id, token_id=token_id, expires_at=expires_at
+        )
+
+    def decode_refresh_token(self, token: str) -> RefreshTokenClaims:
+        user_id, session_id, token_id, expires_at = self._parse(token, "refresh")
+        return RefreshTokenClaims(
+            user_id=user_id, session_id=session_id, token_id=token_id, expires_at=expires_at
+        )
+
+    def _parse(self, token: str, expected_type: str) -> tuple[UUID, UUID, UUID, datetime]:
+        parts = token.split(":")
+        if len(parts) != 4 or parts[0] != expected_type:
+            raise InvalidToken
+        issued = next((item for item in self.issued if item.value == token), None)
+        if issued is None:
+            raise InvalidToken
+        return UUID(parts[1]), UUID(parts[2]), UUID(parts[3]), issued.expires_at
 
 
 class FakeThrottle:

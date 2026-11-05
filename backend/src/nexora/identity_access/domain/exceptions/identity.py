@@ -36,6 +36,14 @@ class SessionNotActive(IdentityError):
         super().__init__(message)
 
 
+class PermissionDenied(IdentityError):
+    """El usuario esta autenticado pero no tiene el permiso exigido."""
+
+    def __init__(self, permission_code: str) -> None:
+        super().__init__("No tiene permisos para ejecutar esta operacion")
+        self.permission_code = permission_code
+
+
 class RefreshTokenReused(IdentityError):
     """Se presento un refresh token que ya habia sido rotado: la sesion queda revocada."""
 
