@@ -1,0 +1,112 @@
+# Orquestacion unica de NEXORA, parametrizada por el archivo .env de la raiz.
+# Desarrollo y produccion se diferencian por variables (NEXORA_ENVIRONMENT, API_WORKERS,
+# RESTART_POLICY, puertos publicados), no por archivos distintos.
+# El frontend todavia no existe: cuando exista, se agrega como un servicio mas de esta red.
+name: nexora
+
+x-backend-environment: &backend-environment
+  NEXORA_ENVIRONMENT: ${NEXORA_ENVIRONMENT:-development}
+  NEXORA_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-nexora}:${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD en .env}@postgres:5432/${POSTGRES_DB:-nexora}
+  NEXORA_JWT_SECRET: ${NEXORA_JWT_SECRET:?define NEXORA_JWT_SECRET en .env}
+  NEXORA_JWT_ALGORITHM: ${NEXORA_JWT_ALGORITHM:-HS256}
+  NEXORA_JWT_ISSUER: ${NEXORA_JWT_ISSUER:-nexora}
+  NEXORA_JWT_AUDIENCE: ${NEXORA_JWT_AUDIENCE:-nexora-app}
+  NEXORA_ACCESS_TOKEN_TTL_MINUTES: ${NEXORA_ACCESS_TOKEN_TTL_MINUTES:-10}
+  NEXORA_REFRESH_TOKEN_TTL_DAYS: ${NEXORA_REFRESH_TOKEN_TTL_DAYS:-7}
+  NEXORA_COOKIE_SAMESITE: ${NEXORA_COOKIE_SAMESITE:-lax}
+  NEXORA_COOKIE_DOMAIN: ${NEXORA_COOKIE_DOMAIN:-}
+  NEXORA_ALLOWED_ORIGINS: '${NEXORA_ALLOWED_ORIGINS:-["http://localhost:5173"]}'
+  NEXORA_LOGIN_MAX_ATTEMPTS: ${NEXORA_LOGIN_MAX_ATTEMPTS:-5}
+  NEXORA_LOGIN_ATTEMPT_WINDOW_SECONDS: ${NEXORA_LOGIN_ATTEMPT_WINDOW_SECONDS:-300}
+  NEXORA_LOGIN_BLOCK_SECONDS: ${NEXORA_LOGIN_BLOCK_SECONDS:-900}
+
+x-backend-build: &backend-build
+  build:
+    context: ./backend
+  image: nexora-backend:${NEXORA_IMAGE_TAG:-local}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: nexora-postgres
+    restart: ${RESTART_POLICY:-unless-stopped}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nexora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_DB:-nexora}
+    ports:
+      # En produccion conviene no publicar la base: POSTGRES_HOST_PORT=127.0.0.1:5434 o quitarlo.
+      - "${POSTGRES_HOST_PORT:-5434}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexora} -d ${POSTGRES_DB:-nexora}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [nexora]
+
+  # Base efimera para las pruebas de integracion: docker compose --profile test up -d postgres-test
+  postgres-test:
+    image: postgres:17-alpine
+    container_name: nexora-postgres-test
+    profiles: ["test"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nexora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_TEST_DB:-nexora_test}
+    ports:
+      - "${POSTGRES_TEST_HOST_PORT:-5433}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexora} -d ${POSTGRES_TEST_DB:-nexora_test}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [nexora]
+
+  # Proceso controlado de migraciones: espera a que PostgreSQL este sano y termina.
+  # La API no arranca hasta que este servicio sale con exito.
+  migrate:
+    <<: *backend-build
+    container_name: nexora-migrate
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [nexora]
+
+  api:
+    <<: *backend-build
+    container_name: nexora-api
+    command:
+      - uvicorn
+      - nexora.bootstrap.app:create_app
+      - --factory
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --workers
+      - "${API_WORKERS:-1}"
+    environment: *backend-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+    restart: ${RESTART_POLICY:-unless-stopped}
+    networks: [nexora]
+
+networks:
+  nexora:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    name: nexora-postgres-data

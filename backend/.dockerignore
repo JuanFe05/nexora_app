@@ -1,0 +1,28 @@
+# Entorno y artefactos locales: la imagen reinstala todo desde uv.lock.
+.venv/
+dist/
+build/
+wheels/
+*.egg-info/
+
+# Cachés
+__pycache__/
+*.py[oc]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Nada de secretos dentro de la imagen.
+.env
+.env.*
+!.env.template
+*.pem
+*.key
+
+# Git y metadatos
+.git/
+.gitignore
+.dockerignore
+Dockerfile
