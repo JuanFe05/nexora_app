@@ -367,3 +367,39 @@ async def test_delegate_can_revoke_an_unowned_permission_from_an_ordinary_role(
     await request(client, headers, "DELETE", f"/roles/{role}/permissions/{permission}", 204)
     stored = (await request(client, admin, "GET", f"/roles/{role}")).json()
     assert stored["permisos"] == []
+
+
+@pytest.mark.parametrize(
+    "permissions",
+    [(), ("identity.users.view",), ("identity.users.delete",), ("identity.users.assign_roles",)],
+)
+@pytest.mark.parametrize("target", ["existing", "random"])
+@pytest.mark.parametrize(
+    "send",
+    [
+        {},
+        {"json": None},
+        {"json": {"estado": "INVALID"}},
+    ],
+    ids=["sin-cuerpo", "null", "estado-invalido"],
+)
+async def test_user_patch_without_update_or_deactivate_is_403_before_body_validation(
+    client: AsyncClient,
+    admin: dict[str, str],
+    seeder: Seeder,
+    db_session: AsyncSession,
+    permissions: tuple[str, ...],
+    target: str,
+    send: dict[str, object],
+) -> None:
+    """Sin update ni deactivate: 403 aunque el cuerpo sea invalido (igual que roles y permisos)."""
+    user, _, _ = await resources(client, admin)
+    actor = await seeder.create_user(username="actor", email="actor@example.test")
+    await seeder.grant_role(actor, role_code="ACTOR", permissions=permissions)
+    headers = await login(client, "actor")
+    before = await stored_access(db_session)
+    identifier = user if target == "existing" else str(uuid4())
+    response = await client.patch(f"/api/v1/users/{identifier}", headers=headers, **send)
+    assert response.status_code == 403, response.text
+    assert response.json() == FORBIDDEN
+    assert await stored_access(db_session) == before

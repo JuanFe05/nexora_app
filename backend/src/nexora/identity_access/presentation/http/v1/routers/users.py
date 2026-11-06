@@ -15,6 +15,7 @@ from nexora.identity_access.application.use_cases.administration import (
 from nexora.identity_access.presentation.http.v1.dependencies.auth import (
     PrincipalDep,
     get_user_administration,
+    require_any_permission,
     require_permission,
 )
 from nexora.identity_access.presentation.http.v1.schemas.administration import (
@@ -84,7 +85,14 @@ async def get_user(id: UUID, use_case: UseCase) -> UserResponse:
     return UserResponse.from_detail(await use_case.get(id))
 
 
-@router.patch("/{id}", response_model=UserResponse, summary="Edita un usuario")
+@router.patch(
+    "/{id}",
+    response_model=UserResponse,
+    summary="Edita un usuario",
+    dependencies=[
+        Depends(require_any_permission("identity.users.update", "identity.users.deactivate"))
+    ],
+)
 async def update_user(
     id: UUID, payload: UserUpdate, principal: PrincipalDep, use_case: UseCase
 ) -> UserResponse:

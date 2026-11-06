@@ -167,3 +167,21 @@ def require_permission(
         return principal
 
     return dependency
+
+
+def require_any_permission(
+    *codes: str,
+) -> Callable[[AuthenticatedPrincipal], Coroutine[Any, Any, AuthenticatedPrincipal]]:
+    """Puerta de ruta: exige AL MENOS uno de los permisos, antes de validar el cuerpo.
+
+    Se usa donde el permiso exacto depende de los campos enviados (PATCH de usuarios): la
+    comprobacion fina por campo sigue en el handler, pero un actor sin ninguno de los permisos
+    recibe 403 aunque el cuerpo sea invalido.
+    """
+
+    async def dependency(principal: PrincipalDep) -> AuthenticatedPrincipal:
+        if not any(principal.has_permission(code) for code in codes):
+            raise PermissionDenied(codes[0])
+        return principal
+
+    return dependency
