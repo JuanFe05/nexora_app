@@ -1,0 +1,5 @@
+{
+  "files": [],
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }],
+  "exclude": [".tailadmin-src", "node_modules", "dist", "coverage"]
+}

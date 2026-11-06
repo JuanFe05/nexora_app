@@ -1,0 +1,23 @@
+import js from "@eslint/js";
+import oxlint from "eslint-plugin-oxlint";
+import reactHooks from "eslint-plugin-react-hooks";
+import reactRefresh from "eslint-plugin-react-refresh";
+import { defineConfig, globalIgnores } from "eslint/config";
+import globals from "globals";
+import tseslint from "typescript-eslint";
+
+export default defineConfig([
+  globalIgnores(["dist", "coverage", ".tailadmin-src/**"]),
+  {
+    files: ["**/*.{ts,tsx}"],
+    extends: [
+      js.configs.recommended,
+      tseslint.configs.recommended,
+      reactHooks.configs.flat.recommended,
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: { ecmaVersion: "latest", globals: globals.browser },
+  },
+  // MUST be last: disables every rule already enabled in .oxlintrc.json
+  ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json", { typeAware: true }),
+]);
