@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from nexora.bootstrap.access_initialization import initialize_access
 from nexora.bootstrap.container import Container, build_container
 from nexora.bootstrap.settings import Settings, get_settings
 from nexora.identity_access.domain.exceptions.identity import (
@@ -27,9 +28,12 @@ GENERIC_CREDENTIALS_MESSAGE = "Credenciales invalidas"
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-    yield
     container: Container = app.state.container
-    await container.database.dispose()
+    try:
+        await initialize_access(container)
+        yield
+    finally:
+        await container.database.dispose()
 
 
 def _register_error_handlers(app: FastAPI) -> None:

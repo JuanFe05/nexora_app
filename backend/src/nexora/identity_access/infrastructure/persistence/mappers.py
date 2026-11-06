@@ -50,3 +50,19 @@ def session_to_model(session: Session) -> SessionModel:
         expires_at=session.expires_at,
         revoked_at=session.revoked_at,
     )
+
+
+def user_to_model(user: User) -> UserModel:
+    return UserModel(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        password_hash=user.password_hash,
+        status=user.status.value,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        middle_name=user.middle_name,
+        second_last_name=user.second_last_name,
+        phone_number=user.phone_number,
+        password_changed_at=user.password_changed_at,
+    )

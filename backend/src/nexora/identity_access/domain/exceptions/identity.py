@@ -49,3 +49,13 @@ class RefreshTokenReused(IdentityError):
 
     def __init__(self, message: str = "Refresh token reutilizado") -> None:
         super().__init__(message)
+
+
+class AdministratorNotConfigured(IdentityError):
+    """No hay administrador activo y las credenciales iniciales no estan configuradas."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "No existe un administrador activo: defina NEXORA_BOOTSTRAP_ADMIN_USERNAME, "
+            "NEXORA_BOOTSTRAP_ADMIN_EMAIL y NEXORA_BOOTSTRAP_ADMIN_PASSWORD"
+        )

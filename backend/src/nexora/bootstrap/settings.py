@@ -23,6 +23,8 @@ _REPO_ROOT = _BACKEND_DIR.parent
 #: Algoritmos de firma aceptados. El algoritmo jamas se toma del encabezado del token.
 ALLOWED_JWT_ALGORITHMS = frozenset({"HS256", "HS384", "HS512"})
 
+MIN_ADMIN_PASSWORD_LENGTH = 12
+
 #: Secreto publico de desarrollo. Produccion debe reemplazarlo si o si.
 DEVELOPMENT_JWT_SECRET = "development-only-secret-change-me"  # noqa: S105
 
@@ -57,6 +59,12 @@ class Settings(BaseSettings):
     #: La cookie CSRF debe ser legible desde cualquier ruta del front, no solo desde /api/v1/auth.
     csrf_cookie_path: str = "/"
 
+    #: Credenciales del primer administrador. Sin valores por defecto: jamas viven en el codigo.
+    bootstrap_admin_username: str | None = None
+    bootstrap_admin_email: str | None = None
+    bootstrap_admin_password: SecretStr | None = None
+    bootstrap_admin_first_name: str = "Administrador"
+    bootstrap_admin_last_name: str = "NEXORA"
     login_max_attempts: int = 5
     login_attempt_window_seconds: int = 300
     login_block_seconds: int = 900
@@ -70,6 +78,29 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
+    def _validate_bootstrap_admin(self) -> Settings:
+        password = self.bootstrap_admin_password
+        provided = [
+            bool(self.bootstrap_admin_username),
+            bool(self.bootstrap_admin_email),
+            bool(password and password.get_secret_value()),
+        ]
+        if any(provided) and not all(provided):
+            raise ValueError(
+                "El administrador inicial exige NEXORA_BOOTSTRAP_ADMIN_USERNAME, _EMAIL y _PASSWORD"
+            )
+        if (
+            password is not None
+            and all(provided)
+            and len(password.get_secret_value()) < MIN_ADMIN_PASSWORD_LENGTH
+        ):
+            raise ValueError(
+                f"NEXORA_BOOTSTRAP_ADMIN_PASSWORD debe tener al menos "
+                f"{MIN_ADMIN_PASSWORD_LENGTH} caracteres"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _require_strong_secret_in_production(self) -> Settings:
         if self.environment != "production":
             return self
@@ -79,6 +110,10 @@ class Settings(BaseSettings):
         if len(secret) < 32:
             raise ValueError("NEXORA_JWT_SECRET debe tener al menos 32 caracteres en produccion")
         return self
+
+    @property
+    def has_bootstrap_admin(self) -> bool:
+        return self.bootstrap_admin_password is not None and bool(self.bootstrap_admin_username)
 
     @property
     def is_production(self) -> bool:

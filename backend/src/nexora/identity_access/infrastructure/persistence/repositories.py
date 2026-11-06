@@ -4,19 +4,22 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import CursorResult, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nexora.identity_access.domain.entities.session import Session
 from nexora.identity_access.domain.entities.user import User
-from nexora.identity_access.domain.value_objects.enums import RoleStatus
+from nexora.identity_access.domain.value_objects.access_catalog import PermissionSpec, RoleSpec
+from nexora.identity_access.domain.value_objects.enums import RoleStatus, UserStatus
 from nexora.identity_access.domain.value_objects.login_identifier import LoginIdentifier
 from nexora.identity_access.infrastructure.persistence.mappers import (
     session_to_domain,
     session_to_model,
     user_to_domain,
+    user_to_model,
 )
 from nexora.identity_access.infrastructure.persistence.models import (
     PermissionModel,
@@ -117,3 +120,91 @@ class SqlAlchemyAccessRepository:
         roles = sorted({role_code for role_code, _ in rows})
         permissions = {code for _, code in rows if code is not None}
         return tuple(roles), frozenset(permissions)
+
+
+#: Clave del advisory lock que serializa la siembra entre workers.
+_SEED_LOCK_KEY = 726_345_001
+
+
+class SqlAlchemyAccessSeedRepository:
+    """Siembra idempotente: INSERT ... ON CONFLICT DO NOTHING y lectura del id resultante."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def acquire_seed_lock(self) -> None:
+        await self._session.execute(select(func.pg_advisory_xact_lock(_SEED_LOCK_KEY)))
+
+    async def ensure_role(self, spec: RoleSpec) -> UUID:
+        await self._session.execute(
+            pg_insert(RoleModel)
+            .values(
+                id=uuid4(),
+                code=spec.code,
+                name=spec.name,
+                description=spec.description,
+                status=RoleStatus.ACTIVE.value,
+            )
+            .on_conflict_do_nothing(index_elements=[RoleModel.code])
+        )
+        return (
+            await self._session.execute(select(RoleModel.id).where(RoleModel.code == spec.code))
+        ).scalar_one()
+
+    async def ensure_permission(self, spec: PermissionSpec) -> UUID:
+        await self._session.execute(
+            pg_insert(PermissionModel)
+            .values(
+                id=uuid4(),
+                code=spec.code,
+                name=spec.name,
+                description=spec.description,
+                module=spec.module,
+            )
+            .on_conflict_do_nothing(index_elements=[PermissionModel.code])
+        )
+        return (
+            await self._session.execute(
+                select(PermissionModel.id).where(PermissionModel.code == spec.code)
+            )
+        ).scalar_one()
+
+    async def ensure_role_permission(self, role_id: UUID, permission_id: UUID) -> None:
+        await self._session.execute(
+            pg_insert(RolePermissionModel)
+            .values(role_id=role_id, permission_id=permission_id)
+            .on_conflict_do_nothing()
+        )
+
+    async def count_active_users_with_role(self, role_id: UUID) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(RoleAssignmentModel)
+            .join(UserModel, UserModel.id == RoleAssignmentModel.user_id)
+            .where(
+                RoleAssignmentModel.role_id == role_id,
+                UserModel.status == UserStatus.ACTIVE.value,
+            )
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
+
+    async def find_user(self, *, username: str, email: str) -> User | None:
+        stmt = select(UserModel).where(
+            or_(
+                func.lower(UserModel.username) == username.lower(),
+                func.lower(UserModel.email) == email.lower(),
+            )
+        )
+        model = (await self._session.execute(stmt)).scalars().first()
+        return user_to_domain(model) if model is not None else None
+
+    async def add_user(self, user: User) -> None:
+        self._session.add(user_to_model(user))
+        await self._session.flush()
+
+    async def ensure_assignment(self, user_id: UUID, role_id: UUID) -> None:
+        await self._session.execute(
+            pg_insert(RoleAssignmentModel)
+            .values(user_id=user_id, role_id=role_id, assigned_by=None)
+            .on_conflict_do_nothing()
+        )
