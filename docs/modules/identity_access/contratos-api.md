@@ -59,6 +59,47 @@ Cabecera `Authorization: Bearer <access_token>`.
 
 Errores: `401` sin token, token invalido o vencido, sesion revocada o usuario desactivado.
 
+## Perfil propio (cualquier usuario autenticado)
+
+Los tres endpoints requieren `Authorization: Bearer <access_token>`; sin token valido responden
+`401`. No requieren rol ni permiten indicar otro usuario. Detalles y decisiones en
+[perfil.md](perfil.md).
+
+### GET /api/v1/profile
+
+Salida `200`:
+
+```json
+{
+  "id": "uuid", "nombre_usuario": "jperez", "correo": "jperez@nexora.co",
+  "primer_nombre": "Juan", "segundo_nombre": null, "primer_apellido": "Perez",
+  "segundo_apellido": null, "numero_telefono": null, "estado": "activo", "roles": []
+}
+```
+
+Nunca incluye `hash_contrasena` ni sesiones.
+
+### PATCH /api/v1/profile
+
+Entrada parcial: `correo`, `primer_nombre`, `segundo_nombre`, `primer_apellido`,
+`segundo_apellido`, `numero_telefono`. Salida `200`: el mismo perfil actualizado.
+
+Campos omitidos no cambian; `null`, cadenas vacias, formatos/longitudes invalidos y campos
+no permitidos producen `422`. `nombre_usuario` es de solo lectura; tampoco se aceptan `id`,
+`estado`, `roles` ni hashes. Correo duplicado de otro usuario sin distinguir mayusculas:
+`409`; el correo actual propio no es conflicto.
+
+### POST /api/v1/profile/password
+
+Entrada: `{"contrasena_actual": "<actual>", "contrasena_nueva": "<nueva>"}`.
+Actual de 1–128 caracteres; nueva de 12–128 y diferente de la actual. Salida `204` sin cuerpo.
+El hash y la fecha se actualizan atomicamente con la revocacion de las otras sesiones;
+la sesion del solicitante permanece activa.
+
+Errores: `400 {"detail": "La contrasena actual es incorrecta"}` (no dispara refresh),
+`429` con `Retry-After` por intentos fallidos acumulados por usuario, `422` por entrada invalida.
+Ningun error devuelve las contrasenas enviadas.
+
 ## Claims del JWT
 
 `sub` (usuario), `sid` (sesion), `jti`, `token_type` (`access` o `refresh`), `iss`, `aud`,

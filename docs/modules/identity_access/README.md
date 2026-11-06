@@ -9,6 +9,7 @@ asignaciones y sesiones. Implementa el flujo de autenticacion y la administracio
 - [modelo-datos.md](modelo-datos.md): las seis tablas del esquema `iam` y sus reglas.
 - [flujos-autenticacion.md](flujos-autenticacion.md): login, refresh, logout y `me`.
 - [contratos-api.md](contratos-api.md): endpoints, entradas y salidas.
+- [perfil.md](perfil.md): perfil propio y cambio de contrasena para cualquier usuario autenticado.
 - [administracion.md](administracion.md): siembra de roles, permisos y administrador; API de gestion.
 - [seguridad.md](seguridad.md): controles aplicados y limitaciones conocidas.
 
@@ -30,6 +31,8 @@ asignaciones y sesiones. Implementa el flujo de autenticacion y la administracio
 | Siembra idempotente de roles, permisos y primer administrador | Implementado |
 | CRUD de usuarios, roles y permisos solo para `ADMINISTRADOR` | Implementado |
 | Proteccion del ultimo administrador activo | Implementado |
+| Consulta y edicion del perfil propio para cualquier usuario autenticado | Implementado |
+| Cambio de contrasena actual con throttle y cierre de otras sesiones | Implementado |
 | Restablecimiento administrativo supervisado | Fuera de alcance de esta entrega |
 
 ## Requisitos no funcionales

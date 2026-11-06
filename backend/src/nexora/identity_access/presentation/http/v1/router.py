@@ -8,11 +8,13 @@ from nexora.identity_access.presentation.http.v1.routers.auth import router as a
 from nexora.identity_access.presentation.http.v1.routers.permissions import (
     router as permissions_router,
 )
+from nexora.identity_access.presentation.http.v1.routers.profile import router as profile_router
 from nexora.identity_access.presentation.http.v1.routers.roles import router as roles_router
 from nexora.identity_access.presentation.http.v1.routers.users import router as users_router
 
 identity_access_router = APIRouter()
 identity_access_router.include_router(auth_router)
+identity_access_router.include_router(profile_router)
 identity_access_router.include_router(users_router)
 identity_access_router.include_router(roles_router)
 identity_access_router.include_router(permissions_router)

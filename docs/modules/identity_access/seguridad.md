@@ -18,11 +18,25 @@
 
 ## Politica de contrasenas
 
-1. El usuario que conoce su contrasena actual puede cambiarla (caso de uso pendiente).
+1. El usuario que conoce su contrasena actual puede cambiarla en
+   `POST /api/v1/profile/password` (12–128 caracteres para la nueva, diferente de la actual).
 2. Si la olvida, contacta al administrador, que supervisa el restablecimiento.
 3. El administrador autoriza el procedimiento pero nunca conoce ni establece la contrasena.
 4. El usuario ingresa personalmente la nueva contrasena.
 5. No existe recuperacion automatica por correo.
+
+## Autoservicio del perfil
+
+[Perfil propio](perfil.md) esta disponible para cualquier usuario autenticado, sin exigir rol.
+Su lista cerrada de campos excluye `nombre_usuario` (solo lectura), estado, roles e ID.
+La contrasena actual se verifica con Argon2; un fallo responde `400`, no `401`, para evitar
+refresh involuntario. `LoginThrottle` limita intentos por `password:<user_id>` con los limites
+de login, registra fallos y reinicia al tener exito. Las contrasenas usan `SecretStr`, los DTO
+ocultan sus secretos en `repr` y el manejador global de `422` elimina `input` y `ctx`.
+
+El nuevo hash, la fecha de cambio y la revocacion de todas las otras sesiones activas se
+confirman en una sola transaccion. La sesion actual y las de otros usuarios se conservan;
+las operaciones concurrentes sobre la clave se serializan por usuario.
 
 ## Limitaciones conocidas
 

@@ -16,6 +16,14 @@ class UserRepository(Protocol):
 
     async def get_by_id(self, user_id: UUID) -> User | None: ...
 
+    async def get_for_update(self, user_id: UUID) -> User | None:
+        """Relee el usuario y serializa sus escrituras hasta finalizar la transaccion."""
+        ...
+
+    async def update_password(
+        self, user_id: UUID, password_hash: str, changed_at: datetime
+    ) -> None: ...
+
 
 class SessionRepository(Protocol):
     async def add(self, session: Session) -> None: ...
@@ -41,6 +49,10 @@ class SessionRepository(Protocol):
     async def revoke(self, session_id: UUID, now: datetime) -> None: ...
 
     async def touch(self, session_id: UUID, now: datetime) -> None: ...
+
+    async def revoke_all_except(
+        self, user_id: UUID, keep_session_id: UUID, now: datetime
+    ) -> None: ...
 
 
 class AccessRepository(Protocol):

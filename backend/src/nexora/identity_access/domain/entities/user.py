@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
@@ -14,7 +14,7 @@ class User:
     id: UUID
     username: str
     email: str
-    password_hash: str
+    password_hash: str = field(repr=False)
     status: UserStatus
     first_name: str
     last_name: str

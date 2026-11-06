@@ -24,6 +24,7 @@ from nexora.identity_access.application.use_cases.authentication.logout import L
 from nexora.identity_access.application.use_cases.authentication.refresh import (
     RefreshSessionUseCase,
 )
+from nexora.identity_access.application.use_cases.profile import ProfileService
 from nexora.identity_access.domain.exceptions.identity import InvalidToken, PermissionDenied
 from nexora.identity_access.domain.value_objects.access_catalog import SystemRole
 from nexora.identity_access.infrastructure.persistence.administration_repository import (
@@ -149,6 +150,19 @@ def get_role_administration(session: SessionDep) -> RoleAdministration:
 def get_permission_administration(session: SessionDep) -> PermissionAdministration:
     return PermissionAdministration(
         repository=SqlAlchemyAdministrationRepository(session),
+        transaction=SqlAlchemyTransaction(session),
+    )
+
+
+def get_profile_service(container: ContainerDep, session: SessionDep) -> ProfileService:
+    return ProfileService(
+        users=SqlAlchemyUserRepository(session),
+        sessions=SqlAlchemySessionRepository(session),
+        access=SqlAlchemyAccessRepository(session),
+        administration=SqlAlchemyAdministrationRepository(session),
+        hasher=container.hasher,
+        throttle=container.throttle,
+        clock=container.clock,
         transaction=SqlAlchemyTransaction(session),
     )
 

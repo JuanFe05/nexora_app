@@ -49,6 +49,25 @@ class SqlAlchemyUserRepository:
         model = await self._session.get(UserModel, user_id)
         return user_to_domain(model) if model is not None else None
 
+    async def get_for_update(self, user_id: UUID) -> User | None:
+        stmt = (
+            select(UserModel)
+            .where(UserModel.id == user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return user_to_domain(model) if model is not None else None
+
+    async def update_password(
+        self, user_id: UUID, password_hash: str, changed_at: datetime
+    ) -> None:
+        await self._session.execute(
+            update(UserModel)
+            .where(UserModel.id == user_id)
+            .values(password_hash=password_hash, password_changed_at=changed_at)
+        )
+
 
 class SqlAlchemySessionRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -95,6 +114,18 @@ class SqlAlchemySessionRepository:
     async def touch(self, session_id: UUID, now: datetime) -> None:
         await self._session.execute(
             update(SessionModel).where(SessionModel.id == session_id).values(last_activity_at=now)
+        )
+
+    async def revoke_all_except(self, user_id: UUID, keep_session_id: UUID, now: datetime) -> None:
+        await self._session.execute(
+            update(SessionModel)
+            .where(
+                SessionModel.user_id == user_id,
+                SessionModel.id != keep_session_id,
+                SessionModel.revoked_at.is_(None),
+                SessionModel.expires_at > now,
+            )
+            .values(revoked_at=now, last_activity_at=now)
         )
 
 

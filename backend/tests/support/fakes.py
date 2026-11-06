@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -81,6 +82,21 @@ class FakeUserRepository:
     async def get_by_id(self, user_id: UUID) -> User | None:
         return next((user for user in self.users if user.id == user_id), None)
 
+    async def get_for_update(self, user_id: UUID) -> User | None:
+        return await self.get_by_id(user_id)
+
+    async def update_profile(self, user: User) -> None:
+        self.users = [user if stored.id == user.id else stored for stored in self.users]
+
+    async def update_password(
+        self, user_id: UUID, password_hash: str, changed_at: datetime
+    ) -> None:
+        user = await self.get_by_id(user_id)
+        assert user is not None
+        await self.update_profile(
+            replace(user, password_hash=password_hash, password_changed_at=changed_at)
+        )
+
 
 class FakeSessionRepository:
     def __init__(self) -> None:
@@ -150,6 +166,15 @@ class FakeSessionRepository:
             ip_address=session.ip_address,
             user_agent=session.user_agent,
         )
+
+    async def revoke_all_except(self, user_id: UUID, keep_session_id: UUID, now: datetime) -> None:
+        for session in list(self.sessions.values()):
+            if (
+                session.user_id == user_id
+                and session.id != keep_session_id
+                and session.is_usable(now)
+            ):
+                await self.revoke(session.id, now)
 
 
 class FakeAccessRepository:

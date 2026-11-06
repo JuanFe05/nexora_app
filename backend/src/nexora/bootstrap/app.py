@@ -16,6 +16,7 @@ from nexora.bootstrap.settings import Settings, get_settings
 from nexora.identity_access.domain.exceptions.identity import (
     AuthenticationThrottled,
     ConflictError,
+    IncorrectCurrentPassword,
     InvalidCredentials,
     InvalidToken,
     PermissionDenied,
@@ -76,6 +77,10 @@ def _register_error_handlers(app: FastAPI) -> None:
     async def conflict_handler(_: Request, exc: Exception) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
 
+    async def current_password_handler(_: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": str(exc)})
+
+    app.add_exception_handler(IncorrectCurrentPassword, current_password_handler)
     app.add_exception_handler(RequestValidationError, validation_handler)
     app.add_exception_handler(ResourceNotFound, not_found_handler)
     app.add_exception_handler(ConflictError, conflict_handler)

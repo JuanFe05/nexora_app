@@ -16,6 +16,13 @@ class InvalidCredentials(IdentityError):
         super().__init__(message)
 
 
+class IncorrectCurrentPassword(IdentityError):
+    """Fallo de reautenticacion del perfil; no invalida el access token."""
+
+    def __init__(self) -> None:
+        super().__init__("La contrasena actual es incorrecta")
+
+
 class AuthenticationThrottled(IdentityError):
     """Demasiados intentos fallidos para la misma combinacion IP + identificador."""
 
