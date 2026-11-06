@@ -2,6 +2,7 @@ import ThemeToggleButton from "@/components/shared/header/theme-toggler";
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
 import { env } from "@/config/env";
+import { UserMenu } from "@/features/auth/components/user-menu";
 import { MenuTwoIcon, XIcon } from "@/icons";
 import { Link } from "react-router";
 
@@ -14,7 +15,10 @@ export default function AppHeader() {
           {openMobile ? <XIcon className="size-6" /> : <MenuTwoIcon className="size-auto!" />}
         </Button>
         <Link to="/" className="text-title-sm font-semibold text-gray-800 xl:hidden dark:text-white/90">{env.appName}</Link>
-        <ThemeToggleButton />
+        <div className="ms-auto flex items-center gap-2">
+          <ThemeToggleButton />
+          <UserMenu />
+        </div>
       </div>
     </header>
   );

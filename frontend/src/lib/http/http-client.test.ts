@@ -2,6 +2,237 @@ import { describe, expect, it, vi } from "vitest";
 import { env } from "../../config/env";
 import { ApiError } from "./api-error";
 import { createHttpClient, httpClient } from "./http-client";
+import { createAuthApi } from "../../features/auth/api/auth-api";
+import { createTokenStore } from "../../features/auth/session/token-store";
+import { createAuthSession } from "../../features/auth/session/auth-session";
+import { authErrorMessage } from "../../features/auth/error-message";
+
+const usuario = { id: "user-1", nombre_usuario: "prueba", correo: "prueba@example.test", nombre_completo: "Persona de prueba" };
+const principal = { usuario, roles: ["operador"], permisos: ["example.view"] };
+const tokens = { access_token: "test-access", token_type: "bearer", expires_in: 600 };
+
+function sessionSetup() {
+  const api = {
+    login: vi.fn().mockResolvedValue({ ...tokens, usuario }),
+    refresh: vi.fn().mockResolvedValue(tokens),
+    logout: vi.fn().mockResolvedValue(undefined),
+    me: vi.fn().mockResolvedValue(principal),
+  };
+  const store = createTokenStore();
+  return { api, store, session: createAuthSession(api, store) };
+}
+
+describe("auth API", () => {
+  it("sends the exact login body and gets the principal with bearer", async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ ...tokens, usuario }))
+      .mockResolvedValueOnce(Response.json(principal));
+    const client = createHttpClient({ baseUrl: "/api/v1", fetchImpl, getAccessToken: () => "test-access" });
+    const api = createAuthApi(client);
+    expect(await api.login({ identificador: "prueba", contrasena: "synthetic-test-value" })).toEqual({ ...tokens, usuario });
+    expect(await api.me()).toEqual(principal);
+    expect(fetchImpl.mock.calls[0][0]).toBe("/api/v1/auth/login");
+    expect(fetchImpl.mock.calls[0][1]?.body).toBe(JSON.stringify({ identificador: "prueba", contrasena: "synthetic-test-value" }));
+    expect(fetchImpl.mock.calls[1][0]).toBe("/api/v1/auth/me");
+    expect(fetchImpl.mock.calls[1][1]?.method).toBe("GET");
+    expect(new Headers(fetchImpl.mock.calls[1][1]?.headers).get("Authorization")).toBe("Bearer test-access");
+  });
+
+  it.each(["refresh", "logout"] as const)("%s reads the current CSRF cookie without sending a body or Origin", async (method) => {
+    vi.stubGlobal("document", { cookie: "other=value; nexora_csrf_token=first%3Dtoken" });
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => method === "logout" ? new Response(null, { status: 204 }) : Response.json(tokens));
+    try {
+      const api = createAuthApi(createHttpClient({ baseUrl: "/api/v1", fetchImpl }));
+      await api[method]();
+      document.cookie = "nexora_csrf_token=rotated";
+      await api[method]();
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      for (const [index, call] of fetchImpl.mock.calls.entries()) {
+        expect(call[0]).toBe(`/api/v1/auth/${method}`);
+        expect(call[1]).toMatchObject({ method: "POST", credentials: "include" });
+        expect(call[1]?.body).toBeUndefined();
+        const headers = new Headers(call[1]?.headers);
+        expect(headers.get("X-CSRF-Token")).toBe(index === 0 ? "first=token" : "rotated");
+        expect(headers.has("Origin")).toBe(false);
+      }
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("propagates errors and Retry-After even without a CSRF cookie", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ detail: "limit" }, { status: 429, headers: { "Retry-After": "37" } }));
+    const api = createAuthApi(createHttpClient({ baseUrl: "/api/v1", fetchImpl }));
+    await expect(api.refresh()).rejects.toMatchObject({ status: 429, retryAfter: "37" });
+    expect(new Headers(fetchImpl.mock.calls[0][1]?.headers).has("X-CSRF-Token")).toBe(false);
+  });
+});
+
+describe("memory session", () => {
+  it("stores and clears access tokens independently in memory", () => {
+    const store = createTokenStore();
+    expect(store.getAccessToken()).toBeNull();
+    store.setAccessToken("test-access");
+    expect(store.getAccessToken()).toBe("test-access");
+    expect(createTokenStore().getAccessToken()).toBeNull();
+    store.clear();
+    expect(store.getAccessToken()).toBeNull();
+  });
+
+  it("restores once and shares concurrent refreshes, including me and permissions", async () => {
+    const { api, store, session } = sessionSetup();
+    const listener = vi.fn();
+    const unsubscribe = session.subscribe(listener);
+    expect(session.getSnapshot().status).toBe("loading");
+    await Promise.all([session.restore(), session.restore(), session.refresh()]);
+    expect(api.refresh).toHaveBeenCalledTimes(1);
+    expect(api.me).toHaveBeenCalledTimes(1);
+    expect(store.getAccessToken()).toBe("test-access");
+    expect(session.getSnapshot()).toEqual({ status: "authenticated", user: usuario, roles: principal.roles, permissions: principal.permisos });
+    expect(session.hasPermission("example.view")).toBe(true);
+    expect(session.hasPermission("example.edit")).toBe(false);
+    expect(listener).toHaveBeenCalled();
+    await session.restore();
+    expect(api.refresh).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it("login loads me and logout clears everything even on network failure", async () => {
+    const { api, store, session } = sessionSetup();
+    const input = { identificador: "prueba", contrasena: "synthetic-test-value" };
+    await session.login(input);
+    expect(api.login).toHaveBeenCalledWith(input);
+    expect(session.getSnapshot().user).toEqual(usuario);
+    api.logout.mockRejectedValue(new Error("network"));
+    await session.logout();
+    expect(store.getAccessToken()).toBeNull();
+    expect(session.getSnapshot()).toEqual({ status: "anonymous", user: null, roles: [], permissions: [] });
+    expect(session.hasPermission("example.view")).toBe(false);
+  });
+
+  it("a rejected login leaves no token, user or permissions and preserves the error", async () => {
+    const { api, store, session } = sessionSetup();
+    const error = new ApiError(401, "Credenciales invalidas", null);
+    api.login.mockRejectedValue(error);
+    await expect(session.login({ identificador: "prueba", contrasena: "synthetic-test-value" })).rejects.toBe(error);
+    expect(api.me).not.toHaveBeenCalled();
+    expect(store.getAccessToken()).toBeNull();
+    expect(session.getSnapshot()).toEqual({ status: "anonymous", user: null, roles: [], permissions: [] });
+  });
+
+  it("does not resurrect a session when logout overlaps refresh", async () => {
+    const { api, store, session } = sessionSetup();
+    let resolve!: (value: typeof tokens) => void;
+    api.refresh.mockImplementation(() => new Promise((done) => { resolve = done; }));
+    const refresh = session.refresh();
+    const outcome = refresh.catch(() => undefined);
+    const logout = session.logout();
+    expect(session.getSnapshot().status).toBe("anonymous");
+    resolve(tokens);
+    await Promise.all([outcome, logout]);
+    expect(store.getAccessToken()).toBeNull();
+    expect(session.getSnapshot().status).toBe("anonymous");
+  });
+
+  it.each(["refresh", "me"] as const)("failed %s clears tokens and principal", async (method) => {
+    const { api, store, session } = sessionSetup();
+    await session.login({ identificador: "prueba", contrasena: "synthetic-test-value" });
+    api[method].mockRejectedValue(new ApiError(401, "No autenticado", null));
+    await expect(session.refresh()).rejects.toBeInstanceOf(ApiError);
+    expect(store.getAccessToken()).toBeNull();
+    expect(session.getSnapshot()).toEqual({ status: "anonymous", user: null, roles: [], permissions: [] });
+  });
+});
+
+describe("authenticated HTTP recovery", () => {
+  it("configures the shared-client hooks without changing ordinary GET behavior", async () => {
+    const store = createTokenStore();
+    store.setAccessToken("first");
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ ok: true }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl });
+    const refreshSession = vi.fn();
+    client.configureAuth({ getAccessToken: store.getAccessToken, refreshSession });
+    expect(await client.get("resource")).toEqual({ ok: true });
+    store.clear();
+    expect(await client.get("resource")).toEqual({ ok: true });
+    expect(new Headers(fetchImpl.mock.calls[0][1]?.headers).get("Authorization")).toBe("Bearer first");
+    expect(new Headers(fetchImpl.mock.calls[1][1]?.headers).has("Authorization")).toBe(false);
+    expect(refreshSession).not.toHaveBeenCalled();
+  });
+
+  it("simultaneous 401s share one session refresh and retry with the renewed bearer", async () => {
+    const { api, store, session } = sessionSetup();
+    await session.login({ identificador: "prueba", contrasena: "synthetic-test-value" });
+    store.setAccessToken("expired");
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async (_url, init) =>
+      new Headers(init?.headers).get("Authorization") === "Bearer expired"
+        ? Response.json({}, { status: 401 })
+        : Response.json({ ok: true }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, getAccessToken: store.getAccessToken, refreshSession: session.refresh });
+    expect(await Promise.all([client.get("first"), client.get("second")])).toEqual([{ ok: true }, { ok: true }]);
+    expect(api.refresh).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    expect(session.getSnapshot().status).toBe("authenticated");
+  });
+
+  it("refreshes on 401 and retries once with the current token and original body/options", async () => {
+    let token = "expired";
+    const refreshSession = vi.fn(async () => { token = "renewed"; });
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({}, { status: 401 })).mockResolvedValueOnce(Response.json({ saved: true }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, getAccessToken: () => token, refreshSession });
+    const signal = new AbortController().signal;
+    expect(await client.post("resource", { body: { value: 1 }, headers: { "X-Test": "kept" }, signal })).toEqual({ saved: true });
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(new Headers(fetchImpl.mock.calls[0][1]?.headers).get("Authorization")).toBe("Bearer expired");
+    expect(new Headers(fetchImpl.mock.calls[1][1]?.headers).get("Authorization")).toBe("Bearer renewed");
+    expect(new Headers(fetchImpl.mock.calls[1][1]?.headers).get("X-Test")).toBe("kept");
+    expect(fetchImpl.mock.calls[1][1]).toMatchObject({ method: "POST", body: '{"value":1}', signal, credentials: "include" });
+  });
+
+  it.each(["/auth/login", "auth/refresh", "/auth/logout", "/auth/me?check=1"])("does not refresh auth endpoint %s", async (path) => {
+    const refreshSession = vi.fn();
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}, { status: 401 }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, refreshSession });
+    await expect(client.post(path)).rejects.toMatchObject({ status: 401 });
+    expect(refreshSession).not.toHaveBeenCalled();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("never refreshes or retries a second time", async () => {
+    const refreshSession = vi.fn().mockResolvedValue(undefined);
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({}, { status: 401 }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, refreshSession });
+    await expect(client.get("resource")).rejects.toMatchObject({ status: 401 });
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("a failed refresh makes the real session anonymous without retrying", async () => {
+    const { api, store, session } = sessionSetup();
+    await session.login({ identificador: "prueba", contrasena: "synthetic-test-value" });
+    api.refresh.mockRejectedValue(new ApiError(401, "No autenticado", null));
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}, { status: 401 }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, getAccessToken: store.getAccessToken, refreshSession: session.refresh });
+    await expect(client.get("resource")).rejects.toMatchObject({ status: 401 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(api.refresh).toHaveBeenCalledTimes(1);
+    expect(store.getAccessToken()).toBeNull();
+    expect(session.getSnapshot().status).toBe("anonymous");
+  });
+});
+
+describe("Spanish authentication errors", () => {
+  it.each([
+    [new ApiError(401, "sensitive field detail", null), "Credenciales invalidas"],
+    [new ApiError(429, "limit", null, "37"), "Demasiados intentos. Intenta de nuevo en 37 segundos."],
+    [new ApiError(429, "limit", null), "Demasiados intentos. Intenta de nuevo más tarde."],
+    [new ApiError(429, "limit", null, "invalid"), "Demasiados intentos. Intenta de nuevo más tarde."],
+    [new ApiError(422, "private validation", null), "Revisa el usuario o correo y la contraseña."],
+    [new ApiError(0, "private network", null), "No se pudo conectar con el servidor. Intenta de nuevo."],
+    [new Error("private error"), "No se pudo iniciar sesión. Intenta de nuevo."],
+  ])("maps safely to %s", (error, message) => {
+    expect(authErrorMessage(error)).toBe(message);
+  });
+});
 
 function setup(response: Response, token?: string) {
   const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response);

@@ -8,9 +8,13 @@ export type HttpOptions = Omit<RequestInit, "method" | "body" | "credentials"> &
   body?: unknown;
 };
 
-type HttpClientConfig = {
-  baseUrl: string;
+type AuthHandlers = {
   getAccessToken?: () => string | null | undefined;
+  refreshSession?: () => Promise<void>;
+};
+
+type HttpClientConfig = AuthHandlers & {
+  baseUrl: string;
   fetchImpl?: typeof fetch;
 };
 
@@ -33,13 +37,15 @@ function errorDetail(body: unknown): string {
   return messages.join("; ") || RESPONSE_ERROR;
 }
 
-export function createHttpClient({ baseUrl, getAccessToken, fetchImpl }: HttpClientConfig) {
-  async function request<T>(method: string, path: string, options: HttpOptions = {}): Promise<T> {
+export function createHttpClient({ baseUrl, getAccessToken, refreshSession, fetchImpl }: HttpClientConfig) {
+  let auth: AuthHandlers = { getAccessToken, refreshSession };
+
+  async function request<T>(method: string, path: string, options: HttpOptions = {}, retried = false): Promise<T> {
     const { body, headers: extraHeaders, ...rest } = options;
     const headers = new Headers(extraHeaders);
     headers.set("Accept", "application/json");
     if (body !== undefined) headers.set("Content-Type", "application/json");
-    const token = getAccessToken?.();
+    const token = auth.getAccessToken?.();
     if (token) headers.set("Authorization", `Bearer ${token}`);
     const url = `${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
     const init: RequestInit = {
@@ -56,19 +62,29 @@ export function createHttpClient({ baseUrl, getAccessToken, fetchImpl }: HttpCli
     } catch {
       throw new ApiError(0, NETWORK_ERROR, null);
     }
+    const isAuthEndpoint = /^auth(?:\/|\?|$)/.test(path.replace(/^\/+/, ""));
+    if (response.status === 401 && !isAuthEndpoint && !retried && auth.refreshSession) {
+      try {
+        await auth.refreshSession();
+      } catch {
+        throw new ApiError(401, "No autenticado", null, response.headers.get("Retry-After"));
+      }
+      return request<T>(method, path, options, true);
+    }
     if (response.status === 204 && response.ok) return undefined as T;
 
     let result: unknown;
     try {
       result = await response.json();
     } catch {
-      throw new ApiError(response.status, RESPONSE_ERROR, null);
+      throw new ApiError(response.status, RESPONSE_ERROR, null, response.headers.get("Retry-After"));
     }
-    if (!response.ok) throw new ApiError(response.status, errorDetail(result), result);
+    if (!response.ok) throw new ApiError(response.status, errorDetail(result), result, response.headers.get("Retry-After"));
     return result as T;
   }
 
   return {
+    configureAuth: (handlers: AuthHandlers) => { auth = handlers; },
     get: <T>(path: string, options?: HttpOptions) => request<T>("GET", path, options),
     post: <T>(path: string, options?: HttpOptions) => request<T>("POST", path, options),
     put: <T>(path: string, options?: HttpOptions) => request<T>("PUT", path, options),

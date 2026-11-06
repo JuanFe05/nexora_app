@@ -40,8 +40,8 @@ Rama: `feature/develop`. Estado: en implementacion.
 
 | ID | Specs | Ruta | Commit | Estado |
 | --- | --- | --- | --- | --- |
-| T1 Armazon TailAdmin podado, PNPM, config, env, cliente HTTP, Vitest | S1-S5, S7 | worker | - | pendiente |
-| T2 Feature auth: Sign In conectado, sesion en memoria, guard, logout | S3, S4, S7, S8 | worker | - | pendiente |
+| T1 Armazon TailAdmin podado, PNPM, config, env, cliente HTTP, Vitest | S1-S5, S7 | worker | `969b984` | hecho |
+| T2 Feature auth: Sign In conectado, sesion en memoria, guard, logout | S3, S4, S7, S8 | worker | ver commit feat(frontend) auth | hecho |
 | T3 Docker (dev y prod), compose, .env.template y documentacion | S5, S6 | inline | - | pendiente |
 | T4 Verificacion integrada con backend y PostgreSQL | S1-S8 | inline | - | pendiente |
 
