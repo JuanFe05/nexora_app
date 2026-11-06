@@ -1,7 +1,7 @@
-"""Administracion de usuarios, roles y permisos (exclusiva del rol ADMINISTRADOR).
+"""Administracion IAM: consistencia y limites anti-escalada en la capa de aplicacion.
 
-La autorizacion se exige en la capa HTTP (`require_administrator`); aqui viven las reglas de
-consistencia: unicidad, proteccion del ultimo administrador activo y de los recursos de sistema.
+HTTP exige el permiso de cada accion; los casos de uso limitan lo que el actor puede delegar
+y protegen administradores y recursos de sistema, antes de cualquier escritura.
 """
 
 from __future__ import annotations
@@ -9,13 +9,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from uuid import UUID, uuid4
 
+from nexora.identity_access.application.dto.auth import AuthenticatedPrincipal
 from nexora.identity_access.application.dto.page import Page
 from nexora.identity_access.application.ports.administration import AdministrationRepository
 from nexora.identity_access.application.ports.security import Clock, PasswordHasher
 from nexora.identity_access.application.ports.transaction import Transaction
 from nexora.identity_access.domain.entities.role import Permission, Role
 from nexora.identity_access.domain.entities.user import User
-from nexora.identity_access.domain.exceptions.identity import ConflictError, ResourceNotFound
+from nexora.identity_access.domain.exceptions.identity import (
+    ConflictError,
+    PermissionDenied,
+    ResourceNotFound,
+)
 from nexora.identity_access.domain.value_objects.access_catalog import (
     PERMISSION_CATALOG,
     SystemRole,
@@ -149,9 +154,12 @@ class UserAdministration(_Base):
         roles = await self._repo.role_codes_by_user([user.id])
         return UserDetail(user, roles.get(user.id, ()))
 
-    async def update(self, user_id: UUID, changes: UserChanges) -> UserDetail:
+    async def update(
+        self, user_id: UUID, changes: UserChanges, *, actor: AuthenticatedPrincipal
+    ) -> UserDetail:
         await self._repo.lock_access_changes()
         user = await self._user(user_id)
+        await self._ensure_can_manage_user(user_id, actor)
         if changes.status is UserStatus.INACTIVE and user.is_active:
             await self._ensure_not_last_administrator(user.id)
         await self._ensure_unique(
@@ -161,33 +169,53 @@ class UserAdministration(_Base):
         await self._tx.commit()
         return await self.get(user_id)
 
-    async def delete(self, user_id: UUID, *, actor_id: UUID) -> None:
+    async def delete(self, user_id: UUID, *, actor: AuthenticatedPrincipal) -> None:
         await self._repo.lock_access_changes()
         user = await self._user(user_id)
-        if user.id == actor_id:
+        await self._ensure_can_manage_user(user_id, actor)
+        if user.id == actor.user.id:
             raise ConflictError("No puede eliminar su propia cuenta")
         await self._ensure_not_last_administrator(user.id)
         await self._repo.delete_user(user.id)
         await self._tx.commit()
 
-    async def assign_role(self, user_id: UUID, role_id: UUID, *, actor_id: UUID) -> UserDetail:
+    async def assign_role(
+        self, user_id: UUID, role_id: UUID, *, actor: AuthenticatedPrincipal
+    ) -> UserDetail:
         await self._repo.lock_access_changes()
         await self._user(user_id)
-        await self._role(role_id)
-        await self._repo.assign_role(user_id, role_id, actor_id)
+        role = await self._role(role_id)
+        if SystemRole.ADMINISTRADOR not in actor.roles:
+            if role.code == SystemRole.ADMINISTRADOR:
+                raise PermissionDenied("identity.users.assign_roles")
+            permissions = await self._repo.permission_codes_by_role([role_id])
+            if not set(permissions.get(role_id, ())) <= actor.permissions:
+                raise PermissionDenied("identity.users.assign_roles")
+        await self._repo.assign_role(user_id, role_id, actor.user.id)
         await self._tx.commit()
         return await self.get(user_id)
 
-    async def revoke_role(self, user_id: UUID, role_id: UUID) -> UserDetail:
+    async def revoke_role(
+        self, user_id: UUID, role_id: UUID, *, actor: AuthenticatedPrincipal
+    ) -> UserDetail:
         await self._repo.lock_access_changes()
         await self._user(user_id)
         role = await self._role(role_id)
         if role.code == SystemRole.ADMINISTRADOR:
+            if SystemRole.ADMINISTRADOR not in actor.roles:
+                raise PermissionDenied("identity.users.assign_roles")
             await self._ensure_not_last_administrator(user_id)
         if not await self._repo.revoke_role(user_id, role_id):
             raise ResourceNotFound("Asignacion de rol")
         await self._tx.commit()
         return await self.get(user_id)
+
+    async def _ensure_can_manage_user(self, user_id: UUID, actor: AuthenticatedPrincipal) -> None:
+        if SystemRole.ADMINISTRADOR not in actor.roles:
+            roles = await self._repo.role_codes_by_user([user_id])
+            # Include inactive users: their administrator role remains protected.
+            if SystemRole.ADMINISTRADOR in roles.get(user_id, ()):
+                raise PermissionDenied(SystemRole.ADMINISTRADOR)
 
     async def _ensure_unique(self, username: str, email: str, *, exclude: UUID | None) -> None:
         for other in await self._repo.find_user(username=username, email=email):
@@ -258,10 +286,16 @@ class RoleAdministration(_Base):
         await self._repo.delete_role(role.id)
         await self._tx.commit()
 
-    async def assign_permission(self, role_id: UUID, permission_id: UUID) -> RoleDetail:
+    async def assign_permission(
+        self, role_id: UUID, permission_id: UUID, *, actor: AuthenticatedPrincipal
+    ) -> RoleDetail:
         await self._repo.lock_access_changes()
         await self._role(role_id)
-        await self._permission(permission_id)
+        permission = await self._permission(permission_id)
+        if SystemRole.ADMINISTRADOR not in actor.roles and not actor.has_permission(
+            permission.code
+        ):
+            raise PermissionDenied(permission.code)
         await self._repo.assign_permission(role_id, permission_id)
         await self._tx.commit()
         return await self.get(role_id)

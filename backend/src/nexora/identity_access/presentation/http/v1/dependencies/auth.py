@@ -26,7 +26,6 @@ from nexora.identity_access.application.use_cases.authentication.refresh import 
 )
 from nexora.identity_access.application.use_cases.profile import ProfileService
 from nexora.identity_access.domain.exceptions.identity import InvalidToken, PermissionDenied
-from nexora.identity_access.domain.value_objects.access_catalog import SystemRole
 from nexora.identity_access.infrastructure.persistence.administration_repository import (
     SqlAlchemyAdministrationRepository,
 )
@@ -119,16 +118,6 @@ async def get_current_principal(
 
 
 PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
-
-
-async def require_administrator(principal: PrincipalDep) -> AuthenticatedPrincipal:
-    """La gestion IAM no se delega mediante permisos: requiere el rol de sistema activo."""
-    if SystemRole.ADMINISTRADOR.value not in principal.roles:
-        raise PermissionDenied(SystemRole.ADMINISTRADOR.value)
-    return principal
-
-
-AdministratorDep = Annotated[AuthenticatedPrincipal, Depends(require_administrator)]
 
 
 def get_user_administration(container: ContainerDep, session: SessionDep) -> UserAdministration:

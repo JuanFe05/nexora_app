@@ -1,7 +1,8 @@
 # Administracion de acceso e inicializacion
 
 Siembra automatica de roles, permisos y primer administrador, y API de administracion de
-usuarios, roles y permisos. Toda la gestion es exclusiva del rol `ADMINISTRADOR`.
+usuarios, roles y permisos. La gestion se delega mediante permisos efectivos `identity.*`,
+con limites anti-escalada en la capa de aplicacion.
 
 ## Inicializacion al arrancar
 
@@ -42,10 +43,59 @@ Solo por variables de entorno; el codigo no trae ninguna credencial por defecto.
 
 ## Autorizacion
 
-Cada endpoint de administracion usa `require_administrator`, que exige el **rol** `ADMINISTRADOR`
-activo del usuario autenticado (no un permiso). Asi, un administrador no puede delegar la gestion
-de identidad otorgando permisos `identity.*` a otro rol: esos usuarios siguen recibiendo 403. Sin
-token la respuesta es 401.
+Cada accion exige **solo su permiso**, mediante `require_permission(code)` y el principal
+actual. Consultar, crear, editar, desactivar, eliminar y asignar son independientes: eliminar
+no permite consultar, crear ni editar; consultar no permite mutar; crear no permite listar.
+Los codigos reales conservan el prefijo `identity.` (por ejemplo, `identity.roles.view`).
+
+| Endpoint (prefijo `/api/v1`) | Permiso requerido |
+| --- | --- |
+| `GET /users`, `GET /users/{id}` | `identity.users.view` |
+| `POST /users` | `identity.users.create` |
+| `PATCH /users/{id}` con campos de perfil, sin `estado` | `identity.users.update` |
+| `PATCH /users/{id}` solo con `estado` (activar o desactivar) | `identity.users.deactivate` |
+| `PATCH /users/{id}` con perfil y `estado` | Ambos: `identity.users.update` y `identity.users.deactivate` |
+| `PATCH /users/{id}` con `{}` | `identity.users.update`; conserva el comportamiento sin cambios |
+| `DELETE /users/{id}` | `identity.users.delete` |
+| `PUT`, `DELETE /users/{id}/roles/{role_id}` | `identity.users.assign_roles` |
+| `GET /roles`, `GET /roles/{id}` | `identity.roles.view` |
+| `POST /roles` | `identity.roles.create` |
+| `PATCH /roles/{id}` | `identity.roles.update` |
+| `DELETE /roles/{id}` | `identity.roles.delete` |
+| `PUT`, `DELETE /roles/{id}/permissions/{permission_id}` | `identity.roles.assign_permissions` |
+| `GET /permissions`, `GET /permissions/{id}` | `identity.permissions.view` |
+| `POST /permissions` | `identity.permissions.create` |
+| `PATCH /permissions/{id}` | `identity.permissions.update` |
+| `DELETE /permissions/{id}` | `identity.permissions.delete` |
+
+Sin token la respuesta es 401. Sin el permiso requerido se responde
+`403 {"detail": "No tiene permisos para ejecutar esta operacion"}` **antes de consultar el
+recurso o mutar datos**: tambien para IDs inexistentes, incluidos IDs de asignaciones. Asi no
+se revela si existe un recurso a quien no tiene permiso. Autenticacion sigue validando la
+sesion y registrando su actividad; una denegacion no cambia usuarios, roles, permisos ni enlaces.
+
+Roles y permisos efectivos se consultan en la base de datos en **cada peticion**, nunca en los
+claims del JWT. Asignar o revocar un rol surte efecto en la peticion siguiente con el mismo
+token; un rol inactivo no concede permisos. El arranque ya asigna todo el catalogo al rol
+`ADMINISTRADOR`: no hay un bypass de permisos HTTP por nombre de rol.
+
+### Limites anti-escalada (403)
+
+La aplicacion recibe el DTO `AuthenticatedPrincipal` (usuario, roles y permisos), sin tipos
+HTTP ni de persistencia, y verifica antes de escribir:
+
+- Solo un actor con el rol efectivo `ADMINISTRADOR` puede asignar o revocar ese rol.
+- Para asignar un rol a cualquier usuario (incluido uno mismo), el actor debe poseer **todos**
+  los permisos del rol, incluso si el rol esta inactivo. `ADMINISTRADOR` queda exceptuado.
+- Para asignar un permiso a un rol (incluido uno propio), el actor debe poseer ese permiso.
+  `ADMINISTRADOR` queda exceptuado. Revocar un permiso o un rol ordinario no exige poseer los
+  permisos revocados, solo el permiso de la accion y las protecciones de sistema existentes.
+- Un actor sin el rol `ADMINISTRADOR` no puede editar, activar, desactivar ni eliminar usuarios
+  que tengan ese rol, aunque el usuario objetivo este inactivo.
+
+Estas denegaciones usan el mismo 403 generico y no dejan cambios parciales. Tener todos los
+permisos `identity.*` sin el rol `ADMINISTRADOR` no elimina estos limites. Las reglas de
+consistencia siguientes (409) siguen vigentes para operaciones autorizadas.
 
 ## Endpoints (`/api/v1`)
 
@@ -57,7 +107,8 @@ token la respuesta es 401.
 | `/roles/{id}/permissions/{permission_id}` | `PUT` asigna, `DELETE` revoca |
 | `/permissions` | `POST`, `GET`, `GET /{id}`, `PATCH /{id}`, `DELETE /{id}` |
 
-`POST` responde 201, `DELETE` 204, un id inexistente 404 y una regla de consistencia 409. Los
+Con permiso suficiente, `POST` responde 201, `DELETE` 204, un id inexistente 404 y una regla de
+consistencia 409. Los
 listados mantienen su cuerpo como un arreglo JSON y aceptan `limit` (1-100, por defecto 50),
 `offset` (desde 0) y `q` opcional (maximo 100 caracteres). Se recortan los espacios al principio
 y al final de `q`; vacio o solo espacios equivale a no filtrar. La busqueda es por contenido,
@@ -102,6 +153,8 @@ Al crear usuarios, `contrasena` debe tener 12-128 caracteres.
 ## Pruebas
 
 `tests/integration/test_access_initialization.py` cubre la siembra, su idempotencia y las
-credenciales. `tests/integration/test_iam_administration.py` cubre el acceso de cada rol
-(`ADMINISTRADOR` permitido; `ESTADISTICA`, `FACTURACION` y un usuario con todos los permisos
-`identity.*` reciben 403), el efecto de asignar permisos sobre `GET /auth/me` y las reglas 409.
+credenciales. `tests/integration/test_iam_administration.py` conserva CRUD, perfil de respuestas,
+busqueda, paginacion, asignaciones y reglas 409. `tests/integration/test_granular_permissions.py`
+cubre la matriz endpoint x permiso individual, todos los permisos, administrador, usuario sin rol
+y peticion sin token; comprueba ausencia de cambios en cada denegacion, IDs inexistentes, PATCH
+mixto, cambios de acceso con el mismo token, roles inactivos y limites anti-escalada.

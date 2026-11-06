@@ -59,6 +59,28 @@ Cabecera `Authorization: Bearer <access_token>`.
 
 Errores: `401` sin token, token invalido o vencido, sesion revocada o usuario desactivado.
 
+## Administracion IAM (permisos por accion)
+
+`/users`, `/roles` y `/permissions` requieren el permiso efectivo de la accion, no un rol
+exclusivo. [Tabla endpoint -> permiso](administracion.md#autorizacion). Los codigos mantienen
+`identity.*`: consultar, crear, editar y eliminar no se implican entre si. Las asignaciones
+requieren `identity.users.assign_roles` o `identity.roles.assign_permissions`, sin exigir `view`.
+
+En `PATCH /users/{id}`, campos distintos de `estado` requieren `identity.users.update`; solo
+`estado` requiere `identity.users.deactivate`; mezclar ambos requiere ambos permisos. `{}`
+conserva su comportamiento sin cambios y requiere `identity.users.update`.
+
+Sin token: `401`. Sin permiso: `403 {"detail": "No tiene permisos para ejecutar esta operacion"}`
+antes de buscar el recurso, incluso con IDs inexistentes; no hay cambios administrativos.
+Con permiso, un recurso inexistente responde `404` y las protecciones de consistencia `409`.
+La aplicacion tambien responde ese mismo `403` cuando un actor intenta delegar un permiso no
+poseido (directamente o mediante un rol). Solo `ADMINISTRADOR` puede asignar/revocar su rol y
+editar/desactivar/eliminar usuarios administradores; este rol queda exceptuado del limite de
+permisos delegables. Las protecciones del ultimo administrador y de sistema se conservan.
+
+Roles y permisos se recargan desde la base en cada peticion con el mismo token. Asignaciones y
+revocaciones son inmediatas; los roles inactivos no conceden acceso.
+
 ## Perfil propio (cualquier usuario autenticado)
 
 Los tres endpoints requieren `Authorization: Bearer <access_token>`; sin token valido responden

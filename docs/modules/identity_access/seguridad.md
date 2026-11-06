@@ -9,12 +9,20 @@
 | Validacion de JWT | Algoritmo tomado de la configuracion (nunca del encabezado), firma, `iss`, `aud`, `exp`, `iat`, `sub`, `jti` requeridos y `token_type` esperado |
 | Cookies | `HttpOnly`, `Secure` en produccion, `SameSite` configurable, `Path=/api/v1/auth` |
 | CSRF | Double submit: cookie legible en `/` (`NEXORA_CSRF_COOKIE_PATH`) + cabecera `X-CSRF-Token`, comparadas con `secrets.compare_digest`, mas validacion de `Origin` |
-| Revocacion inmediata | Cada request protegido verifica la sesion por `sid` en base de datos |
+| Revocacion inmediata | Cada request protegido verifica la sesion por `sid` y recarga roles y permisos efectivos en base de datos; roles inactivos no conceden acceso |
+| Administracion IAM | Permiso `identity.*` independiente por accion; 403 generico antes de consultar el recurso si falta el permiso (incluso IDs inexistentes) |
+| Anti-escalada | La aplicacion impide delegar permisos no poseidos; solo el rol `ADMINISTRADOR` puede asignar/revocar ese rol o editar/desactivar/eliminar administradores |
 | Rotacion y reuso | Rotacion atomica por JTI; un refresh reutilizado revoca la sesion |
 | Fuerza bruta | Bloqueo temporal por IP + identificador |
 | Secretos | `NEXORA_JWT_SECRET` por entorno; en produccion se exige 32+ caracteres y se rechaza el secreto de desarrollo |
 | Minimizacion | Las respuestas nunca incluyen `hash_contrasena`, `refresh_token_jti` ni el JWT de refresh |
 | Logs | No se registran contrasenas, hashes, JWT, cookies ni secretos |
+
+Los permisos se resuelven desde roles en cada peticion, no desde el JWT: un cambio de asignacion
+surte efecto con el mismo token en la peticion siguiente. Tener todos los permisos no equivale
+a tener el rol `ADMINISTRADOR` para los limites anti-escalada. Una denegacion no altera datos
+administrativos; la autenticacion conserva su registro de actividad de sesion. Mapa completo,
+independencia de acciones y excepciones de delegacion en [administracion.md](administracion.md#autorizacion).
 
 ## Politica de contrasenas
 

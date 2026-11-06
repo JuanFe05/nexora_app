@@ -1,4 +1,4 @@
-"""Administracion IAM por HTTP: autorizacion por rol y consistencia transaccional."""
+"""Administracion IAM por HTTP: autorizacion y consistencia transaccional."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from nexora.bootstrap.settings import Settings
+from nexora.identity_access.application.dto.auth import AuthenticatedPrincipal, UserView
 from nexora.identity_access.application.use_cases.administration import (
     PermissionAdministration,
     RoleAdministration,
@@ -161,8 +162,8 @@ def operations(user: str, role: str, permission: str) -> list[tuple[str, str, ob
     ]
 
 
-@pytest.mark.parametrize("role_code", [None, "ESTADISTICA", "FACTURACION", "ALL_PERMISSIONS"])
-async def test_every_endpoint_rejects_non_administrators_without_changes(
+@pytest.mark.parametrize("role_code", [None, "ESTADISTICA", "FACTURACION", "ROLELESS"])
+async def test_every_endpoint_rejects_missing_permissions_without_changes(
     client: AsyncClient,
     admin: dict[str, str],
     seeder: Seeder,
@@ -175,23 +176,12 @@ async def test_every_endpoint_rejects_non_administrators_without_changes(
     headers: dict[str, str] = {}
     if role_code:
         outsider = await seeder.create_user(username="outsider", email="outsider@example.test")
-        if role_code == "ALL_PERMISSIONS":
-            codes = tuple(
-                (
-                    await db_session.execute(
-                        text("SELECT codigo FROM iam.permiso WHERE codigo LIKE 'identity.%'")
-                    )
-                ).scalars()
-            )
-            assert codes
-            await seeder.grant_role(outsider, role_code=role_code, permissions=codes)
-        else:
+        if role_code != "ROLELESS":
             await assign_seeded_role(db_session, outsider, role_code)
         headers = await login(client, "outsider")
         me = await client.get("/api/v1/auth/me", headers=headers)
         assert me.status_code == 200
-        if role_code == "ALL_PERMISSIONS":
-            assert set(codes) <= set(me.json()["permisos"])
+        assert me.json()["permisos"] == []
     before = await snapshot(client, admin)
     for method, path, payload in operations(user, role, permission):
         response = await client.request(method, f"/api/v1{path}", headers=headers, json=payload)
@@ -648,7 +638,18 @@ async def test_assignment_serializes_with_deletion(
     client: AsyncClient, admin: dict[str, str], settings: Settings, kind: str
 ) -> None:
     user, role, permission = await resources(client, admin)
-    actor = UUID((await client.get("/api/v1/auth/me", headers=admin)).json()["usuario"]["id"])
+    me = (await client.get("/api/v1/auth/me", headers=admin)).json()
+    actor = AuthenticatedPrincipal(
+        user=UserView(
+            id=UUID(me["usuario"]["id"]),
+            username="admin",
+            email="admin@example.test",
+            full_name="Administrador",
+        ),
+        session_id=uuid4(),
+        roles=tuple(me["roles"]),
+        permissions=frozenset(me["permisos"]),
+    )
     engine = create_async_engine(settings.database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     assignment_entered = asyncio.Event()
@@ -707,9 +708,9 @@ async def test_assignment_serializes_with_deletion(
             async def assign() -> None:
                 try:
                     if kind == "role":
-                        await users_a.assign_role(UUID(user), UUID(role), actor_id=actor)
+                        await users_a.assign_role(UUID(user), UUID(role), actor=actor)
                     else:
-                        await roles_a.assign_permission(UUID(role), UUID(permission))
+                        await roles_a.assign_permission(UUID(role), UUID(permission), actor=actor)
                 finally:
                     assignment_committed.set()
 
