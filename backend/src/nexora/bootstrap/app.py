@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -39,6 +40,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def _register_error_handlers(app: FastAPI) -> None:
+    async def validation_handler(_: Request, exc: Exception) -> JSONResponse:
+        assert isinstance(exc, RequestValidationError)  # noqa: S101
+        detail = [
+            {key: value for key, value in error.items() if key not in {"input", "ctx"}}
+            for error in exc.errors()
+        ]
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": detail}
+        )
+
     async def credentials_handler(_: Request, __: Exception) -> JSONResponse:
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -65,6 +76,7 @@ def _register_error_handlers(app: FastAPI) -> None:
     async def conflict_handler(_: Request, exc: Exception) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
 
+    app.add_exception_handler(RequestValidationError, validation_handler)
     app.add_exception_handler(ResourceNotFound, not_found_handler)
     app.add_exception_handler(ConflictError, conflict_handler)
     app.add_exception_handler(InvalidCredentials, credentials_handler)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr, ValidationError
@@ -16,7 +18,7 @@ from nexora.identity_access.domain.value_objects.access_catalog import (
     PERMISSION_CATALOG,
     SYSTEM_ROLES,
 )
-from tests.integration.conftest import ORIGIN
+from tests.integration.conftest import ORIGIN, Seeder
 
 ADMIN_PASSWORD = "Clave-Admin-Inicial-9"
 
@@ -141,6 +143,120 @@ async def test_con_un_administrador_activo_no_crea_otro(
     await run_initialization(other)
 
     assert await count(db_session, "usuario") == 1
+
+
+@pytest.mark.parametrize("inactive", ["user", "role"])
+async def test_production_rejects_zero_effective_admins_and_rolls_back(
+    admin_settings: Settings, db_session: AsyncSession, seeder: Seeder, inactive: str
+) -> None:
+    user_id = await seeder.create_user(
+        username="admin",
+        email="admin@nexora.co",
+        status="inactivo" if inactive == "user" else "activo",
+    )
+    await seeder.grant_role(
+        user_id,
+        role_code="ADMINISTRADOR",
+        role_status="inactivo" if inactive == "role" else "activo",
+    )
+    tables = ("rol", "permiso", "rol_permiso", "usuario", "asignacion_rol")
+    before = {
+        table: (
+            await db_session.execute(
+                text(f"SELECT * FROM iam.{table} ORDER BY 1")  # noqa: S608
+            )
+        ).all()
+        for table in tables
+    }
+    production = admin_settings.model_copy(update={"environment": "production"})
+    with pytest.raises(AdministratorNotConfigured):
+        await run_initialization(production)
+    after = {
+        table: (
+            await db_session.execute(
+                text(f"SELECT * FROM iam.{table} ORDER BY 1")  # noqa: S608
+            )
+        ).all()
+        for table in tables
+    }
+    assert after == before
+
+
+@pytest.mark.parametrize("inactive", ["user", "role"])
+async def test_development_warns_without_reactivating(
+    admin_settings: Settings,
+    db_session: AsyncSession,
+    seeder: Seeder,
+    caplog: pytest.LogCaptureFixture,
+    inactive: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Alembic's fileConfig disables loggers imported before migration setup.
+    logger = logging.getLogger(
+        "nexora.identity_access.application.use_cases.bootstrap.initialize_access"
+    )
+    monkeypatch.setattr(logger, "disabled", False)
+    caplog.set_level(logging.WARNING, logger=logger.name)
+    development = admin_settings.model_copy(update={"environment": "development"})
+    user_id = await seeder.create_user(
+        username="admin",
+        email="admin@nexora.co",
+        status="inactivo" if inactive == "user" else "activo",
+    )
+    await seeder.grant_role(
+        user_id,
+        role_code="ADMINISTRADOR",
+        role_status="inactivo" if inactive == "role" else "activo",
+    )
+    result = await run_initialization(development)
+    assert (result.admin_created, result.admin_present) == (False, False)
+    assert "administrador activo" in caplog.text
+    assert (
+        await db_session.execute(
+            text(
+                "SELECT u.estado, r.estado FROM iam.usuario u JOIN iam.asignacion_rol a "
+                "ON a.usuario_id = u.id JOIN iam.rol r ON r.id = a.rol_id"
+            )
+        )
+    ).one() == (
+        "inactivo" if inactive == "user" else "activo",
+        "inactivo" if inactive == "role" else "activo",
+    )
+
+
+async def test_production_healthy_admin_is_idempotent(
+    admin_settings: Settings, db_session: AsyncSession
+) -> None:
+    production = admin_settings.model_copy(update={"environment": "production"})
+    first = await run_initialization(production)
+    assert (first.admin_created, first.admin_present) == (True, True)
+    tables = ("rol", "permiso", "rol_permiso", "usuario", "asignacion_rol")
+    before = {table: await count(db_session, table) for table in tables}
+    second = await run_initialization(production)
+    assert (second.admin_created, second.admin_present) == (False, True)
+    assert {table: await count(db_session, table) for table in tables} == before
+
+
+@pytest.mark.parametrize("length", [129, 256])
+def test_bootstrap_password_over_128_is_rejected(length: int) -> None:
+    with pytest.raises(ValidationError, match="128"):
+        Settings(  # type: ignore[call-arg]
+            _env_file=None,
+            bootstrap_admin_username="admin",
+            bootstrap_admin_email="admin@nexora.co",
+            bootstrap_admin_password=SecretStr("x" * length),
+        )
+
+
+@pytest.mark.parametrize("length", [12, 128])
+def test_bootstrap_password_valid_boundaries(length: int) -> None:
+    configured = Settings(  # type: ignore[call-arg]
+        _env_file=None,
+        bootstrap_admin_username="admin",
+        bootstrap_admin_email="admin@nexora.co",
+        bootstrap_admin_password=SecretStr("x" * length),
+    )
+    assert configured.has_bootstrap_admin
 
 
 def test_credenciales_parciales_se_rechazan() -> None:

@@ -11,8 +11,8 @@ from nexora.identity_access.domain.entities.user import User
 
 
 class AdministrationRepository(Protocol):
-    async def lock_administrators(self) -> None:
-        """Serializa las operaciones que podrian dejar al sistema sin administrador activo."""
+    async def lock_access_changes(self) -> None:
+        """Serializa la proteccion de administradores y las asignaciones frente a eliminaciones."""
         ...
 
     async def count_active_administrators(self) -> int: ...

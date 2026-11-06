@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, StringConstraints, field_validator
 
 from nexora.identity_access.application.use_cases.administration import RoleDetail, UserDetail
 from nexora.identity_access.domain.entities.role import Permission
@@ -45,7 +45,16 @@ class UserCreate(Contract):
     numero_telefono: Phone | None = None
 
 
-class UserUpdate(Contract):
+class PatchContract(Contract):
+    @field_validator("*", mode="before")
+    @classmethod
+    def _reject_explicit_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("Los campos PATCH no admiten null; omita el campo para no cambiarlo")
+        return value
+
+
+class UserUpdate(PatchContract):
     nombre_usuario: Username | None = None
     correo: Email | None = None
     primer_nombre: Name | None = None
@@ -91,7 +100,7 @@ class RoleCreate(Contract):
     descripcion: Description | None = None
 
 
-class RoleUpdate(Contract):
+class RoleUpdate(PatchContract):
     nombre: Name | None = None
     descripcion: Description | None = None
     estado: RoleStatus | None = None
@@ -125,7 +134,7 @@ class PermissionCreate(Contract):
     descripcion: Description | None = None
 
 
-class PermissionUpdate(Contract):
+class PermissionUpdate(PatchContract):
     nombre: Name | None = None
     modulo: Module | None = None
     descripcion: Description | None = None

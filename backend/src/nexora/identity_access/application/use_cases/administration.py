@@ -6,7 +6,7 @@ consistencia: unicidad, proteccion del ultimo administrador activo y de los recu
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from uuid import UUID, uuid4
 
 from nexora.identity_access.application.ports.administration import AdministrationRepository
@@ -30,7 +30,7 @@ LAST_ADMIN_MESSAGE = "No se puede dejar al sistema sin un administrador activo"
 class NewUser:
     username: str
     email: str
-    password: str
+    password: str = field(repr=False)
     first_name: str
     last_name: str
     middle_name: str | None = None
@@ -144,7 +144,7 @@ class UserAdministration(_Base):
         return UserDetail(user, roles.get(user.id, ()))
 
     async def update(self, user_id: UUID, changes: UserChanges) -> UserDetail:
-        await self._repo.lock_administrators()
+        await self._repo.lock_access_changes()
         user = await self._user(user_id)
         if changes.status is UserStatus.INACTIVE and user.is_active:
             await self._ensure_not_last_administrator(user.id)
@@ -156,7 +156,7 @@ class UserAdministration(_Base):
         return await self.get(user_id)
 
     async def delete(self, user_id: UUID, *, actor_id: UUID) -> None:
-        await self._repo.lock_administrators()
+        await self._repo.lock_access_changes()
         user = await self._user(user_id)
         if user.id == actor_id:
             raise ConflictError("No puede eliminar su propia cuenta")
@@ -165,6 +165,7 @@ class UserAdministration(_Base):
         await self._tx.commit()
 
     async def assign_role(self, user_id: UUID, role_id: UUID, *, actor_id: UUID) -> UserDetail:
+        await self._repo.lock_access_changes()
         await self._user(user_id)
         await self._role(role_id)
         await self._repo.assign_role(user_id, role_id, actor_id)
@@ -172,7 +173,7 @@ class UserAdministration(_Base):
         return await self.get(user_id)
 
     async def revoke_role(self, user_id: UUID, role_id: UUID) -> UserDetail:
-        await self._repo.lock_administrators()
+        await self._repo.lock_access_changes()
         await self._user(user_id)
         role = await self._role(role_id)
         if role.code == SystemRole.ADMINISTRADOR:
@@ -238,6 +239,7 @@ class RoleAdministration(_Base):
         return await self.get(role_id)
 
     async def delete(self, role_id: UUID) -> None:
+        await self._repo.lock_access_changes()
         role = await self._role(role_id)
         if role.code in _SYSTEM_ROLE_CODES:
             raise ConflictError("Los roles de sistema no pueden eliminarse")
@@ -247,6 +249,7 @@ class RoleAdministration(_Base):
         await self._tx.commit()
 
     async def assign_permission(self, role_id: UUID, permission_id: UUID) -> RoleDetail:
+        await self._repo.lock_access_changes()
         await self._role(role_id)
         await self._permission(permission_id)
         await self._repo.assign_permission(role_id, permission_id)
@@ -303,6 +306,7 @@ class PermissionAdministration(_Base):
         return updated
 
     async def delete(self, permission_id: UUID) -> None:
+        await self._repo.lock_access_changes()
         permission = await self._permission(permission_id)
         if permission.code in _CATALOG_PERMISSION_CODES:
             raise ConflictError("Los permisos del catalogo del sistema no pueden eliminarse")

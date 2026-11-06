@@ -181,8 +181,10 @@ class SqlAlchemyAccessSeedRepository:
             select(func.count())
             .select_from(RoleAssignmentModel)
             .join(UserModel, UserModel.id == RoleAssignmentModel.user_id)
+            .join(RoleModel, RoleModel.id == RoleAssignmentModel.role_id)
             .where(
                 RoleAssignmentModel.role_id == role_id,
+                RoleModel.status == RoleStatus.ACTIVE.value,
                 UserModel.status == UserStatus.ACTIVE.value,
             )
         )

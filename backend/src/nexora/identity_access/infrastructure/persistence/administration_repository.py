@@ -29,8 +29,8 @@ from nexora.identity_access.infrastructure.persistence.models import (
     UserModel,
 )
 
-#: Serializa las operaciones que podrian dejar al sistema sin administrador activo.
-_ADMIN_LOCK_KEY = 726_345_002
+#: Serializa la proteccion de administradores y las asignaciones frente a eliminaciones.
+_ACCESS_LOCK_KEY = 726_345_002
 
 
 class SqlAlchemyAdministrationRepository:
@@ -39,8 +39,8 @@ class SqlAlchemyAdministrationRepository:
 
     # --- Proteccion del ultimo administrador ---------------------------------------------
 
-    async def lock_administrators(self) -> None:
-        await self._session.execute(select(func.pg_advisory_xact_lock(_ADMIN_LOCK_KEY)))
+    async def lock_access_changes(self) -> None:
+        await self._session.execute(select(func.pg_advisory_xact_lock(_ACCESS_LOCK_KEY)))
 
     def _active_admins(self) -> Any:
         return (

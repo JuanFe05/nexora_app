@@ -2,14 +2,28 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient, Response
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from nexora.bootstrap.settings import Settings
+from nexora.identity_access.application.use_cases.administration import (
+    PermissionAdministration,
+    RoleAdministration,
+    UserAdministration,
+)
+from nexora.identity_access.domain.exceptions.identity import ConflictError
+from nexora.identity_access.infrastructure.persistence.administration_repository import (
+    SqlAlchemyAdministrationRepository,
+)
+from nexora.identity_access.infrastructure.persistence.transaction import SqlAlchemyTransaction
+from nexora.identity_access.infrastructure.security.password_hasher import Argon2PasswordHasher
+from nexora.shared_kernel.clock import SystemClock
 from tests.integration.conftest import ORIGIN, PASSWORD, Seeder
 
 NEW_PASSWORD = "Clave123456*"
@@ -369,6 +383,204 @@ async def test_validation_pagination_and_immutable_codes(
         assert await snapshot(client, admin) == before
     await request(client, admin, "POST", f"/{resource}", 422, {**base, "unknown": "value"})
     assert await snapshot(client, admin) == before
+
+
+@pytest.mark.parametrize("endpoint", ["users", "auth/login"])
+async def test_validation_errors_never_echo_secrets(
+    client: AsyncClient, admin: dict[str, str], endpoint: str
+) -> None:
+    secret = "short-D1" if endpoint == "users" else "D1-secret-" * 15
+    payload = (
+        {**USER, "contrasena": secret}
+        if endpoint == "users"
+        else {"identificador": " ", "contrasena": secret}
+    )
+    before = await snapshot(client, admin)
+    response = await client.post(f"/api/v1/{endpoint}", headers=admin, json=payload)
+    assert response.status_code == 422
+    assert secret not in response.text
+    errors = response.json()["detail"]
+    assert errors
+    for error in errors:
+        assert "input" not in error
+        assert "ctx" not in error
+        assert error["loc"][0] == "body"
+        assert error["msg"]
+    assert any(error["loc"] == ["body", "contrasena"] for error in errors)
+    assert await snapshot(client, admin) == before
+
+
+@pytest.mark.parametrize(
+    ("resource", "fields"),
+    [
+        (
+            "users",
+            (
+                "nombre_usuario",
+                "correo",
+                "primer_nombre",
+                "segundo_nombre",
+                "primer_apellido",
+                "segundo_apellido",
+                "numero_telefono",
+                "estado",
+            ),
+        ),
+        ("roles", ("nombre", "descripcion", "estado")),
+        ("permissions", ("nombre", "modulo", "descripcion")),
+    ],
+)
+async def test_patch_rejects_each_explicit_null_but_preserves_omission(
+    client: AsyncClient, admin: dict[str, str], resource: str, fields: tuple[str, ...]
+) -> None:
+    user, role, permission = await resources(client, admin)
+    identifier = {"users": user, "roles": role, "permissions": permission}[resource]
+    path = f"/{resource}/{identifier}"
+    before = await snapshot(client, admin)
+    original = (await request(client, admin, "GET", path)).json()
+    for field in fields:
+        response = await request(client, admin, "PATCH", path, 422, {field: None})
+        assert response.json()["detail"][0]["loc"] == ["body", field]
+        assert await snapshot(client, admin) == before
+    assert (await request(client, admin, "PATCH", path, 200, {})).json() == original
+    name = "primer_nombre" if resource == "users" else "nombre"
+    changed = (await request(client, admin, "PATCH", path, 200, {name: "Cambio"})).json()
+    assert changed == {**original, name: "Cambio"}
+
+
+async def test_create_user_password_length_boundaries(
+    client: AsyncClient, admin: dict[str, str]
+) -> None:
+    before = await snapshot(client, admin)
+    await request(client, admin, "POST", "/users", 422, {**USER, "contrasena": "x" * 129})
+    assert await snapshot(client, admin) == before
+    for length in (12, 128):
+        password = "x" * length
+        username = f"length{length}"
+        created = await request(
+            client,
+            admin,
+            "POST",
+            "/users",
+            201,
+            {
+                **USER,
+                "nombre_usuario": username,
+                "correo": f"{username}@example.test",
+                "contrasena": password,
+            },
+        )
+        assert password not in created.text
+        await login(client, username, password)
+
+
+@pytest.mark.parametrize("kind", ["role", "permission"])
+async def test_assignment_serializes_with_deletion(
+    client: AsyncClient, admin: dict[str, str], settings: Settings, kind: str
+) -> None:
+    user, role, permission = await resources(client, admin)
+    actor = UUID((await client.get("/api/v1/auth/me", headers=admin)).json()["usuario"]["id"])
+    engine = create_async_engine(settings.database_url)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assignment_entered = asyncio.Event()
+    release_assignment = asyncio.Event()
+    deletion_started = asyncio.Event()
+    assignment_committed = asyncio.Event()
+
+    class AssigningRepository(SqlAlchemyAdministrationRepository):
+        async def assign_role(self, user_id: UUID, role_id: UUID, assigned_by: UUID) -> None:
+            assignment_entered.set()
+            await release_assignment.wait()
+            await super().assign_role(user_id, role_id, assigned_by)
+
+        async def assign_permission(self, role_id: UUID, permission_id: UUID) -> None:
+            assignment_entered.set()
+            await release_assignment.wait()
+            await super().assign_permission(role_id, permission_id)
+
+    class DeletingRepository(SqlAlchemyAdministrationRepository):
+        async def lock_access_changes(self) -> None:
+            deletion_started.set()
+            await super().lock_access_changes()
+
+        async def count_role_assignments(self, role_id: UUID) -> int:
+            count = await super().count_role_assignments(role_id)
+            deletion_started.set()
+            await assignment_committed.wait()
+            return count
+
+        async def count_permission_roles(self, permission_id: UUID) -> int:
+            count = await super().count_permission_roles(permission_id)
+            deletion_started.set()
+            await assignment_committed.wait()
+            return count
+
+    try:
+        async with factory() as session_a, factory() as session_b:
+            assigning = AssigningRepository(session_a)
+            deleting = DeletingRepository(session_b)
+            roles_a = RoleAdministration(
+                repository=assigning, transaction=SqlAlchemyTransaction(session_a)
+            )
+            users_a = UserAdministration(
+                repository=assigning,
+                transaction=SqlAlchemyTransaction(session_a),
+                hasher=Argon2PasswordHasher(),
+                clock=SystemClock(),
+            )
+            roles_b = RoleAdministration(
+                repository=deleting, transaction=SqlAlchemyTransaction(session_b)
+            )
+            permissions_b = PermissionAdministration(
+                repository=deleting, transaction=SqlAlchemyTransaction(session_b)
+            )
+
+            async def assign() -> None:
+                try:
+                    if kind == "role":
+                        await users_a.assign_role(UUID(user), UUID(role), actor_id=actor)
+                    else:
+                        await roles_a.assign_permission(UUID(role), UUID(permission))
+                finally:
+                    assignment_committed.set()
+
+            async def delete() -> None:
+                try:
+                    if kind == "role":
+                        await roles_b.delete(UUID(role))
+                    else:
+                        await permissions_b.delete(UUID(permission))
+                finally:
+                    await session_b.rollback()
+
+            async with asyncio.timeout(10):
+                assignment = asyncio.create_task(assign())
+                await assignment_entered.wait()
+                deletion = asyncio.create_task(delete())
+                try:
+                    await deletion_started.wait()
+                finally:
+                    release_assignment.set()
+                outcomes = await asyncio.gather(assignment, deletion, return_exceptions=True)
+            assert outcomes[0] is None, outcomes
+            assert isinstance(outcomes[1], ConflictError), outcomes
+            message = (
+                "El rol tiene usuarios asignados: revoque las asignaciones primero"
+                if kind == "role"
+                else "El permiso esta asignado a roles: revoquelo primero"
+            )
+            assert str(outcomes[1]) == message
+        path = f"/users/{user}" if kind == "role" else f"/roles/{role}"
+        stored = (await request(client, admin, "GET", path)).json()
+        assert stored["roles" if kind == "role" else "permisos"] == [
+            "CUSTOM" if kind == "role" else "custom.view"
+        ]
+        target = f"/roles/{role}" if kind == "role" else f"/permissions/{permission}"
+        assert (await request(client, admin, "DELETE", target, 409)).json() == {"detail": message}
+    finally:
+        release_assignment.set()
+        assignment_committed.set()
+        await engine.dispose()
 
 
 async def test_inactive_second_admin_does_not_bypass_last_active_protection(

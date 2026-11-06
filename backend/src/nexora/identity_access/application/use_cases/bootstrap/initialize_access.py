@@ -99,4 +99,9 @@ class InitializeAccessUseCase:
             )
             await self._seed.add_user(user)
         await self._seed.ensure_assignment(user.id, admin_role_id)
-        return InitializationResult(admin_created=created, admin_present=user.is_active)
+        admin_present = await self._seed.count_active_users_with_role(admin_role_id) > 0
+        if not admin_present:
+            if self._require_admin:
+                raise AdministratorNotConfigured
+            logger.warning("No hay administrador activo despues de la inicializacion")
+        return InitializationResult(admin_created=created, admin_present=admin_present)

@@ -24,6 +24,7 @@ _REPO_ROOT = _BACKEND_DIR.parent
 ALLOWED_JWT_ALGORITHMS = frozenset({"HS256", "HS384", "HS512"})
 
 MIN_ADMIN_PASSWORD_LENGTH = 12
+MAX_ADMIN_PASSWORD_LENGTH = 128
 
 #: Secreto publico de desarrollo. Produccion debe reemplazarlo si o si.
 DEVELOPMENT_JWT_SECRET = "development-only-secret-change-me"  # noqa: S105
@@ -97,6 +98,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"NEXORA_BOOTSTRAP_ADMIN_PASSWORD debe tener al menos "
                 f"{MIN_ADMIN_PASSWORD_LENGTH} caracteres"
+            )
+        if password is not None and len(password.get_secret_value()) > MAX_ADMIN_PASSWORD_LENGTH:
+            raise ValueError(
+                f"NEXORA_BOOTSTRAP_ADMIN_PASSWORD debe tener como maximo "
+                f"{MAX_ADMIN_PASSWORD_LENGTH} caracteres"
             )
         return self
 
