@@ -4,12 +4,17 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/http/api-error";
+import { PERMISSIONS } from "@/features/auth/permissions";
+
+const { hasPermission } = vi.hoisted(() => ({ hasPermission: vi.fn<(code: string) => boolean>() }));
+vi.mock("@/features/auth/use-auth", () => ({ useAuth: () => ({ hasPermission }) }));
 import * as api from "../api/permissions-api";
 import PermissionsPage from "./permissions-page";
 
 vi.mock("../api/permissions-api", async importOriginal => ({ ...await importOriginal<typeof api>(), listPermissions: vi.fn(), createPermission: vi.fn(), updatePermission: vi.fn(), deletePermission: vi.fn() }));
 const permission = { id: "p1", codigo: "identity.users.view", nombre: "Ver usuarios", modulo: "identity", descripcion: "Consultar usuarios" };
 beforeEach(() => {
+  hasPermission.mockReturnValue(true);
   vi.mocked(api.listPermissions).mockResolvedValue({ items: [permission], total: 21 });
   vi.mocked(api.createPermission).mockResolvedValue(permission);
   vi.mocked(api.updatePermission).mockResolvedValue(permission);
@@ -25,6 +30,114 @@ async function createForm() {
 }
 
 describe("Permisos", () => {
+  it.each([
+    [false, false, false],
+    [true, false, false],
+    [false, true, false],
+    [false, false, true],
+    [true, true, false],
+    [true, false, true],
+    [false, true, true],
+    [true, true, true],
+  ])("independent permission matrix: create=%s update=%s delete=%s", async (create, update, remove) => {
+    const granted = new Set<string>([
+      PERMISSIONS.permissionsView,
+      ...(create ? [PERMISSIONS.permissionsCreate] : []),
+      ...(update ? [PERMISSIONS.permissionsUpdate] : []),
+      ...(remove ? [PERMISSIONS.permissionsDelete] : []),
+    ]);
+    hasPermission.mockImplementation(code => granted.has(code));
+    await loaded();
+    const expectPresence = (element: HTMLElement | null, present: boolean) => {
+      if (present) expect(element).toBeVisible();
+      else expect(element).not.toBeInTheDocument();
+    };
+    expectPresence(screen.queryByRole("button", { name: "Nuevo permiso" }), create);
+    expectPresence(screen.queryByRole("button", { name: "Editar permiso Ver usuarios" }), update);
+    expectPresence(screen.queryByRole("button", { name: "Eliminar permiso Ver usuarios" }), remove);
+    expectPresence(screen.queryByRole("columnheader", { name: "Acciones" }), update || remove);
+    if (create) {
+      await createForm();
+      await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(api.createPermission).toHaveBeenCalledExactlyOnceWith({ codigo: permission.codigo, nombre: permission.nombre, modulo: permission.modulo, descripcion: "" });
+    } else expect(api.createPermission).not.toHaveBeenCalled();
+    if (update) {
+      await userEvent.click(screen.getByRole("button", { name: "Editar permiso Ver usuarios" }));
+      await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(api.updatePermission).not.toHaveBeenCalled();
+      await userEvent.click(screen.getByRole("button", { name: "Editar permiso Ver usuarios" }));
+      fireEvent.change(screen.getByLabelText(/^Nombre/), { target: { value: "Consultar" } });
+      await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(api.updatePermission).toHaveBeenCalledExactlyOnceWith(permission, { codigo: permission.codigo, nombre: "Consultar", modulo: permission.modulo, descripcion: permission.descripcion });
+    } else expect(api.updatePermission).not.toHaveBeenCalled();
+    if (remove) {
+      await userEvent.click(screen.getByRole("button", { name: "Eliminar permiso Ver usuarios" }));
+      await userEvent.click(screen.getByRole("button", { name: "Eliminar" }));
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      expect(api.deletePermission).toHaveBeenCalledExactlyOnceWith(permission.id);
+    } else expect(api.deletePermission).not.toHaveBeenCalled();
+    expect(api.listPermissions).toHaveBeenCalledTimes(1 + Number(create) + Number(update) + Number(remove));
+  });
+  it.each(["Escape", "Cancelar", "Cerrar"])("uses Dialog with Form and dismisses with %s without a mutation", async close => {
+    await loaded();
+    await userEvent.click(screen.getByRole("button", { name: "Nuevo permiso" }));
+    const dialog = screen.getByRole("dialog", { name: "Nuevo permiso" });
+    expect(dialog).toHaveAttribute("data-slot", "dialog-content");
+    expect(dialog).toHaveAccessibleDescription("Agrega un permiso al catálogo. Los campos con * son obligatorios.");
+    if (close === "Escape") await userEvent.keyboard("{Escape}");
+    else await userEvent.click(within(dialog).getByRole("button", { name: close }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(api.createPermission).not.toHaveBeenCalled();
+    expect(api.updatePermission).not.toHaveBeenCalled();
+    expect(api.deletePermission).not.toHaveBeenCalled();
+    expect(api.listPermissions).toHaveBeenCalledTimes(1);
+  });
+  it.each(["create", "update"])("blocks all closing controls while %s is pending", async action => {
+    let resolve!: (value: typeof permission) => void;
+    const pending = new Promise<typeof permission>(done => { resolve = done; });
+    if (action === "create") vi.mocked(api.createPermission).mockReturnValue(pending);
+    else vi.mocked(api.updatePermission).mockReturnValue(pending);
+    await loaded();
+    if (action === "create") await createForm();
+    else {
+      await userEvent.click(screen.getByRole("button", { name: "Editar permiso Ver usuarios" }));
+      fireEvent.change(screen.getByLabelText(/^Nombre/), { target: { value: "Consultar" } });
+    }
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(within(dialog).getByRole("button", { name: "Guardando…" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    expect(screen.getByLabelText(/^Nombre/)).toBeDisabled();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cerrar" }));
+    expect(dialog).toBeVisible();
+    expect(api.listPermissions).toHaveBeenCalledTimes(1);
+    await act(async () => { resolve(permission); });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(api.listPermissions).toHaveBeenCalledTimes(2);
+  });
+  it.each(["create", "update", "delete"])("shows backend 403 detail in the %s InlineAlert without reloading", async action => {
+    const error = new ApiError(403, "No tienes el permiso requerido para esta operación.", null);
+    vi.mocked(api.createPermission).mockRejectedValue(error);
+    vi.mocked(api.updatePermission).mockRejectedValue(error);
+    vi.mocked(api.deletePermission).mockRejectedValue(error);
+    await loaded();
+    if (action === "create") await createForm();
+    else if (action === "update") {
+      await userEvent.click(screen.getByRole("button", { name: "Editar permiso Ver usuarios" }));
+      fireEvent.change(screen.getByLabelText(/^Nombre/), { target: { value: "Consultar" } });
+    } else await userEvent.click(screen.getByRole("button", { name: "Eliminar permiso Ver usuarios" }));
+    await userEvent.click(screen.getByRole("button", { name: action === "delete" ? "Eliminar" : "Guardar" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(error.detail);
+    expect(screen.getByRole(action === "delete" ? "alertdialog" : "dialog")).toBeVisible();
+    expect(api.listPermissions).toHaveBeenCalledTimes(1);
+    if (action !== "delete") expect(screen.getByLabelText(/^Nombre/)).toHaveValue(action === "update" ? "Consultar" : permission.nombre);
+  });
   it("lists real catalog fields with accessible edit/delete actions and paginates", async () => {
     await loaded();
     expect(screen.getByRole("table", { name: "Permisos" })).toBeVisible();
@@ -61,7 +174,7 @@ describe("Permisos", () => {
     expect(screen.getByText("El módulo es obligatorio.")).toBeVisible();
     expect(api.createPermission).not.toHaveBeenCalled();
   });
-  it("creates a permission, closes the drawer, reloads and announces success", async () => {
+  it("creates a permission, closes the dialog, reloads and announces success", async () => {
     await loaded(); await createForm();
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
     expect(api.createPermission).toHaveBeenCalledWith({ codigo: permission.codigo, nombre: permission.nombre, modulo: permission.modulo, descripcion: "" });
@@ -130,7 +243,7 @@ describe("Permisos", () => {
   it("shows safe load errors and supports retry", async () => {
     vi.mocked(api.listPermissions).mockRejectedValueOnce(new ApiError(403, "Forbidden", null));
     render(<PermissionsPage />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("No tienes autorización para administrar permisos.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Forbidden");
     await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(await screen.findByRole("cell", { name: permission.codigo })).toBeVisible();
   });

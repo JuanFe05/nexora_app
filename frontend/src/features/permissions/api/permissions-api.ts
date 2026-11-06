@@ -31,7 +31,7 @@ export function permissionErrorMessage(error: unknown): string {
     switch (error.status) {
       case 0: return "No se pudo conectar con el servidor.";
       case 401: return "Tu sesión ha caducado. Vuelve a iniciar sesión.";
-      case 403: return "No tienes autorización para administrar permisos.";
+      case 403: return error.detail;
       case 404: return "El permiso ya no existe. Actualiza el listado.";
       case 409: return error.detail;
       case 422: return "Revisa los datos del permiso e inténtalo de nuevo.";

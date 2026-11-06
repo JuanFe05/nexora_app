@@ -46,7 +46,7 @@ describe("permissions API", () => {
   });
   it.each([
     [401, "Tu sesión ha caducado. Vuelve a iniciar sesión."],
-    [403, "No tienes autorización para administrar permisos."],
+    [403, "Este permiso está asignado a roles."],
     [404, "El permiso ya no existe. Actualiza el listado."],
     [409, "Este permiso está asignado a roles."],
     [422, "Revisa los datos del permiso e inténtalo de nuevo."],

@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from "react";
-import { FormDrawer } from "@/components/shared/form-drawer";
+import { FormDialog } from "@/components/shared/form-dialog";
 import { InlineAlert } from "@/components/shared/inline-alert";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ type Props = {
   onSaved: (message: string, changed: boolean) => void;
 };
 
-export function PermissionDrawer({ permission, onClose, onSaved }: Props) {
+export function PermissionFormDialog({ permission, onClose, onSaved }: Props) {
   const [values, setValues] = useState(() => permissionValues(permission));
   const [errors, setErrors] = useState<PermissionErrors>({});
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +51,7 @@ export function PermissionDrawer({ permission, onClose, onSaved }: Props) {
   }
 
   return (
-    <FormDrawer open onOpenChange={open => { if (!open) onClose(); }} title={permission ? "Editar permiso" : "Nuevo permiso"}
+    <FormDialog open onOpenChange={open => { if (!open) onClose(); }} title={permission ? "Editar permiso" : "Nuevo permiso"}
       description={permission ? "Actualiza los datos del permiso. El código no se puede modificar." : "Agrega un permiso al catálogo. Los campos con * son obligatorios."}
       formId="permission-form" pending={pending}>
       <form ref={formRef} id="permission-form" noValidate onSubmit={submit} className="space-y-5 py-4">
@@ -77,6 +77,6 @@ export function PermissionDrawer({ permission, onClose, onSaved }: Props) {
           );
         })}
       </form>
-    </FormDrawer>
+    </FormDialog>
   );
 }

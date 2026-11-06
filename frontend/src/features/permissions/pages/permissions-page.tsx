@@ -3,9 +3,11 @@ import { DataTable, RowActionButton, usePagedQuery, type DataTableColumn } from 
 import { InlineAlert } from "@/components/shared/inline-alert";
 import { Button } from "@/components/ui/button";
 import { PlusIcon } from "@/icons";
+import { PERMISSIONS } from "@/features/auth/permissions";
+import { useAuth } from "@/features/auth/use-auth";
 import { listPermissions, permissionErrorMessage } from "../api/permissions-api";
 import { PermissionDeleteDialog } from "../components/permission-delete-dialog";
-import { PermissionDrawer } from "../components/permission-drawer";
+import { PermissionFormDialog } from "../components/permission-drawer";
 import type { Permission } from "../types";
 
 const columns: DataTableColumn<Permission>[] = [
@@ -16,8 +18,12 @@ const columns: DataTableColumn<Permission>[] = [
 ];
 
 export default function PermissionsPage() {
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission(PERMISSIONS.permissionsCreate);
+  const canUpdate = hasPermission(PERMISSIONS.permissionsUpdate);
+  const canDelete = hasPermission(PERMISSIONS.permissionsDelete);
   const list = usePagedQuery({ fetcher: listPermissions, initialPageSize: 10 });
-  const [drawer, setDrawer] = useState<{ permission?: Permission } | null>(null);
+  const [form, setForm] = useState<{ permission?: Permission } | null>(null);
   const [deleting, setDeleting] = useState<Permission | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -30,18 +36,18 @@ export default function PermissionsPage() {
         total={list.total} page={list.page} pageSize={list.pageSize} pageSizeOptions={[10, 25, 50, 100]}
         onPageChange={list.setPage} onPageSizeChange={list.setPageSize} search={list.search}
         onSearchChange={value => list.setSearch(value.slice(0, 100))} searchPlaceholder="Buscar por código, nombre o módulo"
-        headerAction={<Button onClick={() => { setSuccess(null); setDrawer({}); }}><PlusIcon aria-hidden="true" />Nuevo permiso</Button>}
-        rowActions={row => <>
-          <RowActionButton aria-label={`Editar permiso ${row.nombre}`} onClick={() => { setSuccess(null); setDrawer({ permission: row }); }} />
-          <RowActionButton variant="danger" aria-label={`Eliminar permiso ${row.nombre}`} onClick={() => { setSuccess(null); setDeleting(row); }} />
-        </>}
+        headerAction={canCreate ? <Button onClick={() => { setSuccess(null); setForm({}); }}><PlusIcon aria-hidden="true" />Nuevo permiso</Button> : undefined}
+        rowActions={canUpdate || canDelete ? row => <>
+          {canUpdate && <RowActionButton aria-label={`Editar permiso ${row.nombre}`} onClick={() => { setSuccess(null); setForm({ permission: row }); }} />}
+          {canDelete && <RowActionButton variant="danger" aria-label={`Eliminar permiso ${row.nombre}`} onClick={() => { setSuccess(null); setDeleting(row); }} />}
+        </> : undefined}
         emptyState={{ title: "No hay permisos", description: "Crea el primer permiso para comenzar." }} />
-      {drawer && <PermissionDrawer permission={drawer.permission} onClose={() => setDrawer(null)} onSaved={(message, changed) => {
-        setDrawer(null);
+      {form && (form.permission ? canUpdate : canCreate) && <PermissionFormDialog permission={form.permission} onClose={() => setForm(null)} onSaved={(message, changed) => {
+        setForm(null);
         setSuccess(message);
         if (changed) list.reload();
       }} />}
-      {deleting && <PermissionDeleteDialog permission={deleting} onClose={() => setDeleting(null)} onDeleted={() => {
+      {deleting && canDelete && <PermissionDeleteDialog permission={deleting} onClose={() => setDeleting(null)} onDeleted={() => {
         setDeleting(null);
         setSuccess("Permiso eliminado correctamente.");
         list.reload();
