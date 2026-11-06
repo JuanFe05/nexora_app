@@ -88,6 +88,9 @@ Todas usan el prefijo `NEXORA_`.
 | `NEXORA_REFRESH_TOKEN_TTL_DAYS` | `7` | Vigencia del refresh token y de la sesion |
 | `NEXORA_COOKIE_SAMESITE` | `lax` | `lax`, `strict` o `none` |
 | `NEXORA_CSRF_COOKIE_PATH` | `/` | Ruta de la cookie CSRF legible por el front |
+| `NEXORA_BOOTSTRAP_ADMIN_USERNAME` | — | Administrador inicial; obligatorio en produccion si no hay administrador |
+| `NEXORA_BOOTSTRAP_ADMIN_EMAIL` | — | Correo del administrador inicial |
+| `NEXORA_BOOTSTRAP_ADMIN_PASSWORD` | — | Contrasena inicial, 12 a 128 caracteres (Argon2id); ver `administracion.md` |
 | `NEXORA_ALLOWED_ORIGINS` | `["http://localhost:5173"]` | Origenes de CORS y validacion CSRF |
 | `NEXORA_LOGIN_MAX_ATTEMPTS` | `5` | Intentos antes del bloqueo |
 | `NEXORA_LOGIN_ATTEMPT_WINDOW_SECONDS` | `300` | Ventana de conteo |

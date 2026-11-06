@@ -41,7 +41,7 @@ rol `ADMINISTRADOR`. Rama: `feature/develop`. Estado: en implementacion.
 | T1 Siembra idempotente (settings, caso de uso, arranque) | S1, S3, S4 | inline | ver ultimo commit feat(iam) seed | hecho |
 | T2 Guard administrador + gestion de roles/permisos y asignaciones | S2, S5 | worker | ver commit feat(iam) admin api | hecho |
 | T3 Gestion de usuarios y proteccion del ultimo admin | S2, S5 | worker | mismo commit que T2 | hecho |
-| T4 Documentacion y verificacion final | S6 | inline | - | pendiente |
+| T4 Documentacion y verificacion final | S6 | inline | ver commits fix(iam) y docs(iam) | hecho |
 
 ## Log
 
@@ -51,3 +51,15 @@ rol `ADMINISTRADOR`. Rama: `feature/develop`. Estado: en implementacion.
   modular)." Metodologia: "Primero inspecciona el codigo ... Propon brevemente los cambios
   necesarios y despues implementa siguiendo ODD." "Verifica mediante pruebas la inicializacion, la
   asignacion de permisos y las restricciones de acceso para cada rol."
+- **L2** Verificacion independiente (`gentle-ai-verify`) sobre 8d834cb..647bb45: S1-S3 y S5 incumplidos por
+  cinco defectos reales, corregidos con pruebas de regresion (141 pruebas en verde):
+  (D1) un 422 devolvia la contrasena enviada en `input`, tambien en login: handler global que
+  elimina `input` y `ctx`; (D2) `PATCH` con `null` respondia 200 sin cambiar nada: ahora 422;
+  (D3) en produccion la siembra podia terminar sin administrador efectivo (usuario o rol
+  inactivo): ahora cuenta solo usuario y rol activos y aborta con rollback; (D4) carreras entre
+  asignar y eliminar rol/permiso perdian la asignacion por cascada: el advisory lock
+  `lock_access_changes` serializa esas operaciones y se relee despues de tomarlo; (D5) la
+  contrasena inicial aceptaba mas de 128 caracteres que luego el login rechazaba. Ademas se oculta
+  la contrasena en el `repr` de `NewUser`. Limitacion: la base de comparacion (`HEAD~2`) no pudo
+  ejecutarse por un lanzador de pytest contaminado; los hallazgos estan confirmados contra HEAD, no
+  clasificados contra la base. Riesgo residual: la siembra no reactiva usuarios ni roles inactivos.

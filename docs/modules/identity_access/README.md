@@ -1,7 +1,7 @@
 # Modulo identity_access (IAM)
 
 Contexto acotado de identidad y acceso de NEXORA: usuarios, credenciales, roles, permisos,
-asignaciones y sesiones. Esta primera entrega implementa el flujo vertical de autenticacion.
+asignaciones y sesiones. Implementa el flujo de autenticacion y la administracion de acceso.
 
 ## Documentos
 
@@ -9,6 +9,7 @@ asignaciones y sesiones. Esta primera entrega implementa el flujo vertical de au
 - [modelo-datos.md](modelo-datos.md): las seis tablas del esquema `iam` y sus reglas.
 - [flujos-autenticacion.md](flujos-autenticacion.md): login, refresh, logout y `me`.
 - [contratos-api.md](contratos-api.md): endpoints, entradas y salidas.
+- [administracion.md](administracion.md): siembra de roles, permisos y administrador; API de gestion.
 - [seguridad.md](seguridad.md): controles aplicados y limitaciones conocidas.
 
 ## Requisitos funcionales cubiertos
@@ -26,7 +27,9 @@ asignaciones y sesiones. Esta primera entrega implementa el flujo vertical de au
 | Permisos efectivos por union de roles activos | Implementado |
 | `require_permission` reutilizable | Implementado |
 | Limitacion de intentos de login | Implementado (en memoria del proceso) |
-| CRUD de usuarios, roles y permisos | Fuera de alcance de esta entrega |
+| Siembra idempotente de roles, permisos y primer administrador | Implementado |
+| CRUD de usuarios, roles y permisos solo para `ADMINISTRADOR` | Implementado |
+| Proteccion del ultimo administrador activo | Implementado |
 | Restablecimiento administrativo supervisado | Fuera de alcance de esta entrega |
 
 ## Requisitos no funcionales
