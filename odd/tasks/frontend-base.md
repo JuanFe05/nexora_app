@@ -42,8 +42,8 @@ Rama: `feature/develop`. Estado: en implementacion.
 | --- | --- | --- | --- | --- |
 | T1 Armazon TailAdmin podado, PNPM, config, env, cliente HTTP, Vitest | S1-S5, S7 | worker | `969b984` | hecho |
 | T2 Feature auth: Sign In conectado, sesion en memoria, guard, logout | S3, S4, S7, S8 | worker | ver commit feat(frontend) auth | hecho |
-| T3 Docker (dev y prod), compose, .env.template y documentacion | S5, S6 | inline | - | pendiente |
-| T4 Verificacion integrada con backend y PostgreSQL | S1-S8 | inline | - | pendiente |
+| T3 Docker (dev y prod), compose, .env.template y documentacion | S5, S6 | inline | ver commit feat(frontend) docker | hecho |
+| T4 Verificacion integrada con backend y PostgreSQL | S1-S8 | inline | mismo commit que T3 | hecho (parcial) |
 
 ## Log
 
@@ -65,3 +65,12 @@ Rama: `feature/develop`. Estado: en implementacion.
 - **L3** Exploracion: TailAdmin free-react-tailwind-admin-dashboard v2.5.0, MIT, 563 archivos
   (~190 paginas de demostracion), `package-lock.json` de npm, Vite 8, React 19, TS ~6, Tailwind 4,
   React Router 8. Entorno local: Node 24, Corepack 0.34, sin pnpm instalado.
+- **L4** Verificacion integrada (stack completo con `docker compose up`): frontend sano en 45334 con
+  usuario 101; `/`, `/signin` y rutas desconocidas devuelven el SPA, `/assets/inexistente` 404;
+  `/api/v1/auth/me` sin token 401 a traves del proxy; login real 200 con cookie de refresh
+  HttpOnly; `/me` con rol ADMINISTRADOR y 16 permisos; `/users` 200; refresh sin CSRF 401, con CSRF
+  200, reuso del token anterior 401 y origen ajeno 401; perfil `dev` sirve Vite en 5173 con proxy.
+  Frontend: 56 pruebas, lint sin errores, build correcto. Backend sin cambios (`git diff -- backend`
+  vacio). NO verificado: render visual en navegador, flujo interactivo del formulario y recarga en
+  caliente. Pendiente del usuario: agregar `http://localhost:45334` a `NEXORA_ALLOWED_ORIGINS` en su
+  `.env` local (la plantilla ya lo trae).

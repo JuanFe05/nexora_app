@@ -14,6 +14,13 @@ const proxy = {
 export default defineConfig({
   plugins: [react(), tailwindcss(), babel({ presets: [reactCompilerPreset()] })],
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "./src") } },
-  server: { host: "0.0.0.0", port: 5173, strictPort: true, proxy, watch: { ignored: ["**/.tailadmin-src/**"] } },
+  server: {
+    host: "0.0.0.0",
+    port: 5173,
+    strictPort: true,
+    proxy,
+    // Los volumenes de Docker en Windows/macOS no emiten eventos de archivo: se activa con VITE_USE_POLLING.
+    watch: process.env.VITE_USE_POLLING === "true" ? { usePolling: true, interval: 300 } : undefined,
+  },
   preview: { host: "0.0.0.0", proxy },
 });

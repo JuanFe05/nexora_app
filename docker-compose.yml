@@ -1,7 +1,8 @@
 # Orquestacion unica de NEXORA, parametrizada por el archivo .env de la raiz.
 # Desarrollo y produccion se diferencian por variables (NEXORA_ENVIRONMENT, API_WORKERS,
 # RESTART_POLICY, puertos publicados), no por archivos distintos.
-# El frontend todavia no existe: cuando exista, se agrega como un servicio mas de esta red.
+# El frontend (React + TailAdmin) es un servicio mas de la red: `frontend` sirve la build de
+# produccion con Nginx y hace proxy de /api hacia la API; `frontend-dev` (profile dev) usa Vite.
 name: nexora
 
 x-backend-environment: &backend-environment
@@ -15,7 +16,7 @@ x-backend-environment: &backend-environment
   NEXORA_REFRESH_TOKEN_TTL_DAYS: ${NEXORA_REFRESH_TOKEN_TTL_DAYS:-7}
   NEXORA_COOKIE_SAMESITE: ${NEXORA_COOKIE_SAMESITE:-lax}
   NEXORA_COOKIE_DOMAIN: ${NEXORA_COOKIE_DOMAIN:-}
-  NEXORA_ALLOWED_ORIGINS: '${NEXORA_ALLOWED_ORIGINS:-["http://localhost:5173"]}'
+  NEXORA_ALLOWED_ORIGINS: '${NEXORA_ALLOWED_ORIGINS:-["http://localhost:5173","http://localhost:45334"]}'
   NEXORA_BOOTSTRAP_ADMIN_USERNAME: ${NEXORA_BOOTSTRAP_ADMIN_USERNAME:-}
   NEXORA_BOOTSTRAP_ADMIN_EMAIL: ${NEXORA_BOOTSTRAP_ADMIN_EMAIL:-}
   NEXORA_BOOTSTRAP_ADMIN_PASSWORD: ${NEXORA_BOOTSTRAP_ADMIN_PASSWORD:-}
@@ -106,6 +107,48 @@ services:
     ports:
       - "${API_HOST_PORT:-45335}:8000"
     restart: ${RESTART_POLICY:-unless-stopped}
+    networks: [nexora]
+
+  # Frontend de produccion: archivos estaticos en Nginx sin privilegios; /api va a la API (mismo origen).
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+        VITE_APP_NAME: ${VITE_APP_NAME:-NEXORA}
+    image: nexora-frontend:${NEXORA_IMAGE_TAG:-local}
+    container_name: nexora-frontend
+    environment:
+      API_UPSTREAM: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_HOST_PORT:-45334}:8080"
+    restart: ${RESTART_POLICY:-unless-stopped}
+    networks: [nexora]
+
+  # Frontend de desarrollo con recarga en caliente: docker compose --profile dev up -d frontend-dev
+  frontend-dev:
+    build:
+      context: ./frontend
+      target: dev
+    image: nexora-frontend-dev:${NEXORA_IMAGE_TAG:-local}
+    container_name: nexora-frontend-dev
+    profiles: ["dev"]
+    environment:
+      VITE_DEV_PROXY_TARGET: http://api:8000
+      VITE_USE_POLLING: "true"
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_DEV_HOST_PORT:-5173}:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
     networks: [nexora]
 
 networks:

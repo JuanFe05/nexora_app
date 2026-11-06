@@ -165,3 +165,24 @@ No introducir dependencias que el código conservado no importe. Esta base no mo
 `node_modules/`, `dist/`, `.env*`, `coverage/` y `.tailadmin-src/` están ignorados por Git.
 La copia temporal de TailAdmin no es código de la aplicación: también está excluida explícitamente de TypeScript,
 ESLint, Oxlint, Prettier, Vitest y del escaneo de clases Tailwind. El orquestador la elimina tras la entrega.
+
+## Docker
+
+El `Dockerfile` tiene cuatro etapas: `deps` (pnpm con lockfile congelado), `dev` (Vite con recarga),
+`build` (compila con las `VITE_*`) y `runtime` (Nginx sin privilegios, usuario 101, puerto 8080).
+Las imagenes base estan fijadas (`node:24.13.0-alpine3.23`, `nginx-unprivileged:1.28.1-alpine3.23`)
+y pnpm lo fija `packageManager` en `package.json`.
+
+Desde la raiz del repositorio:
+
+```bash
+docker compose up -d --build                       # produccion: http://localhost:45334
+docker compose --profile dev up -d frontend-dev    # desarrollo: http://localhost:5173
+```
+
+- **Produccion:** `nginx.conf.template` sirve los estaticos (con fallback de SPA y cache inmutable
+  para `/assets/`) y hace proxy de `/api/` al servicio `api` (`API_UPSTREAM`).
+- **Desarrollo:** el codigo de `src/` se monta como volumen y Vite reenvia `/api` a la API
+  (`VITE_DEV_PROXY_TARGET`).
+- **Variables:** solo `VITE_*` (`VITE_API_BASE_URL`, `VITE_APP_NAME`), publicas y embebidas en el
+  bundle. Los secretos del backend nunca llegan al frontend.

@@ -1,0 +1,46 @@
+# Servidor de produccion del frontend: estaticos + proxy hacia la API en el mismo origen.
+# El navegador solo conoce este origen, asi que no hace falta CORS para las llamadas a /api
+# y la cookie de refresh (SameSite=Lax) viaja sin problemas.
+
+server {
+    listen 8080;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 1024;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # API de FastAPI. Se conserva el Origin del navegador porque el backend lo valida.
+    location /api/ {
+        proxy_pass ${API_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    # Los archivos de Vite llevan hash en el nombre: cache larga e inmutable.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    # SPA: cualquier ruta desconocida la resuelve el router del cliente. index.html no se cachea.
+    location / {
+        add_header Cache-Control "no-cache";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        try_files $uri $uri/ /index.html;
+    }
+}
