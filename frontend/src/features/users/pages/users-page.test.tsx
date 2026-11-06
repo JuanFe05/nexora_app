@@ -4,6 +4,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/http/api-error";
+import { PERMISSIONS as P } from "@/features/auth/permissions";
+import { useAuth } from "@/features/auth/use-auth";
 import * as api from "../api/users-api";
 import { loadRoleOptions } from "../api/role-options";
 import type { User } from "../types";
@@ -11,9 +13,14 @@ import UsersPage from "./users-page";
 
 vi.mock("../api/users-api", () => ({ listUsers: vi.fn(), createUser: vi.fn(), updateUser: vi.fn(), deleteUser: vi.fn(), assignUserRole: vi.fn(), revokeUserRole: vi.fn() }));
 vi.mock("../api/role-options", () => ({ loadRoleOptions: vi.fn() }));
+vi.mock("@/features/auth/use-auth", () => ({ useAuth: vi.fn() }));
+function permissions(codes: string[]) {
+  vi.mocked(useAuth).mockReturnValue({ hasPermission: (code: string) => codes.includes(code) } as ReturnType<typeof useAuth>);
+}
 const ana: User = { id: "u", nombre_usuario: "ana", correo: "ana@example.org", primer_nombre: "Ana", primer_apellido: "Sol", segundo_nombre: null, segundo_apellido: null, numero_telefono: null, estado: "activo", roles: ["ADMINISTRADOR"] };
 beforeEach(() => {
   vi.resetAllMocks();
+  permissions(Object.values(P));
   vi.mocked(api.listUsers).mockResolvedValue({ items: [ana], total: 101 });
   vi.mocked(api.createUser).mockResolvedValue(ana);
   vi.mocked(api.updateUser).mockResolvedValue({ ...ana, primer_nombre: "Luz" });
@@ -136,7 +143,7 @@ describe("Usuarios", () => {
     expect(screen.queryByText(/raw secret/)).not.toBeInTheDocument();
   });
   it("requires a complete role catalog before editing and offers retry", async () => {
-    vi.mocked(loadRoleOptions).mockRejectedValueOnce(new ApiError(403, "raw", null));
+    vi.mocked(loadRoleOptions).mockRejectedValueOnce(new ApiError(403, "No tienes permisos para consultar roles.", null));
     render(<UsersPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Editar ana" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permisos");
@@ -171,7 +178,7 @@ describe("Usuarios", () => {
     expect(screen.getByText("Usuario eliminado correctamente.")).toHaveAttribute("role", "status");
   });
   it("shows empty state and server error with retry through DataTable", async () => {
-    vi.mocked(api.listUsers).mockRejectedValueOnce(new ApiError(403, "private", null)).mockResolvedValue({ items: [], total: 0 });
+    vi.mocked(api.listUsers).mockRejectedValueOnce(new ApiError(403, "No tienes permisos para consultar usuarios.", null)).mockResolvedValue({ items: [], total: 0 });
     render(<UsersPage />);
     expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permisos");
     await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));

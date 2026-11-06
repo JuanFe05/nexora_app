@@ -6,8 +6,7 @@ export function userError(error: unknown): { message: string; fields: UserFieldE
   const result = { message: "No se pudo completar la solicitud. Inténtalo de nuevo.", fields: {} as UserFieldErrors };
   if (!(error instanceof ApiError)) return result;
   if (error.status === 401) result.message = "Tu sesión ha caducado. Inicia sesión de nuevo.";
-  else if (error.status === 403) result.message = "No tienes permisos para administrar usuarios.";
-  else if (error.status === 404 || error.status === 409) result.message = error.detail;
+  else if (error.status === 403 || error.status === 404 || error.status === 409) result.message = error.detail;
   else if (error.status === 0) result.message = "No se pudo conectar con el servidor. Inténtalo de nuevo.";
   else if (error.status === 422) {
     result.message = "Revisa los datos e inténtalo de nuevo.";

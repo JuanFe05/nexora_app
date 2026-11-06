@@ -1,29 +1,53 @@
 # Usuarios
 
-Administración conectada a `/api/v1/users`. La ruta existente exige `ADMINISTRADOR`;
-la autorización efectiva y las protecciones del último administrador se aplican en el backend.
-No se cambia el guard, la sesión ni el cliente HTTP compartido.
+Administración conectada a `/api/v1/users`. La ruta exige `identity.users.view`;
+las acciones tienen permisos independientes. Ocultar controles es presentación: la API
+aplica la autorización y las protecciones del último administrador.
+No se cambia el guard, la sesión ni el cliente HTTP compartido desde este módulo.
 
-## Uso
+## Permisos y uso
+
+Se consulta `useAuth().hasPermission` con las constantes compartidas `PERMISSIONS`.
+Eliminar no concede consultar, crear, editar ni asignar roles.
+
+| Acción o sección | Permiso necesario |
+| --- | --- |
+| **Nuevo usuario** | `identity.users.create` |
+| Lápiz de edición | `identity.users.update`, `identity.users.deactivate` o `identity.users.assign_roles` |
+| Papelera | `identity.users.delete` |
+| Datos personales en edición | `identity.users.update`; en otro caso, solo lectura |
+| Estado en edición | `identity.users.deactivate`; en otro caso, control deshabilitado de solo lectura |
+| Catálogo y asignación de roles | `identity.users.assign_roles` **y** `identity.roles.view` |
 
 - Buscar consulta el servidor tras 300 ms; paginación y tamaño usan `X-Total-Count`.
+- Crear y editar usan **FormDialog** (TailAdmin Dialog with Form), no el panel lateral.
+  El cuerpo del formulario tiene scroll dentro de una altura limitada a la pantalla;
+  el encabezado y el pie permanecen fuera del área desplazable. Cancelar, Escape y X
+  cierran sin guardar; no cierran mientras hay una mutación pendiente.
 - **Nuevo usuario** solicita usuario, correo, primer nombre, primer apellido y contraseña
   (12–128 caracteres). La contraseña solo existe en el control del formulario y en la
   petición de creación; se limpia tras la respuesta y nunca se muestra en errores.
-- **Editar** permite datos personales, estado y roles. Envía un único PATCH con los campos
-  modificados (ninguno si solo cambian roles), seguido de asignaciones y revocaciones.
-  Los campos opcionales existentes no pueden vaciarse: PATCH rechaza null y cadenas vacías.
-  Correo sigue el contrato real de texto no vacío, hasta 255 caracteres.
-- El catálogo de roles se carga completo en páginas de 100 desde un adaptador local;
+  Solo se ofrecen roles con ambos permisos de catálogo y asignación; se asignan después
+  de crear. Si ese segundo paso falla, reintentar no crea otro usuario ni solicita otra contraseña.
+- **Editar** envía un único PATCH mínimo con los campos modificados y autorizados:
+  datos personales con `users.update`, estado con `users.deactivate`. Las diferencias de
+  roles se aplican después, sin PATCH si solo cambian roles. No hay peticiones de mutación
+  si nada editable cambió. Un diálogo sin controles editables ofrece **Cerrar**, no **Guardar**.
+- Sin `users.assign_roles` no se muestra la sección de roles. En edición, con ese permiso
+  pero sin `roles.view`, aparece una sección deshabilitada con una nota explicativa;
+  no se consulta `/roles` ni se bloquea el guardado de otros campos autorizados.
+- El catálogo autorizado se carga completo en páginas de 100 desde un adaptador local;
   un fallo bloquea el guardado y ofrece **Reintentar roles**. Códigos ausentes se conservan.
-- El guardado **no es atómico**: ante un fallo el panel permanece abierto, indica el paso
+- Los campos opcionales existentes no pueden vaciarse: PATCH rechaza null y cadenas vacías.
+  Correo sigue el contrato real de texto no vacío, hasta 255 caracteres.
+- El guardado **no es atómico**: ante un fallo el diálogo permanece abierto, indica el paso
   fallido y los pasos ya confirmados, y recarga la tabla. Reintentar no repite pasos confirmados.
   Ante pérdida de conexión puede haber un resultado incierto: comprobar la tabla y volver
-  a abrir el panel antes de decidir un nuevo intento. Cancelar no revierte pasos aplicados.
-- **Eliminar** exige confirmación e identifica al usuario. Cancelar no envía peticiones;
+  a abrir el diálogo antes de decidir un nuevo intento. Cancelar no revierte pasos aplicados.
+- **Eliminar** exige ConfirmDialog e identifica al usuario. Cancelar no envía peticiones;
   éxito recarga el listado y ajusta la última página. Un conflicto conserva el diálogo.
 
-Errores 404/409 muestran el `detail` del backend; 401/403/red tienen mensajes seguros.
+Errores 403/404/409 muestran el `detail` del backend en InlineAlert; 401/red tienen mensajes seguros.
 422 se asocia a campos mediante `loc`, sin mostrar `input`, `ctx` ni mensajes crudos
 que puedan contener contraseñas. Las restricciones del cliente se muestran bajo el campo,
 con `aria-invalid`, asociación de mensaje y foco en el primer error.
@@ -31,10 +55,13 @@ con `aria-invalid`, asociación de mensaje y foco en el primer error.
 ## Límites y verificación
 
 API, validación, coordinación de mutaciones y presentación viven separadas dentro de
-este módulo. Se consumen DataTable/usePagedQuery/pagedResult, FormDrawer, ConfirmDialog,
+este módulo. Se consumen DataTable/usePagedQuery/pagedResult, FormDialog, ConfirmDialog,
 InlineAlert y controles compartidos sin duplicarlos. No existe restablecimiento de contraseña.
 
 Desde `frontend/`: `corepack pnpm test src/features/users`.
-Las pruebas de página simulan los módulos de API, no la red. Las de adaptadores comprueban
-el cliente HTTP compartido y el catálogo paginado. Se requiere comprobación visual en navegador
-para ambos temas y pantallas móviles; jsdom no demuestra apariencia ni conectividad real.
+Las pruebas de página simulan `useAuth` y los módulos de API, no la red. Cubren la matriz
+independiente de permisos, cuerpos mínimos, diferencias de roles, cierre/bloqueo del diálogo,
+validaciones y guardados parciales. Las de adaptadores comprueban el cliente HTTP compartido
+y el catálogo paginado. Se verifica estructuralmente el scroll con un catálogo de 100 roles;
+se requiere comprobación visual en navegador para ambos temas y pantallas móviles:
+jsdom no demuestra apariencia, dimensiones reales ni conectividad.

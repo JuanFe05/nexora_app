@@ -4,27 +4,29 @@ import { Label } from "@/components/ui/label";
 import { userTextFields } from "../hooks/user-validation";
 import type { UserFieldErrors, UserValues } from "../types";
 
-export function UserFields({ values, errors, onChange, editing }: {
+export function UserFields({ values, errors, onChange, editing, personalEditable, statusEditable }: {
   values: UserValues;
   errors: UserFieldErrors;
   onChange: (name: keyof UserValues, value: string) => void;
   editing: boolean;
+  personalEditable: boolean;
+  statusEditable: boolean;
 }) {
   return <>
     {userTextFields.map(({ name, label, required, max }) => <Field key={name} controlId={`user-${name}`} data-invalid={!!errors[name]}>
       <Label htmlFor={`user-${name}`}>{label}{required && <span aria-hidden="true" className="text-red-500">*</span>}</Label>
-      <Input name={name} value={values[name]} onChange={event => onChange(name, event.target.value)} required={required} aria-invalid={!!errors[name]} aria-describedby={errors[name] ? `user-${name}-error` : undefined} autoComplete={name === "nombre_usuario" ? "off" : name === "correo" ? "email" : undefined} inputMode={name === "correo" ? "email" : name === "numero_telefono" ? "tel" : undefined} maxLength={max * 2} />
+      <Input name={name} value={values[name]} readOnly={!personalEditable} onChange={event => { if (personalEditable) onChange(name, event.target.value); }} required={required} aria-invalid={!!errors[name]} aria-describedby={errors[name] ? `user-${name}-error` : undefined} autoComplete={name === "nombre_usuario" ? "off" : name === "correo" ? "email" : undefined} inputMode={name === "correo" ? "email" : name === "numero_telefono" ? "tel" : undefined} maxLength={max * 2} />
       {errors[name] && <p id={`user-${name}-error`} className="text-sm text-red-500 dark:text-red-400">{errors[name]}</p>}
     </Field>)}
     {!editing && <Field controlId="user-contrasena" data-invalid={!!errors.contrasena}>
       <Label htmlFor="user-contrasena">Contraseña<span aria-hidden="true" className="text-red-500">*</span></Label>
-      <Input name="contrasena" type="password" autoComplete="new-password" required aria-invalid={!!errors.contrasena} aria-describedby={errors.contrasena ? "user-contrasena-error" : "user-password-help"} />
+      <Input name="contrasena" disabled={!personalEditable} type="password" autoComplete="new-password" required aria-invalid={!!errors.contrasena} aria-describedby={errors.contrasena ? "user-contrasena-error" : "user-password-help"} />
       <p id="user-password-help" className="text-sm text-gray-500 dark:text-gray-400">Entre 12 y 128 caracteres. Solo se establece al crear el usuario.</p>
       {errors.contrasena && <p id="user-contrasena-error" className="text-sm text-red-500 dark:text-red-400">{errors.contrasena}</p>}
     </Field>}
     {editing && <Field controlId="user-estado" data-invalid={!!errors.estado}>
       <Label htmlFor="user-estado">Estado<span aria-hidden="true" className="text-red-500">*</span></Label>
-      <select id="user-estado" name="estado" value={values.estado} onChange={event => onChange("estado", event.target.value)} aria-invalid={!!errors.estado} aria-describedby={errors.estado ? "user-estado-error" : undefined} className="h-11 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 focus:ring-3 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+      <select id="user-estado" name="estado" value={values.estado} disabled={!statusEditable} aria-readonly={!statusEditable} onChange={event => { if (statusEditable) onChange("estado", event.target.value); }} aria-invalid={!!errors.estado} aria-describedby={errors.estado ? "user-estado-error" : undefined} className="h-11 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 focus:ring-3 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
         <option value="activo">Activo</option><option value="inactivo">Inactivo</option>
       </select>
       {errors.estado && <p id="user-estado-error" className="text-sm text-red-500 dark:text-red-400">{errors.estado}</p>}

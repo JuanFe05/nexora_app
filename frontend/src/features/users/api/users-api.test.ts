@@ -44,10 +44,10 @@ describe("users API", () => {
     vi.mocked(httpClient.getWithMeta).mockResolvedValue({ data: [], headers: new Headers({ "X-Total-Count": "2" }) });
     await expect(loadRoleOptions()).rejects.toThrow("No se pudo cargar el catálogo completo de roles.");
   });
-  it.each([404, 409])("preserves Spanish domain detail for %s", status => {
+  it.each([403, 404, 409])("preserves Spanish domain detail for %s", status => {
     expect(userError(new ApiError(status, "Mensaje del backend", null)).message).toBe("Mensaje del backend");
   });
-  it.each([401, 403, 0, 500])("maps %s to a safe Spanish error", status => {
+  it.each([401, 0, 500])("maps %s to a safe Spanish error", status => {
     const error = userError(new ApiError(status, "internal", null));
     expect(error.message).not.toContain("internal");
     expect(error.message.length).toBeGreaterThan(10);

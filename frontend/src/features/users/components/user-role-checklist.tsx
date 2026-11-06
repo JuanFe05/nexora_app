@@ -5,14 +5,14 @@ import { Field } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
 import type { RoleOption } from "../types";
 
-export function UserRoleChecklist({ catalog, selected, onChange, loading, error, onRetry }: {
+export function UserRoleChecklist({ catalog, selected, onChange, loading, error, onRetry, disabled = false }: {
   catalog: RoleOption[]; selected: string[]; onChange: (codes: string[]) => void;
-  loading: boolean; error: string | null; onRetry: () => void;
+  loading: boolean; error: string | null; onRetry: () => void; disabled?: boolean;
 }) {
   const missing = selected.filter(code => !catalog.some(role => role.codigo === code));
-  return <fieldset className="space-y-3 rounded-xl border border-gray-200 p-4 dark:border-gray-800">
+  return <fieldset disabled={disabled} className="space-y-3 rounded-xl border border-gray-200 p-4 dark:border-gray-800">
     <legend className="px-1 text-sm font-medium text-gray-800 dark:text-gray-200">Roles</legend>
-    {loading ? <p role="status" className="text-sm text-gray-500 dark:text-gray-400">Cargando roles…</p> : error ? <>
+    {disabled ? <p className="text-sm text-gray-500 dark:text-gray-400">Necesitas el permiso identity.roles.view para consultar el catálogo y asignar roles.</p> : loading ? <p role="status" className="text-sm text-gray-500 dark:text-gray-400">Cargando roles…</p> : error ? <>
       <InlineAlert variant="error">{error}</InlineAlert>
       <Button type="button" variant="outline" onClick={onRetry}>Reintentar roles</Button>
     </> : <>
