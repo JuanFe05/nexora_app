@@ -1,6 +1,5 @@
 import { Sidebar, SidebarContent, useSidebar } from "@/components/ui/sidebar";
 import { navigation } from "@/config/navigation";
-import { LayoutGridIcon } from "@/icons";
 import { cn } from "@/utils";
 import { Link, useLocation } from "react-router";
 import AppSidebarHeader from "./sidebar-header";
@@ -23,7 +22,7 @@ export default function AppSidebar() {
                   <Link to={item.path} aria-current={active ? "page" : undefined} aria-label={item.label}
                     onClick={() => setOpenMobile(false)}
                     className={cn("group menu-item", active ? "menu-item-active" : "menu-item-inactive", !showContent && "justify-center")}>
-                    <LayoutGridIcon className={active ? "menu-item-icon-active" : "menu-item-icon-inactive"} />
+                    <item.icon aria-hidden="true" className={cn("size-6 shrink-0", active ? "menu-item-icon-active" : "menu-item-icon-inactive")} />
                     {showContent && <span>{item.label}</span>}
                   </Link>
                 </li>

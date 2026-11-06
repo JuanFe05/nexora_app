@@ -58,7 +58,7 @@ src/
 │   └── others/auth/         # AuthLayout y vista Sign In de TailAdmin
 ├── components/
 │   ├── layout/app-layout/   # Sidebar y header de TailAdmin, sin demos
-│   ├── shared/              # Metadatos, cuadrícula y selector de tema
+│   ├── shared/              # Metadatos, cuadrícula del 404 y selector de tema
 │   └── ui/                  # Solo primitivas importadas por el shell/acceso
 ├── contexts/                # Tema claro/oscuro/automático de TailAdmin
 ├── hooks/                   # Breakpoint del sidebar
@@ -133,7 +133,7 @@ pasa a anónima y se descarta el token. `T` tipa el resultado; no sustituye vali
 - `useAuth()` expone `status` (`loading`, `authenticated`, `anonymous`), `user`, `roles`, `permissions`,
   `login`, `logout` y `hasPermission`. Mientras se restaura la sesión, los guards muestran un estado de carga.
   `hasPermission` facilita presentación; **la autorización real siempre corresponde al backend**.
-- El menú de usuario de la cabecera muestra avatar con iniciales, `nombre_completo`, `correo`,
+- El menú de usuario de la cabecera no utiliza avatar, fotografía ni iniciales: muestra `nombre_completo`, `correo`,
   «Configuración de la cuenta» y «Cerrar sesión». Se abre por clic o teclado; las flechas recorren opciones,
   Escape lo cierra y devuelve el foco, y un clic exterior lo cierra. No incluye perfil, soporte ni idioma.
   Logout limpia token, usuario, roles y permisos
@@ -152,14 +152,31 @@ puntos de entrada permitidos por la configuración Vitest del shell. Cubren cont
 restauración única y single-flight, recuperación 401 con un solo reintento, fallo a anónimo, logout y mensajes
 401/429/422/red. Las pruebas de componentes usan Testing Library y `// @vitest-environment jsdom` por archivo;
 las demás siguen en Node. Se simula `useAuth` en su límite público, no HTTP, para comprobar validación,
-foco, errores, visibilidad de contraseña y menú. El botón circular de tema usa el `ThemeProvider` real:
-luna sobre azul para activar oscuro, sol sobre fondo oscuro para activar claro; persiste la preferencia
-con el sistema de temas de TailAdmin.
+foco, errores, visibilidad de contraseña y menú. El botón de tema conserva el contorno y las esquinas de TailAdmin,
+sin forma circular: luna para activar oscuro y sol para activar claro. Usa el `ThemeProvider` real,
+expone `aria-pressed` y persiste la preferencia con el sistema de temas de TailAdmin.
 
 Ejecutar toda la batería: `corepack pnpm test`. Solo componentes: `corepack pnpm exec vitest run src/features/auth/components src/components/shared/header/theme-toggler`.
 El formulario valida campos obligatorios al enviar, muestra mensajes debajo de cada campo y conserva usuario o correo
 como identificador. Los errores de autenticación señalan ambos campos sin revelar cuál falló.
 La apariencia responsive y el acceso real requieren además comprobación en navegador, sin registrar credenciales ni tokens.
+
+## Diseño del acceso
+
+El formulario conserva la columna `max-w-md` y los inputs estándar de TailAdmin (`h-11`), con mensajes y
+estados de validación accesibles. En escritorio se muestra un panel fotográfico; por debajo de `lg`, la marca
+NEXORA y «Gestión inteligente para una atención conectada» aparecen encima del formulario. Ambos temas
+conservan el selector fijo de TailAdmin desde `sm`.
+
+La fotografía se sirve localmente desde `public/images/auth/sign-in-bg.jpg` (1600 × 1067), sin solicitudes
+externas. Fuente: [Pexels — mano y tableta digital](https://www.pexels.com/es-es/foto/mano-tecnologia-tableta-digital-pantalla-tactil-12326656/).
+Se utiliza bajo la [licencia Pexels](https://www.pexels.com/license/), gratuita y sin atribución obligatoria.
+La imagen es decorativa (`alt` vacío) y lleva un degradado `brand-950` (`#161950`) del 90 % al 65 %,
+con 85 % en el centro; en oscuro, del 95 % al 75 %, con 90 % en el centro.
+Incluso sobre un píxel blanco, la opacidad mínima del 65 % produce aproximadamente `#686a8d`:
+el contraste del texto blanco es al menos 5,2:1 (en oscuro, al menos 7,3:1 con 75 %).
+Estos límites conservadores superan WCAG AA 4,5:1 sin depender de la posición o del recorte de la fotografía;
+la sombra del texto es solo un refuerzo, no parte del cálculo.
 
 ## Agregar un módulo en features/
 
@@ -167,7 +184,8 @@ La apariencia responsive y el acceso real requieren además comprobación en nav
    tipos y llamadas a la API. Reutilizar `components/ui`, `components/shared` y `httpClient`.
 2. Crear el punto de entrada de la página en `pages/`, sin duplicar primitivas de TailAdmin.
 3. Registrar su carga con `React.lazy` en `routes/index.tsx`. Añadir su enlace en `config/navigation.ts`
-   únicamente si debe aparecer en el menú.
+   únicamente si debe aparecer en el menú, incluyendo su componente `icon` tipado. El sidebar lo muestra
+   también al contraerse, con los estilos activo/inactivo de TailAdmin.
 4. Mantener textos en español y variantes `dark:`. Ejecutar lint, test y build.
 
 No introducir dependencias que el código conservado no importe. Esta base no modifica backend ni Docker.

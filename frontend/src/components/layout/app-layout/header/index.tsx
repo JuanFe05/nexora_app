@@ -12,7 +12,7 @@ export default function AppHeader() {
     <header className="sticky top-0 z-50 flex w-full shrink-0 border-gray-200 bg-white xl:border-b dark:border-gray-800 dark:bg-gray-900">
       <div className="flex w-full items-center justify-between gap-2 border-b border-gray-200 px-3 py-3 sm:gap-4 xl:border-b-0 xl:px-6 xl:py-4 dark:border-gray-800">
         <Button variant="outline" size="icon" className="text-gray-500 lg:size-11 dark:text-gray-400" onClick={toggleSidebar} aria-label="Alternar barra lateral">
-          {openMobile ? <XIcon className="size-6" /> : <MenuTwoIcon className="size-auto!" />}
+          {openMobile ? <XIcon aria-hidden="true" className="size-6" /> : <MenuTwoIcon aria-hidden="true" className="size-6" />}
         </Button>
         <Link to="/" className="text-title-sm font-semibold text-gray-800 xl:hidden dark:text-white/90">{env.appName}</Link>
         <div className="ms-auto flex items-center gap-2">

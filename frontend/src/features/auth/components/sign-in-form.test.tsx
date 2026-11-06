@@ -4,7 +4,9 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HelmetProvider } from "react-helmet-async";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes } from "react-router";
+import { ThemeProvider } from "@/contexts/theme-context";
+import AuthLayout from "@/pages/others/auth/layout";
 import { ApiError } from "@/lib/http/api-error";
 import SignInPage from "@/pages/others/auth/sign-in";
 import SignInForm from "./sign-in-form";
@@ -78,8 +80,32 @@ describe("formulario de acceso", () => {
     expect(password()).toHaveAttribute("type", "password");
   });
 
-  it("no ofrece volver a la página de inicio", () => {
+  it("mantiene dimensiones estándar dentro de la columna max-w-md", () => {
     render(<HelmetProvider><MemoryRouter><SignInPage /></MemoryRouter></HelmetProvider>);
+    expect(identifier().closest(".max-w-md")).toBeInTheDocument();
+    expect(password().closest(".max-w-md")).toBeInTheDocument();
+    expect(identifier()).toHaveClass("h-11", "rounded-[10px]");
+    expect(password().closest('[data-slot="input-group"]')).toHaveClass("h-11", "rounded-[10px]");
+    for (const field of [identifier(), password(), password().closest('[data-slot="input-group"]')]) {
+      expect(field).not.toHaveClass("h-[68px]", "rounded-2xl");
+    }
+  });
+
+  it("presenta fotografía decorativa, marca y slogan también en móvil, sin enlace de regreso", () => {
+    render(<HelmetProvider><MemoryRouter><ThemeProvider><Routes>
+      <Route element={<AuthLayout />}><Route index element={<SignInPage />} /></Route>
+    </Routes></ThemeProvider></MemoryRouter></HelmetProvider>);
+    const slogan = "Gestión inteligente para una atención conectada";
+    expect(screen.getAllByText("NEXORA")).toHaveLength(2);
+    expect(screen.getAllByText(slogan)).toHaveLength(2);
+    expect(screen.getAllByText(slogan)[0].closest(".lg\\:hidden")).toBeInTheDocument();
+    const image = document.querySelector('img[src="/images/auth/sign-in-bg.jpg"]');
+    expect(image).toHaveAttribute("alt", "");
+    expect(image).toHaveAttribute("aria-hidden", "true");
+    expect(image).toHaveAttribute("width", "1600");
+    expect(image).toHaveAttribute("height", "1067");
+    expect(image).toHaveAttribute("decoding", "async");
+    expect(image?.parentElement).toHaveClass("hidden", "lg:grid");
     expect(screen.queryByText(/Volver a la página de inicio/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Volver/ })).not.toBeInTheDocument();
   });

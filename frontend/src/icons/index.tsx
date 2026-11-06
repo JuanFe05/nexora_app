@@ -10,3 +10,7 @@ export { EyeIcon } from "./eye";
 export { EyeCloseIcon } from "./eye-close";
 export { ChevronLeftIcon } from "./chevron-left";
 export { CheckIcon } from "./check";
+export { ChevronDownIcon } from "./chevron-down";
+export { GearIcon } from "./gear";
+export { LogOutIcon } from "./log-out";
+export { UserIcon } from "./user";

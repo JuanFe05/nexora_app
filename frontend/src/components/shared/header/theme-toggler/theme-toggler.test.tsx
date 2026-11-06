@@ -16,6 +16,8 @@ it("alterna luna/sol, estado accesible, clase dark y persistencia con ThemeProvi
   const user = userEvent.setup();
   const view = render(<ThemeProvider><ThemeToggleButton /></ThemeProvider>);
   const button = screen.getByRole("button", { name: "Activar tema oscuro" });
+  expect(button).not.toHaveClass("rounded-full", "bg-brand-600", "bg-brand-500");
+  expect(button).toHaveClass("rounded-[10px]", "border-gray-300", "bg-transparent");
   expect(button).toHaveAttribute("aria-pressed", "false");
   expect(button.querySelector("svg")).toHaveAttribute("data-theme-icon", "moon");
   expect(document.documentElement).not.toHaveClass("dark");

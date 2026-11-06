@@ -62,7 +62,7 @@ export default function SignInForm() {
       <Field>
         <FieldLabel htmlFor="identificador" className="mb-1.5 block">Usuario o correo electrónico <span aria-hidden="true" className="text-red-500">*</span></FieldLabel>
         <Input id="identificador" name="identificador" type="text" autoComplete="username" maxLength={255} placeholder="Usuario o correo electrónico" required disabled={pending}
-          className="h-[68px] rounded-2xl text-base placeholder:text-gray-400 dark:placeholder:text-gray-400"
+          className="placeholder:text-gray-400 dark:placeholder:text-gray-400"
           aria-invalid={Boolean(fieldErrors.identificador) || rejectedFields.identificador}
           aria-describedby={fieldErrors.identificador ? "identificador-error" : error ? "sign-in-error" : undefined}
           onChange={() => clearField("identificador")} />
@@ -70,9 +70,9 @@ export default function SignInForm() {
       </Field>
       <Field>
         <FieldLabel htmlFor="contrasena" className="mb-1.5 block">Contraseña <span aria-hidden="true" className="text-red-500">*</span></FieldLabel>
-        <InputGroup className="h-[68px] rounded-2xl">
+        <InputGroup>
           <InputGroupInput id="contrasena" name="contrasena" autoComplete="current-password" type={showPassword ? "text" : "password"} maxLength={128} placeholder="Introduce tu contraseña" required disabled={pending}
-            className="rounded-2xl text-base placeholder:text-gray-400 dark:placeholder:text-gray-400"
+            className="placeholder:text-gray-400 dark:placeholder:text-gray-400"
             aria-invalid={Boolean(fieldErrors.contrasena) || rejectedFields.contrasena}
             aria-describedby={fieldErrors.contrasena ? "contrasena-error" : error ? "sign-in-error" : undefined}
             onChange={() => clearField("contrasena")} />

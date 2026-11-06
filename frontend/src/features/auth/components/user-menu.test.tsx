@@ -24,13 +24,23 @@ function mount() {
 describe("menú de usuario", () => {
   it("abre, muestra identidad y únicamente cuenta/logout; cerrar sesión llama logout", async () => {
     const user = userEvent.setup();
-    mount();
-    await user.click(screen.getByRole("button", { name: /Ana García López/ }));
+    const { container } = mount();
+    const trigger = screen.getByRole("button", { name: /Ana García López/ });
+    expect(container.querySelector('[data-slot="avatar"], [data-slot="avatar-fallback"], img')).toBeNull();
+    expect(screen.queryByText("AG")).not.toBeInTheDocument();
+    expect(trigger.querySelector("svg.sm\\:hidden")).toHaveAttribute("aria-hidden", "true");
+    expect(trigger.querySelector("svg[data-menu-chevron]")).toHaveClass("group-data-popup-open:rotate-180");
+    await user.click(trigger);
     expect(await screen.findByRole("menu")).toBeInTheDocument();
     expect(screen.getAllByText("Ana García López").length).toBeGreaterThan(0);
     expect(screen.getByText("ana@example.com")).toBeVisible();
     expect(screen.getByRole("menuitem", { name: "Configuración de la cuenta" })).toBeVisible();
     expect(screen.getAllByRole("menuitem")).toHaveLength(2);
+    for (const item of screen.getAllByRole("menuitem")) {
+      expect(item.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+      expect(item.querySelector("svg")).toHaveClass("size-6");
+    }
+    expect(screen.getByRole("menu").querySelector('[data-slot="avatar"], [data-slot="avatar-fallback"], img')).toBeNull();
     expect(screen.queryByText(/perfil|soporte|idioma/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole("menuitem", { name: "Cerrar sesión" }));
     expect(logout).toHaveBeenCalledOnce();
