@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { GearIcon, LayoutGridIcon, UserIcon, type IconProps } from "@/icons";
+import { KeyIcon, LayoutGridIcon, LockIcon, UserCircleIcon, UsersIcon, type IconProps } from "@/icons";
 import { ADMINISTRADOR } from "@/features/auth/roles";
 
 export type NavigationItem = {
@@ -14,9 +14,9 @@ export type NavigationSection = { title: string; items: NavigationItem[] };
 export const navigation: NavigationSection[] = [
   { title: "INFORMES", items: [{ label: "Inicio", path: "/", icon: LayoutGridIcon }] },
   { title: "CONFIGURACIONES", items: [
-    { label: "Perfil de usuario", path: "/configuracion/perfil", icon: UserIcon },
-    { label: "Usuarios", path: "/configuracion/usuarios", icon: UserIcon, requiredRole: ADMINISTRADOR },
-    { label: "Permisos", path: "/configuracion/permisos", icon: GearIcon, requiredRole: ADMINISTRADOR },
-    { label: "Roles", path: "/configuracion/roles", icon: GearIcon, requiredRole: ADMINISTRADOR },
+    { label: "Perfil de usuario", path: "/configuracion/perfil", icon: UserCircleIcon },
+    { label: "Usuarios", path: "/configuracion/usuarios", icon: UsersIcon, requiredRole: ADMINISTRADOR },
+    { label: "Permisos", path: "/configuracion/permisos", icon: KeyIcon, requiredRole: ADMINISTRADOR },
+    { label: "Roles", path: "/configuracion/roles", icon: LockIcon, requiredRole: ADMINISTRADOR },
   ] },
 ];

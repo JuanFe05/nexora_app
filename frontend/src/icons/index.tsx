@@ -14,3 +14,7 @@ export { ChevronDownIcon } from "./chevron-down";
 export { GearIcon } from "./gear";
 export { LogOutIcon } from "./log-out";
 export { UserIcon } from "./user";
+export { UsersIcon } from "./users";
+export { KeyIcon } from "./key";
+export { LockIcon } from "./lock";
+export { UserCircleIcon } from "./user-circle";
