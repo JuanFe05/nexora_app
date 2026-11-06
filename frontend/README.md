@@ -41,7 +41,7 @@ src/
 ├── routes/index.tsx         # Único registro; páginas con React.lazy
 ├── config/
 │   ├── env.ts               # Variables públicas, valores por defecto y validación
-│   └── navigation.ts        # Menú: solo Inicio → /
+│   └── navigation.ts        # Secciones INFORMES y CONFIGURACIONES, iconos y roles
 ├── lib/http/                # Cliente fetch y ApiError
 ├── features/auth/
 │   ├── api/auth-api.ts      # Login, refresh, logout y me mediante httpClient
@@ -66,9 +66,20 @@ src/
 └── utils/                   # cn y reglas Tailwind Merge
 ```
 
-Rutas actuales: `/` y `/cuenta` con su layout requieren sesión; `/signin` solo admite visitantes anónimos;
-`/cuenta` reutiliza el marcador de Inicio con el título «Configuración de la cuenta», sin funcionalidad de negocio ni enlace en el sidebar;
-cualquier otra URL → 404. El guard conserva la ruta, consulta y fragmento solicitados para volver después del acceso.
+Rutas actuales: `/` y `/configuracion/perfil` requieren sesión; `/signin` solo admite visitantes anónimos.
+`/configuracion/usuarios`, `/configuracion/permisos` y `/configuracion/roles` requieren además el rol
+`ADMINISTRADOR`; `RequireRole` redirige a `/` si falta ese rol. Las cuatro páginas de configuración son
+marcadores delgados en `features/{profile,users,permissions,roles}/pages/`, cargados con `React.lazy`,
+sin llamadas nuevas al backend. El menú «Configuración de la cuenta» lleva a `/configuracion/perfil`.
+La ruta provisional de cuenta se retiró; cualquier URL no registrada → 404. El guard conserva la ruta,
+consulta y fragmento solicitados para volver después del acceso.
+
+El sidebar conserva el diseño TailAdmin: **INFORMES** contiene Inicio y **CONFIGURACIONES** contiene
+Perfil de usuario, Usuarios, Permisos y Roles. Filtra por los roles de `useAuth()` y oculta secciones vacías;
+contraído muestra iconos y puntos en los títulos. Perfil está disponible para cualquier usuario autenticado;
+las otras tres entradas solo para `ADMINISTRADOR` (constante compartida en `features/auth/roles.ts`).
+Los roles `ESTADISTICA` y `FACTURACION` no habilitan administración. Este filtro y los guards son
+presentación: la autorización real debe aplicarse también en el backend.
 Una visita autenticada directa a `/signin` vuelve a `/`. No hay registro público, recuperador de contraseña,
 «mantener la sesión iniciada», login social, perfiles, buscador ni notificaciones de demostración.
 Textos en español, sin i18n. Se usó `es.json` de TailAdmin donde hay traducción; la vista de acceso original
@@ -133,8 +144,9 @@ pasa a anónima y se descarta el token. `T` tipa el resultado; no sustituye vali
 - `useAuth()` expone `status` (`loading`, `authenticated`, `anonymous`), `user`, `roles`, `permissions`,
   `login`, `logout` y `hasPermission`. Mientras se restaura la sesión, los guards muestran un estado de carga.
   `hasPermission` facilita presentación; **la autorización real siempre corresponde al backend**.
-- El menú de usuario de la cabecera no utiliza avatar, fotografía ni iniciales: muestra `nombre_completo`, `correo`,
-  «Configuración de la cuenta» y «Cerrar sesión». Se abre por clic o teclado; las flechas recorren opciones,
+- El menú de usuario de la cabecera no utiliza avatar, fotografía ni iniciales: muestra `nombre_usuario`, `correo`,
+  «Configuración de la cuenta» y «Cerrar sesión» (icono y texto rojos, también en oscuro y con foco).
+  Se abre por clic o teclado; las flechas recorren opciones,
   Escape lo cierra y devuelve el foco, y un clic exterior lo cierra. No incluye perfil, soporte ni idioma.
   Logout limpia token, usuario, roles y permisos
   inmediatamente, incluso si falla el servidor. Un refresh que termine después no puede restaurar ese estado.
@@ -165,8 +177,12 @@ La apariencia responsive y el acceso real requieren además comprobación en nav
 
 El formulario conserva la columna `max-w-md` y los inputs estándar de TailAdmin (`h-11`), con mensajes y
 estados de validación accesibles. En escritorio se muestra un panel fotográfico; por debajo de `lg`, la marca
-NEXORA y «Gestión inteligente para una atención conectada» aparecen encima del formulario. Ambos temas
-conservan el selector fijo de TailAdmin desde `sm`.
+NEXORA y «Transformamos datos en decisiones inteligentes» aparecen encima del formulario. Ambos temas
+conservan el selector fijo de TailAdmin desde `sm`. El componente `LoginFooter` queda al pie de la columna
+del formulario, en flujo normal, con texto gris claro/oscuro y espacio inferior para evitar el selector fijo
+en móvil/tableta. Muestra el nombre de `env.appName`, © y el año actual (helper `getCurrentYear`, inicializado
+fuera del render mediante estado), seguido de «Todos los derechos reservados. El uso de este sistema de
+software está sujeto a los términos de licencia». El texto se ajusta al ancho disponible.
 
 La fotografía se sirve localmente desde `public/images/auth/sign-in-bg.jpg` (1600 × 1067), sin solicitudes
 externas. Fuente: [Pexels — mano y tableta digital](https://www.pexels.com/es-es/foto/mano-tecnologia-tableta-digital-pantalla-tactil-12326656/).

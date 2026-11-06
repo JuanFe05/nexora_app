@@ -1,6 +1,7 @@
 import { PageMeta } from "@/components/shared/page-meta";
 import { env } from "@/config/env";
 import AuthBrand from "../auth-brand";
+import LoginFooter from "../login-footer";
 import SignInFormFields from "./form";
 import SignInHeader from "./header";
 
@@ -12,6 +13,7 @@ export default function SignInPage() {
         <AuthBrand compact />
         <div><SignInHeader /><SignInFormFields /></div>
       </div>
+      <LoginFooter />
     </div>
   );
 }

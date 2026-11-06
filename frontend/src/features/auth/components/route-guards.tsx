@@ -15,6 +15,12 @@ export function ProtectedRoute() {
   return <Outlet />;
 }
 
+// Nested under ProtectedRoute: session restoration and anonymous redirects stay there.
+export function RequireRole({ role }: { role: string }) {
+  const { roles } = useAuth();
+  return roles.includes(role) ? <Outlet /> : <Navigate to="/" replace />;
+}
+
 export function PublicOnlyRoute() {
   const { status } = useAuth();
   const location = useLocation();

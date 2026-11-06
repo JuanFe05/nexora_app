@@ -13,7 +13,7 @@ import SignInForm from "./sign-in-form";
 
 const { login } = vi.hoisted(() => ({ login: vi.fn() }));
 vi.mock("../use-auth", () => ({ useAuth: () => ({ login }) }));
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 beforeEach(() => { login.mockReset(); });
 
 const identifier = () => screen.getByLabelText(/Usuario o correo electrónico/);
@@ -91,11 +91,22 @@ describe("formulario de acceso", () => {
     }
   });
 
+  it.each([2026, 2031])("muestra el pie debajo del formulario con el año dinámico %s", (year) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(`${year}-07-01T12:00:00Z`));
+    render(<HelmetProvider><MemoryRouter><SignInPage /></MemoryRouter></HelmetProvider>);
+    const footer = screen.getByRole("contentinfo");
+    expect(footer).toHaveTextContent(`NEXORA © ${year}. Todos los derechos reservados. El uso de este sistema de software está sujeto a los términos de licencia`);
+    expect(footer).toHaveClass("text-xs", "text-gray-500", "dark:text-gray-400", "pb-24", "lg:pb-6");
+    expect(screen.getByRole("button", { name: "Iniciar sesión" }).compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(footer).not.toHaveClass("fixed", "absolute");
+  });
+
   it("presenta fotografía decorativa, marca y slogan también en móvil, sin enlace de regreso", () => {
     render(<HelmetProvider><MemoryRouter><ThemeProvider><Routes>
       <Route element={<AuthLayout />}><Route index element={<SignInPage />} /></Route>
     </Routes></ThemeProvider></MemoryRouter></HelmetProvider>);
-    const slogan = "Gestión inteligente para una atención conectada";
+    const slogan = "Transformamos datos en decisiones inteligentes";
     expect(screen.getAllByText("NEXORA")).toHaveLength(2);
     expect(screen.getAllByText(slogan)).toHaveLength(2);
     expect(screen.getAllByText(slogan)[0].closest(".lg\\:hidden")).toBeInTheDocument();
