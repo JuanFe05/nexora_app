@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Annotated, Any
 
 from fastapi import Depends, Request
+from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nexora.bootstrap.container import Container
@@ -94,6 +95,11 @@ def get_authenticate_use_case(
     )
 
 
+#: Solo declara el esquema en OpenAPI (boton Authorize de Swagger); la validacion real la hace
+#: `_bearer_token`, que conserva el mensaje y el 401 existentes.
+bearer_scheme = HTTPBearer(auto_error=False, description="Access token del login")
+
+
 def _bearer_token(request: Request) -> str:
     header = request.headers.get("authorization", "")
     scheme, _, token = header.partition(" ")
@@ -105,6 +111,7 @@ def _bearer_token(request: Request) -> str:
 async def get_current_principal(
     request: Request,
     use_case: Annotated[AuthenticateRequestUseCase, Depends(get_authenticate_use_case)],
+    _: Annotated[object, Depends(bearer_scheme)] = None,
 ) -> AuthenticatedPrincipal:
     """Identifica al usuario, valida la sesion viva y carga sus permisos efectivos."""
     return await use_case.execute(_bearer_token(request))

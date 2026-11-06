@@ -50,7 +50,10 @@ ORIGIN = "http://localhost:5173"
 
 @pytest.fixture(scope="session")
 def settings() -> Settings:
+    # `_env_file=None`: las pruebas no dependen del .env del desarrollador (por ejemplo, su
+    # administrador inicial); cada prueba declara explicitamente lo que necesita.
     return Settings(
+        _env_file=None,
         environment="testing",
         database_url=TEST_DATABASE_URL,
         jwt_secret=SecretStr("secreto-de-pruebas-de-al-menos-32-caracteres"),
