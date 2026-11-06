@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from nexora.identity_access.domain.entities.role import Permission, Role
 from nexora.identity_access.domain.entities.session import Session
 from nexora.identity_access.domain.entities.user import User
-from nexora.identity_access.domain.value_objects.enums import UserStatus
-from nexora.identity_access.infrastructure.persistence.models import SessionModel, UserModel
+from nexora.identity_access.domain.value_objects.enums import RoleStatus, UserStatus
+from nexora.identity_access.infrastructure.persistence.models import (
+    PermissionModel,
+    RoleModel,
+    SessionModel,
+    UserModel,
+)
 
 
 def user_to_domain(model: UserModel) -> User:
@@ -65,4 +71,24 @@ def user_to_model(user: User) -> UserModel:
         second_last_name=user.second_last_name,
         phone_number=user.phone_number,
         password_changed_at=user.password_changed_at,
+    )
+
+
+def role_to_domain(model: RoleModel) -> Role:
+    return Role(
+        id=model.id,
+        code=model.code,
+        name=model.name,
+        status=RoleStatus(model.status),
+        description=model.description,
+    )
+
+
+def permission_to_domain(model: PermissionModel) -> Permission:
+    return Permission(
+        id=model.id,
+        code=model.code,
+        name=model.name,
+        module=model.module,
+        description=model.description,
     )

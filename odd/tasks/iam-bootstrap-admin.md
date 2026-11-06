@@ -39,8 +39,8 @@ rol `ADMINISTRADOR`. Rama: `feature/develop`. Estado: en implementacion.
 | ID | Specs | Ruta | Commit | Estado |
 | --- | --- | --- | --- | --- |
 | T1 Siembra idempotente (settings, caso de uso, arranque) | S1, S3, S4 | inline | ver ultimo commit feat(iam) seed | hecho |
-| T2 Guard administrador + gestion de roles/permisos y asignaciones | S2, S5 | inline | - | pendiente |
-| T3 Gestion de usuarios y proteccion del ultimo admin | S2, S5 | inline | - | pendiente |
+| T2 Guard administrador + gestion de roles/permisos y asignaciones | S2, S5 | worker | ver commit feat(iam) admin api | hecho |
+| T3 Gestion de usuarios y proteccion del ultimo admin | S2, S5 | worker | mismo commit que T2 | hecho |
 | T4 Documentacion y verificacion final | S6 | inline | - | pendiente |
 
 ## Log

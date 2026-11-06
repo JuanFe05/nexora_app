@@ -14,10 +14,12 @@ from nexora.bootstrap.container import Container, build_container
 from nexora.bootstrap.settings import Settings, get_settings
 from nexora.identity_access.domain.exceptions.identity import (
     AuthenticationThrottled,
+    ConflictError,
     InvalidCredentials,
     InvalidToken,
     PermissionDenied,
     RefreshTokenReused,
+    ResourceNotFound,
     SessionNotActive,
 )
 from nexora.identity_access.presentation.http.v1.router import identity_access_router
@@ -57,6 +59,14 @@ def _register_error_handlers(app: FastAPI) -> None:
     async def forbidden_handler(_: Request, exc: Exception) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": str(exc)})
 
+    async def not_found_handler(_: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": str(exc)})
+
+    async def conflict_handler(_: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
+
+    app.add_exception_handler(ResourceNotFound, not_found_handler)
+    app.add_exception_handler(ConflictError, conflict_handler)
     app.add_exception_handler(InvalidCredentials, credentials_handler)
     app.add_exception_handler(AuthenticationThrottled, throttled_handler)
     app.add_exception_handler(InvalidToken, unauthenticated_handler)

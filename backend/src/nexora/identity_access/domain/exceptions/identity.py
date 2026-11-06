@@ -59,3 +59,14 @@ class AdministratorNotConfigured(IdentityError):
             "No existe un administrador activo: defina NEXORA_BOOTSTRAP_ADMIN_USERNAME, "
             "NEXORA_BOOTSTRAP_ADMIN_EMAIL y NEXORA_BOOTSTRAP_ADMIN_PASSWORD"
         )
+
+
+class ResourceNotFound(IdentityError):
+    """El usuario, rol o permiso solicitado no existe."""
+
+    def __init__(self, resource: str) -> None:
+        super().__init__(f"{resource} no encontrado")
+
+
+class ConflictError(IdentityError):
+    """La operacion dejaria datos inconsistentes o duplicados."""
