@@ -54,5 +54,9 @@ las operaciones concurrentes sobre la clave se serializan por usuario.
   sistema de auditoria dentro de IAM. Cuando exista, los eventos de login, logout, rotacion,
   reutilizacion y denegacion de permiso son los primeros candidatos.
 - No hay rotacion de claves JWT ni `kid`; con HS256 el secreto se rota por entorno.
+- La autorizacion por permiso se evalua al inicio de cada peticion: una revocacion rige desde la
+  peticion siguiente y una escritura ya autorizada que esta en curso puede completarse. No se
+  reverifica dentro de la transaccion; las protecciones de consistencia si se comprueban bajo el
+  lock. Cerrarlo del todo exigiria reevaluar el principal al escribir.
 - `GET /auth/me` escribe `fecha_ultima_actividad` en cada llamada; si el volumen lo exige, habra
   que espaciar esa escritura.

@@ -78,8 +78,9 @@ poseido (directamente o mediante un rol). Solo `ADMINISTRADOR` puede asignar/rev
 editar/desactivar/eliminar usuarios administradores; este rol queda exceptuado del limite de
 permisos delegables. Las protecciones del ultimo administrador y de sistema se conservan.
 
-Roles y permisos se recargan desde la base en cada peticion con el mismo token. Asignaciones y
-revocaciones son inmediatas; los roles inactivos no conceden acceso.
+Roles y permisos se recargan desde la base en cada peticion con el mismo token. Una asignacion o
+revocacion rige desde la **peticion siguiente**; una peticion ya autorizada y en curso puede
+terminar tras la revocacion (ver `administracion.md`). Los roles inactivos no conceden acceso.
 
 ## Perfil propio (cualquier usuario autenticado)
 

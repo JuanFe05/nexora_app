@@ -79,6 +79,19 @@ claims del JWT. Asignar o revocar un rol surte efecto en la peticion siguiente c
 token; un rol inactivo no concede permisos. El arranque ya asigna todo el catalogo al rol
 `ADMINISTRADOR`: no hay un bypass de permisos HTTP por nombre de rol.
 
+**Ventana de revocacion en vuelo.** Los permisos se evaluan una vez, al inicio de cada peticion. Si a
+un actor se le revoca un permiso (o el rol que lo concedia) mientras una peticion suya **ya
+autorizada** esta en curso, esa peticion puede terminar y persistir su cambio; la siguiente
+peticion con el mismo token recibe 403. Es el comportamiento esperado de una autorizacion por
+peticion y no se reevalua dentro de la transaccion. Las protecciones de consistencia (ultimo
+administrador, roles y permisos de sistema) si se comprueban bajo el lock, durante la escritura.
+
+**Cuerpos invalidos.** En `PATCH /users/{id}` la ruta exige al menos `identity.users.update` o
+`identity.users.deactivate` antes de validar el cuerpo, de modo que un actor sin ninguno recibe 403
+aunque el cuerpo falte o sea invalido, igual que en roles y permisos. Un JSON mal formado responde
+422 en los tres routers, porque FastAPI lo rechaza al leer el cuerpo, antes de cualquier
+dependencia; no revela si el recurso existe.
+
 ### Limites anti-escalada (403)
 
 La aplicacion recibe el DTO `AuthenticatedPrincipal` (usuario, roles y permisos), sin tipos

@@ -54,10 +54,10 @@ Estado: en implementacion.
 
 | ID | Specs | Ruta | Commit | Estado |
 | --- | --- | --- | --- | --- |
-| T1 Backend: permisos granulares por endpoint + anti-escalada | S2-S5, S7, S8 | worker | - | pendiente |
-| T2 Frontend: redireccion, sesion refrescable, guards y sidebar por permisos | S1, S2, S3, S5 | worker | - | pendiente |
-| T3 Frontend: FormDialog + acciones por permiso en Usuarios, Roles y Permisos | S3, S6 | worker x3 | - | pendiente |
-| T4 Verificacion con combinaciones de permisos, docs y verificacion independiente | S1-S8 | inline | - | pendiente |
+| T1 Backend: permisos granulares por endpoint + anti-escalada | S2-S5, S7, S8 | worker | `5926bdc` | hecho |
+| T2 Frontend: redireccion, sesion refrescable, guards y sidebar por permisos | S1, S2, S3, S5 | worker | `3c0f297` | hecho |
+| T3 Frontend: FormDialog + acciones por permiso en Usuarios, Roles y Permisos | S3, S6 | worker x3 | `c10c457`, `6184623`, `73b9add`, `fd9ef7d`, `4939a09` | hecho |
+| T4 Verificacion con combinaciones de permisos, docs y verificacion independiente | S1-S8 | inline | este commit | hecho (parcial) |
 
 ## Log
 
@@ -70,3 +70,29 @@ Estado: en implementacion.
 - **L3** Exploracion: ver "Causas encontradas". Catalogo vigente: identity.users.{view,create,update,
   deactivate,delete,reset_password,assign_roles}, identity.roles.{view,create,update,delete,
   assign_permissions}, identity.permissions.{view,create,update,delete}.
+- **L4** Implementacion: backend con permiso por endpoint segun D1 y limites anti-escalada en la
+  capa de aplicacion (`5926bdc`, 691 pruebas con una matriz de 420 combinaciones); frontend con
+  redireccion fija a `/` tras el login, sesion refrescable (`reloadPrincipal` al volver a la
+  pestana y tras un 403), sidebar y rutas por permiso, y `FormDialog` sobre `ui/dialog.tsx` de
+  TailAdmin en las tres paginas (387 pruebas). Se agregaron los iconos users/key/lock/user-circle
+  para la navegacion y se retiro `FormDrawer`.
+- **L5** Verificacion integrada con el stack real (via Nginx): 33 comprobaciones en verde con
+  usuarios de permisos distintos: solo consultar, solo eliminar (no implica consultar, crear ni
+  editar y si elimina), solo consultar roles, editar sin poder desactivar, anti-escalada (rol con
+  permisos que no tiene, asignar ADMINISTRADOR, autoasignarse, editar o borrar a un administrador),
+  permisos por rol reflejados con el MISMO token al asignar y al revocar, sin token 401 y el
+  administrador intacto; limpieza de los datos temporales verificada.
+- **L6** Verificacion independiente (`gentle-ai-verify`) sobre `5926bdc`: sin bypass de autorizacion
+  confirmado; 19 rutas con el permiso previsto, ruff, mypy, 691 pruebas y 20 sondas propias
+  en verde; sin oraculo de existencia de ids. Dos hallazgos: (1) una peticion ya autorizada puede
+  persistir su escritura si el permiso se revoca mientras esta en curso (la siguiente da 403):
+  documentado en `administracion.md`, `seguridad.md` y `contratos-api.md` (se corrigio la palabra
+  'inmediatas'); (2) `PATCH /users/{id}` sin permiso devolvia 422 con cuerpo ausente, nulo o
+  invalido en lugar de 403: corregido con la puerta `require_any_permission(update, deactivate)`
+  y pruebas (RED 32 fallos, luego verde). El JSON mal formado sigue dando 422 en los tres routers
+  porque FastAPI lo rechaza antes de las dependencias; documentado.
+- **L7** Limites conocidos: no se verifico el render en navegador (responsive, temas, interaccion
+  real: las interacciones se cubren en jsdom y la autorizacion por HTTP). La comparacion contra la
+  base no pudo ejecutarse en el entorno del verificador (sin el `.env` raiz), asi que los dos
+  hallazgos no se clasificaron contra el estado anterior. El arreglo del orden 403/422 no se volvio
+  a revisar con un segundo verificador, solo con pruebas.
