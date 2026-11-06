@@ -16,6 +16,7 @@ from nexora.identity_access.domain.entities.role import Permission, Role
 from nexora.identity_access.domain.entities.user import User
 from nexora.identity_access.domain.value_objects.access_catalog import SystemRole
 from nexora.identity_access.domain.value_objects.enums import UserStatus
+from nexora.identity_access.infrastructure.persistence.integrity import identity_conflicts
 from nexora.identity_access.infrastructure.persistence.mappers import (
     permission_to_domain,
     role_to_domain,
@@ -30,7 +31,7 @@ from nexora.identity_access.infrastructure.persistence.models import (
     UserModel,
 )
 
-#: Serializa la proteccion de administradores y las asignaciones frente a eliminaciones.
+#: Serializa unicidad de identidad, proteccion de administradores y asignaciones.
 _ACCESS_LOCK_KEY = 726_345_002
 
 
@@ -80,7 +81,8 @@ class SqlAlchemyAdministrationRepository:
 
     async def add_user(self, user: User) -> None:
         self._session.add(user_to_model(user))
-        await self._session.flush()
+        with identity_conflicts():
+            await self._session.flush()
 
     async def update_user(self, user: User) -> None:
         model = await self._session.get(UserModel, user.id)
@@ -93,7 +95,8 @@ class SqlAlchemyAdministrationRepository:
         model.second_last_name = user.second_last_name
         model.phone_number = user.phone_number
         model.status = user.status.value
-        await self._session.flush()
+        with identity_conflicts():
+            await self._session.flush()
 
     async def delete_user(self, user_id: UUID) -> None:
         await self._session.execute(delete(UserModel).where(UserModel.id == user_id))

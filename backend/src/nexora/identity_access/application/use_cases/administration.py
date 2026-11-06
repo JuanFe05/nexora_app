@@ -116,6 +116,7 @@ class UserAdministration(_Base):
         self._clock = clock
 
     async def create(self, command: NewUser) -> UserDetail:
+        await self._repo.lock_access_changes()
         await self._ensure_unique(command.username, command.email, exclude=None)
         user = User(
             id=uuid4(),

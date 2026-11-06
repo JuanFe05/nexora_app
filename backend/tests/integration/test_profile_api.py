@@ -407,3 +407,53 @@ async def test_concurrent_profile_emails_remain_case_insensitively_unique(client
     assert sorted(response.status_code for response in responses) == [200, 409]
     profiles = [await client.get(PATH, headers=headers) for headers in (first, second)]
     assert sum(profile.json()["correo"].lower() == "same@example.test" for profile in profiles) == 1
+
+
+@pytest.mark.parametrize("method,path", [("PATCH", PATH), ("POST", PATH + "/password")])
+async def test_malformed_profile_json_is_redacted_and_does_not_write(
+    client, seeder, db_session, method, path
+):
+    await seeder.create_user()
+    headers = await login(client, "jperez")
+    before = await stored(db_session)
+    secret = "malformed-secret-marker"
+    response = await client.request(
+        method,
+        path,
+        headers={**headers, "Content-Type": "application/json"},
+        content='{"contrasena_actual": "' + secret + '",',
+    )
+    assert response.status_code == 422, response.text
+    assert secret not in response.text
+    assert response.json()["detail"]
+    assert all("input" not in error and "ctx" not in error for error in response.json()["detail"])
+    assert await stored(db_session) == before
+
+
+@pytest.mark.parametrize("reason", ["inactive", "revoked"])
+async def test_inactive_or_revoked_user_cannot_use_any_profile_endpoint(
+    client, seeder, db_session, reason
+):
+    user_id = await seeder.create_user()
+    headers = await login(client, "jperez")
+    if reason == "inactive":
+        await db_session.execute(
+            text("UPDATE iam.usuario SET estado = 'inactivo' WHERE id = :id"), {"id": user_id}
+        )
+    else:
+        await db_session.execute(
+            text("UPDATE iam.sesion SET fecha_revocacion = now() WHERE usuario_id = :id"),
+            {"id": user_id},
+        )
+    await db_session.commit()
+    before = await stored(db_session)
+    for method, path, payload in (
+        ("GET", PATH, None),
+        ("PATCH", PATH, {"correo": "denied@example.test"}),
+        ("POST", PATH + "/password", {"contrasena_actual": PASSWORD, "contrasena_nueva": NEW}),
+    ):
+        response = await client.request(method, path, headers=headers, json=payload)
+        assert response.status_code == 401, response.text
+        assert response.json() == {"detail": "Sesion no activa"}
+        assert PASSWORD not in response.text and NEW not in response.text
+        assert await stored(db_session) == before

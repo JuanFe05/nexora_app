@@ -30,6 +30,11 @@ produce `422`; no se ignoran silenciosamente.
 - El correo debe ser unico sin distinguir mayusculas/minusculas. El correo actual del propio
   usuario no es un conflicto. Un correo de otro usuario produce `409` sin modificar datos.
 
+La edicion del perfil y la creacion/edicion administrativa de usuarios serializan la
+comprobacion de unicidad y la escritura con el mismo advisory lock transaccional. Como defensa
+adicional, las restricciones SQL de unicidad de usuario/correo en flush o commit producen
+`409 {"detail": "El nombre de usuario o el correo ya estan registrados"}`, no un error 500.
+
 Ejemplo:
 
 ```json

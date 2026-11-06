@@ -334,13 +334,18 @@ async def test_list_search_pagination_totals_and_validation(
 
 @pytest.mark.parametrize("resource", ["users", "roles", "permissions"])
 async def test_list_search_metacharacters_are_literal(
-    client: AsyncClient, admin: dict[str, str], resource: str
+    client: AsyncClient, admin: dict[str, str], resource: str, db_session: AsyncSession
 ) -> None:
     user, role, permission = await resources(client, admin)
     identifier = {"users": user, "roles": role, "permissions": permission}[resource]
     field = "primer_nombre" if resource == "users" else "nombre"
     changed = await request(
-        client, admin, "PATCH", f"/{resource}/{identifier}", 200, {field: r"Literal%_\Name"}
+        client,
+        admin,
+        "PATCH",
+        f"/{resource}/{identifier}",
+        200,
+        {field: "Literal%_\\Name '\" '; DROP TABLE iam.usuario;-- ñ á 😀"},
     )
     before = await snapshot(client, admin)
     all_items = (await request(client, admin, "GET", f"/{resource}?limit=100")).json()
@@ -356,7 +361,19 @@ async def test_list_search_metacharacters_are_literal(
         "roles": ("codigo", "nombre"),
         "permissions": ("codigo", "nombre", "modulo"),
     }[resource]
-    for query in ("%", "_", "\\", "%_\\", r"l%_\n"):
+    for query in (
+        "'",
+        '"',
+        "\\",
+        "'; DROP TABLE iam.usuario;--",
+        "%",
+        "_",
+        "ñ",
+        "á",
+        "😀",
+        "%_\\",
+        r"l%_\n",
+    ):
         expected = [
             item
             for item in all_items
@@ -367,6 +384,10 @@ async def test_list_search_metacharacters_are_literal(
         assert response.status_code == 200, response.text
         assert response.json() == expected
         assert response.headers["X-Total-Count"] == str(len(expected))
+        for table in ("iam.usuario", "iam.rol", "iam.permiso"):
+            assert (
+                await db_session.execute(text("SELECT to_regclass(:table)"), {"table": table})
+            ).scalar_one() == table
     assert await snapshot(client, admin) == before
 
 

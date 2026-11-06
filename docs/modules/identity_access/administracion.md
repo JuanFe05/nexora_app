@@ -92,6 +92,10 @@ Al crear usuarios, `contrasena` debe tener 12-128 caracteres.
 - Un permiso asignado a algun rol no se elimina; asignar permisos y eliminar permisos comparten
   el mismo advisory lock para que el conteo vea las asignaciones confirmadas.
 - Nombre de usuario, correo, codigo de rol y codigo de permiso son unicos.
+- Crear y editar usuarios comparten `lock_access_changes` con el perfil: la comprobacion de
+  identidad se hace despues del bloqueo y antes de escribir, en la misma transaccion. Las
+  violaciones SQL de unicidad de usuario/correo en flush o commit se traducen a
+  `409 {"detail": "El nombre de usuario o el correo ya estan registrados"}`.
 - Eliminar un usuario borra en cascada sus sesiones y asignaciones; `asignado_por` en las
   asignaciones que hizo pasa a nulo.
 
