@@ -46,13 +46,13 @@ Frontend de configuracion sobre el backend IAM existente, mas los endpoints que 
 
 | ID | Specs | Ruta | Commit | Estado |
 | --- | --- | --- | --- | --- |
-| T1 Backend: busqueda `q` y `X-Total-Count` en listados | S6, S8 | worker | - | pendiente |
-| T2 Backend: perfil propio y cambio de contrasena | S5, S9 | worker | - | pendiente |
-| T3 Frontend base: slogan, pie, menu de usuario, sidebar por secciones y roles, rutas | S1-S4, S7 | worker | - | pendiente |
-| T4 DataTable compartida (basada en table-three gratuita) | S6, S8 | worker | - | pendiente |
-| T5 Pagina Perfil de usuario | S5, S9 | worker | - | pendiente |
-| T6 Paginas Usuarios, Roles y Permisos | S5-S8 | worker | - | pendiente |
-| T7 Documentacion, verificacion integrada y verificacion independiente | S1-S9 | inline | - | pendiente |
+| T1 Backend: busqueda `q` y `X-Total-Count` en listados | S6, S8 | worker | `f24dcd6` | hecho |
+| T2 Backend: perfil propio y cambio de contrasena | S5, S9 | worker | `12cf1c6`, `7e38928` | hecho |
+| T3 Frontend base: slogan, pie, menu de usuario, sidebar por secciones y roles, rutas | S1-S4, S7 | worker | `fc05b6e`, `ebeb16e` | hecho |
+| T4 DataTable compartida (basada en table-three gratuita) | S6, S8 | worker | `ed2977e`, `847d406` | hecho |
+| T5 Pagina Perfil de usuario | S5, S9 | worker | `0fe82e8` | hecho |
+| T6 Paginas Usuarios, Roles y Permisos | S5-S8 | worker | `554e45b`, `4b0af60`, `82a06f6` | hecho |
+| T7 Documentacion, verificacion integrada y verificacion independiente | S1-S9 | inline | este commit | hecho (parcial) |
 
 ## Log
 
@@ -67,3 +67,29 @@ Frontend de configuracion sobre el backend IAM existente, mas los endpoints que 
 - **L3** Exploracion: Data Table 3 es de TailAdmin Pro (react-demo.tailadmin.com/data-tables); la
   plantilla gratuita trae `table-three` (buscador, paginacion, estado vacio) y `ui/table`,
   `ui/pagination`. El backend solo expone `/auth/me` minimo y listados sin busqueda ni total.
+- **L4** Verificacion independiente (`gentle-ai-verify`) del backend de perfil y listados (commits
+  `12cf1c6` y `f24dcd6`): ruff, mypy y 216 pruebas en verde en una copia aislada, y un hallazgo
+  confirmado por inspeccion: el alta administrativa de usuarios no tomaba el lock que si toma el
+  perfil, y PostgreSQL solo tiene unicidad sensible a mayusculas, de modo que un cambio de correo
+  del perfil concurrente con un alta podia terminar en 500 o dejar duplicados por capitalizacion.
+  Corregido en `7e38928`: el alta toma el mismo lock antes de comprobar y escribir, y las
+  violaciones de `uq_usuario_nombre_usuario`/`uq_usuario_correo` se traducen a 409 en
+  infraestructura (otros errores no se enmascaran). Se agregaron sondas adversariales (`q` con
+  comillas, SQL, Unicode; JSON malformado; usuario inactivo o sesion revocada) y la prueba
+  determinista de la carrera. El verificador no pudo ejecutar sus propias sondas de runtime (ruta
+  POSIX en Windows) y no se hizo la comparacion contra la base: lo reproducido es por la suite.
+- **L5** Verificacion integrada con el stack real (`docker compose up --build`, a traves de Nginx en
+  45334): 24 comprobaciones HTTP en verde: listados con `q` y `X-Total-Count`, `%` literal, alta
+  con correo duplicado en otra capitalizacion 409, usuario sin rol ADMINISTRADOR 403 en
+  `/users`, `/roles` y `/permissions`, sin token 401, perfil propio, edicion parcial,
+  `nombre_usuario` de solo lectura 422, correo ajeno 409, contrasena actual incorrecta 400, nueva
+  corta 422 sin eco, cambio 204 con la sesion actual viva y la otra cerrada, contrasena vieja
+  rechazada y nueva aceptada, limpieza del usuario temporal. Frontend: 292 pruebas, lint sin
+  errores, build correcto; backend: 237 pruebas.
+- **L6** Limites conocidos: no se verifico el render en navegador (responsive, temas, interaccion
+  real; las interacciones se cubren en jsdom). Tras editar el correo en Perfil el menu del
+  encabezado conserva el valor anterior hasta recargar la sesion (`useAuth()` no refresca el
+  usuario; no se toco la autenticacion). Decision pendiente del usuario: indice unico
+  case-insensitive en PostgreSQL (migracion Alembic sobre `lower(correo)` y `lower(nombre_usuario)`),
+  que cerraria el hueco tambien para escrituras fuera de la aplicacion. La siembra usa un lock
+  distinto (`726345001`) al de administracion y perfil (`726345002`).
