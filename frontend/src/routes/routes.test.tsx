@@ -11,6 +11,11 @@ const { auth } = vi.hoisted(() => ({ auth: { status: "authenticated", roles: [] 
 vi.mock("@/features/auth/use-auth", () => ({ useAuth: () => auth }));
 vi.mock("@/components/layout/app-layout", () => ({ default: () => <Outlet /> }));
 vi.mock("@/pages/others/auth/layout", () => ({ default: () => <Outlet /> }));
+// Estas pruebas cubren el enrutamiento y los guards, no el contenido: las páginas reales se cubren en su feature.
+vi.mock("@/features/profile/pages/profile-page", () => ({ default: () => <h1>Perfil de usuario</h1> }));
+vi.mock("@/features/users/pages/users-page", () => ({ default: () => <h1>Usuarios</h1> }));
+vi.mock("@/features/permissions/pages/permissions-page", () => ({ default: () => <h1>Permisos</h1> }));
+vi.mock("@/features/roles/pages/roles-page", () => ({ default: () => <h1>Roles</h1> }));
 afterEach(cleanup);
 beforeEach(() => { auth.status = "authenticated"; auth.roles = []; });
 
@@ -35,7 +40,6 @@ describe("páginas protegidas", () => {
     auth.roles = ["ADMINISTRADOR"];
     mount(`/configuracion/${path}`);
     expect(await screen.findByRole("heading", { name: title })).toBeVisible();
-    expect(screen.getByText("Página en blanco")).toBeVisible();
   });
   it.each(["usuarios", "permisos", "roles"])("redirige no administrador desde %s a Inicio", async (path) => {
     auth.roles = ["ESTADISTICA"];
