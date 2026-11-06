@@ -126,6 +126,123 @@ repite la petición una sola vez, conservando cuerpo, cabeceras y señal. Nunca 
 otros errores. Cada reintento obtiene el token vigente. Si falla el refresh o la carga de `/auth/me`, la sesión
 pasa a anónima y se descarta el token. `T` tipa el resultado; no sustituye validación de datos en tiempo de ejecución.
 
+## Tablas paginadas y confirmaciones
+
+Base compartida para Usuarios, Roles y Permisos (T4, S6/S8); todavía no conecta ni implementa sus páginas.
+No se copió **Data Table 3 Pro**. La tarjeta, tabla, estado vacío y algoritmo de paginación se adaptaron
+con `curl` desde [TailAdmin Free (MIT)](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard):
+`src/pages/main/tables/basic-tables/table-three/{card-header,card-footer,empty-state,transaction-table}.tsx`,
+`src/components/ui/{table,pagination}.tsx` y los iconos `box`, `search`, `pencil`, `trash-bin` de `src/icons/`.
+Solo se conservan las piezas utilizadas, sin datos de demostración ni dependencia de TanStack Table.
+La licencia original permanece en `LICENSE.md`.
+
+### Responsabilidades y contrato
+
+- `components/shared/data-table`: `DataTable<TRow>` presenta columnas tipadas (`id`, `header`, `cell(row)`,
+  `className`, `srOnlyHeader`), filas, acciones y controles. No hace HTTP ni filtra localmente. Usa
+  `getRowId` estable; `rowActions(row)` agrega una columna final «Acciones» con encabezado accesible.
+  `headerAction` aloja el botón principal. `emptyState: { title, description? }` describe una colección vacía;
+  una búsqueda activa muestra «No se encontraron resultados» / «Prueba con otra búsqueda.».
+- `RowActionButton` exige `aria-label`. Por defecto incluye el lápiz de TailAdmin; `variant="danger"`
+  incluye la papelera y estilos rojos. `children` permite reemplazar el icono. Admite `disabled` y eventos nativos.
+- `usePagedQuery({ fetcher, initialPageSize? })` mantiene `items`, `total`, `page`, `pageSize`, `search`,
+  `loading`, `error` y expone `setPage`, `setPageSize`, `setSearch`, `reload`. La primera consulta es inmediata;
+  la búsqueda espera **300 ms** desde el último cambio. Cambiar búsqueda o tamaño reinicia la página a 1.
+  El tamaño inicial es 50 (límites 1–100). Aborta solicitudes anteriores al cambiar de consulta/desmontar e
+  ignora sus resultados aunque el fetcher no respete AbortSignal. `reload()` vuelve a consultar y, si el total
+  se redujo, ajusta a la última página válida y la consulta de nuevo. Mantiene filas anteriores mientras carga;
+  la tabla muestra un estado ocupado, nunca un vacío transitorio.
+- Mantener la referencia de `fetcher` estable (función de módulo o `useCallback`); cambiarla dispara una consulta.
+  El fetcher recibe `{ q, limit, offset, signal }` y devuelve `Promise<{ items, total }>`.
+- `httpClient.getWithMeta<T>(path, options)` devuelve `{ data: T, headers: Headers }`. Comparte cookies,
+  Bearer, errores y el único refresh/reintento 401 con los métodos anteriores, que siguen devolviendo solo datos.
+  Un 204 devuelve `data: undefined` con sus cabeceras; no intenta leer JSON.
+- `pagedResult(await httpClient.getWithMeta<Fila[]>(...))` transforma un array más `X-Total-Count` en
+  `{ items, total }`. Solo acepta un entero decimal no negativo seguro; cabecera ausente o inválida →
+  `items.length`. Los listados reales `GET /users`, `/roles`, `/permissions` aceptan `q` opcional,
+  `limit` (1–100, 50 por defecto), `offset` (>=0). El total corresponde al filtro, **antes** de paginar.
+  El cuerpo continúa siendo un array; no se espera un objeto paginado.
+
+### Composición desde una página
+
+El adaptador HTTP vive en `features/<entidad>/api/`, no dentro del componente visual. Ejemplo del contrato
+para el listado de usuarios (sin fixtures ni consultas ejecutadas por esta documentación):
+
+```tsx
+import { httpClient } from "@/lib/http/http-client";
+import {
+  DataTable, RowActionButton, pagedResult, usePagedQuery,
+  type DataTableColumn, type PagedQueryParams,
+} from "@/components/shared/data-table";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+
+// Importar Usuario del módulo; no duplicar el modelo en la tabla compartida.
+const listarUsuarios = async ({ q, limit, offset, signal }: PagedQueryParams) => {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (q) params.set("q", q);
+  return pagedResult(await httpClient.getWithMeta<Usuario[]>(`/users?${params}`, { signal }));
+};
+
+// Dentro de la página, con columnas y callbacks definidos por el módulo:
+const listado = usePagedQuery({ fetcher: listarUsuarios, initialPageSize: 10 });
+const columnas: DataTableColumn<Usuario>[] = [
+  { id: "nombre_usuario", header: "Usuario", cell: row => row.nombre_usuario },
+];
+
+<DataTable
+  title="Usuarios"
+  description="Administración de usuarios"
+  columns={columnas}
+  rows={listado.items}
+  getRowId={row => row.id}
+  loading={listado.loading}
+  error={listado.error ? { message: "No se pudieron cargar los usuarios.", onRetry: listado.reload } : null}
+  total={listado.total}
+  page={listado.page}
+  pageSize={listado.pageSize}
+  pageSizeOptions={[10, 25, 50, 100]}
+  onPageChange={listado.setPage}
+  onPageSizeChange={listado.setPageSize}
+  search={listado.search}
+  onSearchChange={listado.setSearch}
+  searchPlaceholder="Buscar usuarios"
+  headerAction={<button onClick={abrirCreacion}>Nuevo</button>}
+  rowActions={row => <>
+    <RowActionButton aria-label={`Editar ${row.nombre_usuario}`} onClick={() => editar(row)} />
+    <RowActionButton variant="danger" aria-label={`Eliminar ${row.nombre_usuario}`} onClick={() => seleccionarParaEliminar(row)} />
+  </>}
+  emptyState={{ title: "No hay usuarios", description: "Crea el primer usuario para comenzar." }}
+/>
+
+<ConfirmDialog
+  open={seleccionado !== null}
+  onOpenChange={open => { if (!open) seleccionarParaEliminar(null); }}
+  title="Eliminar usuario"
+  description="Esta acción no se puede deshacer."
+  confirmLabel="Eliminar"
+  variant="danger"
+  pending={eliminando}
+  onConfirm={confirmarEliminacion}
+/>
+```
+
+La página conserva selección, estado de mutación y errores seguros de dominio. `confirmarEliminacion` debe
+activar `pending`, ejecutar la operación real, cerrar solo tras éxito y llamar a `listado.reload()`; ante error,
+conservar el diálogo y presentar un mensaje seguro. `onConfirm` **no cierra automáticamente**. Se deshabilitan
+ambos botones durante `pending` y aparece «Eliminando…» (personalizable con `pendingLabel`). Escape cierra;
+Cancelar cierra cuando está habilitado. Base UI AlertDialog proporciona foco atrapado, retorno al elemento que
+abrió el diálogo y asociación de título/descripción; el foco inicial va a Cancelar. `variant="default"` conserva
+el botón principal de marca; `variant="danger"` usa el rojo de TailAdmin. `cancelLabel` también es personalizable.
+
+La tabla incluye etiquetas para búsqueda y selector, encabezados de columna, región `aria-live="polite"`
+para «Mostrando X a Y de Z registros», botones de paginación con `aria-current`, estados ocupado/error/reintento,
+scroll horizontal y estilos claros/oscuros. Las pruebas jsdom usan fetchers simulados y temporizadores falsos;
+no hacen llamadas al backend. Comprobación enfocada:
+
+```sh
+corepack pnpm test src/lib/http/http-meta.test.ts src/components/shared/data-table src/components/shared/confirm-dialog.test.tsx
+```
+
 ## Autenticación y modelo de sesión
 
 - El formulario envía `identificador` (usuario o correo) y `contrasena` a `POST /auth/login`, y consulta

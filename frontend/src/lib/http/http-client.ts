@@ -8,6 +8,8 @@ export type HttpOptions = Omit<RequestInit, "method" | "body" | "credentials"> &
   body?: unknown;
 };
 
+export type HttpResult<T> = { data: T; headers: Headers };
+
 type AuthHandlers = {
   getAccessToken?: () => string | null | undefined;
   refreshSession?: () => Promise<void>;
@@ -40,7 +42,7 @@ function errorDetail(body: unknown): string {
 export function createHttpClient({ baseUrl, getAccessToken, refreshSession, fetchImpl }: HttpClientConfig) {
   let auth: AuthHandlers = { getAccessToken, refreshSession };
 
-  async function request<T>(method: string, path: string, options: HttpOptions = {}, retried = false): Promise<T> {
+  async function request<T>(method: string, path: string, options: HttpOptions = {}, retried = false): Promise<HttpResult<T>> {
     const { body, headers: extraHeaders, ...rest } = options;
     const headers = new Headers(extraHeaders);
     headers.set("Accept", "application/json");
@@ -71,7 +73,7 @@ export function createHttpClient({ baseUrl, getAccessToken, refreshSession, fetc
       }
       return request<T>(method, path, options, true);
     }
-    if (response.status === 204 && response.ok) return undefined as T;
+    if (response.status === 204 && response.ok) return { data: undefined as T, headers: response.headers };
 
     let result: unknown;
     try {
@@ -80,16 +82,21 @@ export function createHttpClient({ baseUrl, getAccessToken, refreshSession, fetc
       throw new ApiError(response.status, RESPONSE_ERROR, null, response.headers.get("Retry-After"));
     }
     if (!response.ok) throw new ApiError(response.status, errorDetail(result), result, response.headers.get("Retry-After"));
-    return result as T;
+    return { data: result as T, headers: response.headers };
+  }
+
+  async function requestData<T>(method: string, path: string, options?: HttpOptions): Promise<T> {
+    return (await request<T>(method, path, options)).data;
   }
 
   return {
     configureAuth: (handlers: AuthHandlers) => { auth = handlers; },
-    get: <T>(path: string, options?: HttpOptions) => request<T>("GET", path, options),
-    post: <T>(path: string, options?: HttpOptions) => request<T>("POST", path, options),
-    put: <T>(path: string, options?: HttpOptions) => request<T>("PUT", path, options),
-    patch: <T>(path: string, options?: HttpOptions) => request<T>("PATCH", path, options),
-    delete: <T>(path: string, options?: HttpOptions) => request<T>("DELETE", path, options),
+    getWithMeta: <T>(path: string, options?: HttpOptions) => request<T>("GET", path, options),
+    get: <T>(path: string, options?: HttpOptions) => requestData<T>("GET", path, options),
+    post: <T>(path: string, options?: HttpOptions) => requestData<T>("POST", path, options),
+    put: <T>(path: string, options?: HttpOptions) => requestData<T>("PUT", path, options),
+    patch: <T>(path: string, options?: HttpOptions) => requestData<T>("PATCH", path, options),
+    delete: <T>(path: string, options?: HttpOptions) => requestData<T>("DELETE", path, options),
   };
 }
 

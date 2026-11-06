@@ -1,0 +1,85 @@
+// @vitest-environment jsdom
+import "@testing-library/jest-dom/vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { DataTable, type DataTableProps } from "./data-table";
+import { RowActionButton } from "./row-action-button";
+
+afterEach(cleanup);
+type Row = { id: string; name: string };
+function props(overrides: Partial<DataTableProps<Row>> = {}): DataTableProps<Row> {
+  return { title: "Usuarios", description: "Administración", columns: [{ id: "name", header: "Nombre", cell: row => row.name }], rows: [{ id: "1", name: "Ana" }], getRowId: row => row.id, loading: false, total: 95, page: 1, pageSize: 10, pageSizeOptions: [10, 25, 50], onPageChange: vi.fn(), onPageSizeChange: vi.fn(), search: "", onSearchChange: vi.fn(), searchPlaceholder: "Buscar usuarios", ...overrides };
+}
+describe("DataTable", () => {
+  it("renders typed columns, rows, description, header slot and trailing labelled actions", () => {
+    const edit = vi.fn();
+    render(<DataTable {...props({ headerAction: <button>Nuevo</button>, rowActions: row => <RowActionButton aria-label={`Editar ${row.name}`} onClick={edit}>E</RowActionButton> })} />);
+    expect(screen.getByRole("table", { name: "Usuarios" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Nombre" })).toBeVisible();
+    expect(screen.getByRole("columnheader", { name: "Acciones" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Ana" })).toBeVisible();
+    expect(screen.getByText("Administración")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Nuevo" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Editar Ana" }));
+    expect(edit).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Mostrando 1 a 10 de 95 registros");
+    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+  });
+  it("shows a busy nonblank table instead of empty content while loading", () => {
+    render(<DataTable {...props({ loading: true, rows: [] })} />);
+    expect(screen.getByRole("table")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText("Cargando registros…")).toBeInTheDocument();
+    expect(screen.queryByText("No hay registros")).not.toBeInTheDocument();
+  });
+  it("shows error and invokes retry without empty state", () => {
+    const onRetry = vi.fn();
+    render(<DataTable {...props({ rows: [], error: { message: "No se pudo cargar", onRetry } })} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("No se pudo cargar");
+    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+    expect(screen.queryByText("No hay registros")).not.toBeInTheDocument();
+  });
+  it("distinguishes empty collection and active search and reports zero range", () => {
+    const { rerender } = render(<DataTable {...props({ rows: [], total: 0, emptyState: { title: "Sin usuarios", description: "Agrega un usuario" } })} />);
+    expect(screen.getByText("Sin usuarios")).toBeVisible();
+    expect(screen.getByText("Agrega un usuario")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("Mostrando 0 a 0 de 0 registros");
+    expect(screen.getByRole("button", { name: "Página siguiente" })).toBeDisabled();
+    rerender(<DataTable {...props({ rows: [], total: 0, search: "nadie" })} />);
+    expect(screen.getByText("No se encontraron resultados")).toBeVisible();
+    expect(screen.getByText("Prueba con otra búsqueda.")).toBeVisible();
+  });
+  it("labels search and page size and forwards changes", () => {
+    const input = props();
+    render(<DataTable {...input} />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar en Usuarios" }), { target: { value: "ana" } });
+    expect(input.onSearchChange).toHaveBeenCalledWith("ana");
+    expect(screen.getByPlaceholderText("Buscar usuarios")).toBeVisible();
+    fireEvent.change(screen.getByRole("combobox", { name: "Registros por página" }), { target: { value: "25" } });
+    expect(input.onPageSizeChange).toHaveBeenCalledWith(25);
+  });
+  it.each([1, 6, 10])("paginates with TailAdmin ellipses at page %s", page => {
+    const input = props({ page });
+    render(<DataTable {...input} />);
+    const nav = screen.getByRole("navigation", { name: "Paginación" });
+    expect(within(nav).getByRole("button", { name: `Página ${page}` })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getAllByText("…").length).toBe(page === 6 ? 2 : 1);
+    expect(screen.getByRole("button", { name: "Página anterior" })).toHaveProperty("disabled", page === 1);
+    expect(screen.getByRole("button", { name: "Página siguiente" })).toHaveProperty("disabled", page === 10);
+    const target = page === 1 ? "Página siguiente" : "Página anterior";
+    fireEvent.click(screen.getByRole("button", { name: target }));
+    expect(input.onPageChange).toHaveBeenCalledWith(page === 1 ? 2 : page - 1);
+    fireEvent.click(within(nav).getByRole("button", { name: "Página 1" }));
+    expect(input.onPageChange).toHaveBeenCalledWith(1);
+  });
+  it("shows all pages without ellipsis for small totals and the final partial range", () => {
+    render(<DataTable {...props({ page: 3, total: 25 })} />);
+    expect(screen.queryByText("…")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Mostrando 21 a 25 de 25 registros");
+  });
+  it("supports an sr-only column header and danger action styling", () => {
+    render(<DataTable {...props({ columns: [{ id: "action", header: "Acción", srOnlyHeader: true, cell: () => <RowActionButton variant="danger" aria-label="Eliminar">X</RowActionButton> }] })} />);
+    expect(screen.getByText("Acción")).toHaveClass("sr-only");
+    expect(screen.getByRole("button", { name: "Eliminar" })).toHaveClass("text-red-500");
+  });
+});
