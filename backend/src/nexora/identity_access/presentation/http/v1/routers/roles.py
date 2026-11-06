@@ -34,13 +34,20 @@ async def create_role(payload: RoleCreate, use_case: UseCase) -> RoleResponse:
 @router.get("", response_model=list[RoleResponse], summary="Lista roles")
 async def list_roles(
     use_case: UseCase,
+    response: Response,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    q: Annotated[
+        str | None,
+        Query(
+            max_length=100,
+            description="Busqueda literal sin distinguir mayusculas; se recortan espacios",
+        ),
+    ] = None,
 ) -> list[RoleResponse]:
-    return [
-        RoleResponse.from_detail(detail)
-        for detail in await use_case.list(limit=limit, offset=offset)
-    ]
+    page = await use_case.list(limit=limit, offset=offset, query=q)
+    response.headers["X-Total-Count"] = str(page.total)
+    return [RoleResponse.from_detail(detail) for detail in page.items]
 
 
 @router.get("/{id}", response_model=RoleResponse, summary="Consulta un rol")

@@ -242,6 +242,154 @@ async def test_administrator_crud_assignments_and_effective_permissions(
         assert response.json() == {"detail": f"{label} no encontrado"}
 
 
+@pytest.mark.parametrize(
+    ("resource", "field", "value", "query"),
+    [
+        ("users", "nombre_usuario", "needleuser", "EDLEU"),
+        ("users", "correo", "needle@example.test", "EDLE@"),
+        ("users", "primer_nombre", "NeedleFirst", "EDLEF"),
+        ("users", "segundo_nombre", "NeedleMiddle", "EDLEM"),
+        ("users", "primer_apellido", "NeedleLast", "EDLEL"),
+        ("users", "segundo_apellido", "NeedleSecond", "EDLES"),
+        ("roles", "codigo", "NEEDLE_CODE", "edle_c"),
+        ("roles", "nombre", "NeedleName", "EDLEN"),
+        ("permissions", "codigo", "needle.code", "EDLE.C"),
+        ("permissions", "nombre", "NeedleName", "EDLEN"),
+        ("permissions", "modulo", "iam_test", "IAM_TEST"),
+    ],
+)
+async def test_list_search_each_field(
+    client: AsyncClient,
+    admin: dict[str, str],
+    resource: str,
+    field: str,
+    value: str,
+    query: str,
+) -> None:
+    payload = {
+        "users": USER,
+        "roles": {"codigo": "CUSTOM", "nombre": "Otro"},
+        "permissions": {"codigo": "custom.view", "nombre": "Otro", "modulo": "iam_test"},
+    }[resource]
+    created = await request(client, admin, "POST", f"/{resource}", 201, {**payload, field: value})
+    before = await snapshot(client, admin)
+    response = await client.get(f"/api/v1/{resource}", headers=admin, params={"q": f"  {query}  "})
+    assert response.status_code == 200, response.text
+    assert response.json() == [created.json()]
+    assert response.headers["X-Total-Count"] == "1"
+    assert await snapshot(client, admin) == before
+
+
+@pytest.mark.parametrize("resource", ["users", "roles", "permissions"])
+async def test_list_search_pagination_totals_and_validation(
+    client: AsyncClient, admin: dict[str, str], resource: str
+) -> None:
+    await resources(client, admin)
+    full = await request(client, admin, "GET", f"/{resource}?limit=100")
+    expected = full.json()
+    assert isinstance(expected, list)
+    assert full.headers["X-Total-Count"] == str(len(expected))
+    order = "nombre_usuario" if resource == "users" else "codigo"
+    assert expected == sorted(expected, key=lambda item: (item[order], item["id"]))
+    before = await snapshot(client, admin)
+    for query in ("", "   "):
+        response = await client.get(
+            f"/api/v1/{resource}", headers=admin, params={"q": query, "limit": 100}
+        )
+        assert response.status_code == 200, response.text
+        assert response.json() == expected
+        assert response.headers["X-Total-Count"] == str(len(expected))
+    query = {"users": "e", "roles": "a", "permissions": "identity"}[resource]
+    matching = await client.get(
+        f"/api/v1/{resource}", headers=admin, params={"q": query, "limit": 100}
+    )
+    assert matching.status_code == 200, matching.text
+    matches = matching.json()
+    assert len(matches) >= 2
+    for offset in (0, 1, 100):
+        page = await client.get(
+            f"/api/v1/{resource}",
+            headers={**admin, "Origin": ORIGIN},
+            params={"q": query, "limit": 1, "offset": offset},
+        )
+        assert page.status_code == 200, page.text
+        assert page.json() == matches[offset : offset + 1]
+        assert page.headers["X-Total-Count"] == str(len(matches))
+        assert "x-total-count" in page.headers["Access-Control-Expose-Headers"].lower()
+    boundary = await client.get(f"/api/v1/{resource}", headers=admin, params={"q": "z" * 100})
+    assert boundary.status_code == 200, boundary.text
+    assert boundary.json() == []
+    assert boundary.headers["X-Total-Count"] == "0"
+    invalid = "sensitive-query-" * 7
+    rejected = await client.get(f"/api/v1/{resource}", headers=admin, params={"q": invalid})
+    assert rejected.status_code == 422, rejected.text
+    assert invalid not in rejected.text
+    assert rejected.json()["detail"]
+    for error in rejected.json()["detail"]:
+        assert error["loc"] == ["query", "q"]
+        assert "input" not in error
+        assert "ctx" not in error
+    assert await snapshot(client, admin) == before
+
+
+@pytest.mark.parametrize("resource", ["users", "roles", "permissions"])
+async def test_list_search_metacharacters_are_literal(
+    client: AsyncClient, admin: dict[str, str], resource: str
+) -> None:
+    user, role, permission = await resources(client, admin)
+    identifier = {"users": user, "roles": role, "permissions": permission}[resource]
+    field = "primer_nombre" if resource == "users" else "nombre"
+    changed = await request(
+        client, admin, "PATCH", f"/{resource}/{identifier}", 200, {field: r"Literal%_\Name"}
+    )
+    before = await snapshot(client, admin)
+    all_items = (await request(client, admin, "GET", f"/{resource}?limit=100")).json()
+    fields = {
+        "users": (
+            "nombre_usuario",
+            "correo",
+            "primer_nombre",
+            "segundo_nombre",
+            "primer_apellido",
+            "segundo_apellido",
+        ),
+        "roles": ("codigo", "nombre"),
+        "permissions": ("codigo", "nombre", "modulo"),
+    }[resource]
+    for query in ("%", "_", "\\", "%_\\", r"l%_\n"):
+        expected = [
+            item
+            for item in all_items
+            if any(query.lower() in (item[key] or "").lower() for key in fields)
+        ]
+        assert changed.json() in expected
+        response = await client.get(f"/api/v1/{resource}", headers=admin, params={"q": query})
+        assert response.status_code == 200, response.text
+        assert response.json() == expected
+        assert response.headers["X-Total-Count"] == str(len(expected))
+    assert await snapshot(client, admin) == before
+
+
+@pytest.mark.parametrize("resource", ["users", "roles", "permissions"])
+async def test_list_search_preserves_authorization(
+    client: AsyncClient, admin: dict[str, str], seeder: Seeder, resource: str
+) -> None:
+    await seeder.create_user(username="outsider", email="outsider@example.test")
+    outsider = await login(client, "outsider")
+    before = await snapshot(client, admin)
+    for headers, status, detail in (
+        ({}, 401, {"detail": "Falta el encabezado Authorization: Bearer"}),
+        (outsider, 403, FORBIDDEN),
+    ):
+        response = await client.get(
+            f"/api/v1/{resource}", headers=headers, params={"q": "admin", "limit": 1}
+        )
+        assert response.status_code == status, response.text
+        assert response.json() == detail
+        assert "X-Total-Count" not in response.headers
+        assert await snapshot(client, admin) == before
+
+
 @pytest.mark.parametrize("action", ["deactivate", "revoke", "delete"])
 async def test_last_active_admin_and_self_protection(
     client: AsyncClient,

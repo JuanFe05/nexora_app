@@ -7,9 +7,10 @@ from collections.abc import Collection
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import CursorResult, delete, func, select
+from sqlalchemy import ColumnElement, CursorResult, Select, delete, func, or_, select, true
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from nexora.identity_access.domain.entities.role import Permission, Role
 from nexora.identity_access.domain.entities.user import User
@@ -31,6 +32,17 @@ from nexora.identity_access.infrastructure.persistence.models import (
 
 #: Serializa la proteccion de administradores y las asignaciones frente a eliminaciones.
 _ACCESS_LOCK_KEY = 726_345_002
+
+
+def _search(
+    query: str | None,
+    *columns: InstrumentedAttribute[str] | InstrumentedAttribute[str | None],
+) -> ColumnElement[bool]:
+    if not query:
+        return true()
+    # Escapar primero la barra evita que % y _ se conviertan en comodines SQL.
+    escaped = query.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+    return or_(*(column.ilike(f"%{escaped}%", escape="\\") for column in columns))
 
 
 class SqlAlchemyAdministrationRepository:
@@ -97,9 +109,31 @@ class SqlAlchemyAdministrationRepository:
         )
         return [user_to_domain(model) for model in (await self._session.execute(stmt)).scalars()]
 
-    async def list_users(self, *, limit: int, offset: int) -> list[User]:
-        stmt = select(UserModel).order_by(UserModel.username).limit(limit).offset(offset)
+    def _users(self, query: str | None) -> Select[UserModel]:
+        return select(UserModel).where(
+            _search(
+                query,
+                UserModel.username,
+                UserModel.email,
+                UserModel.first_name,
+                UserModel.middle_name,
+                UserModel.last_name,
+                UserModel.second_last_name,
+            )
+        )
+
+    async def list_users(self, *, limit: int, offset: int, query: str | None = None) -> list[User]:
+        stmt = (
+            self._users(query)
+            .order_by(UserModel.username, UserModel.id)
+            .limit(limit)
+            .offset(offset)
+        )
         return [user_to_domain(model) for model in (await self._session.execute(stmt)).scalars()]
+
+    async def count_users(self, *, query: str | None = None) -> int:
+        stmt = select(func.count()).select_from(self._users(query).subquery())
+        return int((await self._session.execute(stmt)).scalar_one())
 
     # --- Roles -----------------------------------------------------------------------------
 
@@ -135,9 +169,16 @@ class SqlAlchemyAdministrationRepository:
         model = (await self._session.execute(stmt)).scalar_one_or_none()
         return role_to_domain(model) if model is not None else None
 
-    async def list_roles(self, *, limit: int, offset: int) -> list[Role]:
-        stmt = select(RoleModel).order_by(RoleModel.code).limit(limit).offset(offset)
+    def _roles(self, query: str | None) -> Select[RoleModel]:
+        return select(RoleModel).where(_search(query, RoleModel.code, RoleModel.name))
+
+    async def list_roles(self, *, limit: int, offset: int, query: str | None = None) -> list[Role]:
+        stmt = self._roles(query).order_by(RoleModel.code, RoleModel.id).limit(limit).offset(offset)
         return [role_to_domain(model) for model in (await self._session.execute(stmt)).scalars()]
+
+    async def count_roles(self, *, query: str | None = None) -> int:
+        stmt = select(func.count()).select_from(self._roles(query).subquery())
+        return int((await self._session.execute(stmt)).scalar_one())
 
     async def count_role_assignments(self, role_id: UUID) -> int:
         stmt = (
@@ -183,11 +224,27 @@ class SqlAlchemyAdministrationRepository:
         model = (await self._session.execute(stmt)).scalar_one_or_none()
         return permission_to_domain(model) if model is not None else None
 
-    async def list_permissions(self, *, limit: int, offset: int) -> list[Permission]:
-        stmt = select(PermissionModel).order_by(PermissionModel.code).limit(limit).offset(offset)
+    def _permissions(self, query: str | None) -> Select[PermissionModel]:
+        return select(PermissionModel).where(
+            _search(query, PermissionModel.code, PermissionModel.name, PermissionModel.module)
+        )
+
+    async def list_permissions(
+        self, *, limit: int, offset: int, query: str | None = None
+    ) -> list[Permission]:
+        stmt = (
+            self._permissions(query)
+            .order_by(PermissionModel.code, PermissionModel.id)
+            .limit(limit)
+            .offset(offset)
+        )
         return [
             permission_to_domain(model) for model in (await self._session.execute(stmt)).scalars()
         ]
+
+    async def count_permissions(self, *, query: str | None = None) -> int:
+        stmt = select(func.count()).select_from(self._permissions(query).subquery())
+        return int((await self._session.execute(stmt)).scalar_one())
 
     async def count_permission_roles(self, permission_id: UUID) -> int:
         stmt = (

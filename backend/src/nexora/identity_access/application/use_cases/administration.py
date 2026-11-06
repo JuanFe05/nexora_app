@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from uuid import UUID, uuid4
 
+from nexora.identity_access.application.dto.page import Page
 from nexora.identity_access.application.ports.administration import AdministrationRepository
 from nexora.identity_access.application.ports.security import Clock, PasswordHasher
 from nexora.identity_access.application.ports.transaction import Transaction
@@ -133,10 +134,14 @@ class UserAdministration(_Base):
         await self._tx.commit()
         return UserDetail(user, ())
 
-    async def list(self, *, limit: int, offset: int) -> list[UserDetail]:
-        users = await self._repo.list_users(limit=limit, offset=offset)
+    async def list(self, *, limit: int, offset: int, query: str | None = None) -> Page[UserDetail]:
+        query = query.strip() or None if query is not None else None
+        users = await self._repo.list_users(limit=limit, offset=offset, query=query)
         roles = await self._repo.role_codes_by_user([user.id for user in users])
-        return [UserDetail(user, roles.get(user.id, ())) for user in users]
+        return Page(
+            items=tuple(UserDetail(user, roles.get(user.id, ())) for user in users),
+            total=await self._repo.count_users(query=query),
+        )
 
     async def get(self, user_id: UUID) -> UserDetail:
         user = await self._user(user_id)
@@ -207,10 +212,14 @@ class RoleAdministration(_Base):
         await self._tx.commit()
         return RoleDetail(role, ())
 
-    async def list(self, *, limit: int, offset: int) -> list[RoleDetail]:
-        roles = await self._repo.list_roles(limit=limit, offset=offset)
+    async def list(self, *, limit: int, offset: int, query: str | None = None) -> Page[RoleDetail]:
+        query = query.strip() or None if query is not None else None
+        roles = await self._repo.list_roles(limit=limit, offset=offset, query=query)
         permissions = await self._repo.permission_codes_by_role([role.id for role in roles])
-        return [RoleDetail(role, permissions.get(role.id, ())) for role in roles]
+        return Page(
+            items=tuple(RoleDetail(role, permissions.get(role.id, ())) for role in roles),
+            total=await self._repo.count_roles(query=query),
+        )
 
     async def get(self, role_id: UUID) -> RoleDetail:
         role = await self._role(role_id)
@@ -280,8 +289,10 @@ class PermissionAdministration(_Base):
         await self._tx.commit()
         return permission
 
-    async def list(self, *, limit: int, offset: int) -> list[Permission]:
-        return await self._repo.list_permissions(limit=limit, offset=offset)
+    async def list(self, *, limit: int, offset: int, query: str | None = None) -> Page[Permission]:
+        query = query.strip() or None if query is not None else None
+        permissions = await self._repo.list_permissions(limit=limit, offset=offset, query=query)
+        return Page(items=tuple(permissions), total=await self._repo.count_permissions(query=query))
 
     async def get(self, permission_id: UUID) -> Permission:
         return await self._permission(permission_id)

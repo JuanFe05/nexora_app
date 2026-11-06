@@ -58,7 +58,22 @@ token la respuesta es 401.
 | `/permissions` | `POST`, `GET`, `GET /{id}`, `PATCH /{id}`, `DELETE /{id}` |
 
 `POST` responde 201, `DELETE` 204, un id inexistente 404 y una regla de consistencia 409. Los
-listados aceptan `limit` (1-100, por defecto 50) y `offset`. Nunca se devuelve `hash_contrasena`.
+listados mantienen su cuerpo como un arreglo JSON y aceptan `limit` (1-100, por defecto 50),
+`offset` (desde 0) y `q` opcional (maximo 100 caracteres). Se recortan los espacios al principio
+y al final de `q`; vacio o solo espacios equivale a no filtrar. La busqueda es por contenido,
+sin distinguir mayusculas y minusculas; `%`, `_` y `\` son caracteres literales, no comodines.
+
+- Usuarios: `nombre_usuario`, `correo`, `primer_nombre`, `segundo_nombre`, `primer_apellido` y
+  `segundo_apellido`.
+- Roles: `codigo` y `nombre`.
+- Permisos: `codigo`, `nombre` y `modulo`.
+
+Cada listado devuelve `X-Total-Count`: el total que coincide con `q`, sin aplicar `limit` ni
+`offset`, incluso si la pagina esta vacia. La cabecera esta expuesta por CORS para clientes en
+otro origen. El orden es estable: usuarios por `nombre_usuario`, roles y permisos por `codigo`,
+con `id` como desempate. Ejemplo: `GET /api/v1/users?q=ana&limit=10&offset=10`.
+Una `q` de mas de 100 caracteres responde 422 sin reflejar el valor enviado.
+Nunca se devuelve `hash_contrasena`.
 El codigo de un rol o permiso es inmutable. Los errores 422 conservan `detail`, `loc` y `msg`,
 pero nunca devuelven `input` ni `ctx`, para no exponer contrasenas ni otros datos enviados.
 En `PATCH`, cualquier campo con `null` explicito se rechaza con 422; omitirlo significa no cambiarlo.

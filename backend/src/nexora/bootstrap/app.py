@@ -103,6 +103,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Total-Count"],
     )
     _register_error_handlers(app)
     app.include_router(identity_access_router, prefix=settings.api_prefix)

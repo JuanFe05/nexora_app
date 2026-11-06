@@ -39,13 +39,20 @@ async def create_permission(payload: PermissionCreate, use_case: UseCase) -> Per
 @router.get("", response_model=list[PermissionResponse], summary="Lista permisos")
 async def list_permissions(
     use_case: UseCase,
+    response: Response,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    q: Annotated[
+        str | None,
+        Query(
+            max_length=100,
+            description="Busqueda literal sin distinguir mayusculas; se recortan espacios",
+        ),
+    ] = None,
 ) -> list[PermissionResponse]:
-    return [
-        PermissionResponse.from_permission(permission)
-        for permission in await use_case.list(limit=limit, offset=offset)
-    ]
+    page = await use_case.list(limit=limit, offset=offset, query=q)
+    response.headers["X-Total-Count"] = str(page.total)
+    return [PermissionResponse.from_permission(permission) for permission in page.items]
 
 
 @router.get("/{id}", response_model=PermissionResponse, summary="Consulta un permiso")

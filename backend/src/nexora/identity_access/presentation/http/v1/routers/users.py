@@ -49,13 +49,20 @@ async def create_user(payload: UserCreate, use_case: UseCase) -> UserResponse:
 @router.get("", response_model=list[UserResponse], summary="Lista usuarios")
 async def list_users(
     use_case: UseCase,
+    response: Response,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    q: Annotated[
+        str | None,
+        Query(
+            max_length=100,
+            description="Busqueda literal sin distinguir mayusculas; se recortan espacios",
+        ),
+    ] = None,
 ) -> list[UserResponse]:
-    return [
-        UserResponse.from_detail(detail)
-        for detail in await use_case.list(limit=limit, offset=offset)
-    ]
+    page = await use_case.list(limit=limit, offset=offset, query=q)
+    response.headers["X-Total-Count"] = str(page.total)
+    return [UserResponse.from_detail(detail) for detail in page.items]
 
 
 @router.get("/{id}", response_model=UserResponse, summary="Consulta un usuario")
