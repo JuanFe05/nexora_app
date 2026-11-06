@@ -3,8 +3,10 @@ import { assignPermission, changedRoleFields, createRole, revokePermission, role
 import { ADMINISTRATOR_CODE } from "../constants";
 import type { PermissionOption, Role, RoleValues } from "../types";
 
+type SaveAccess = { create: boolean; update: boolean; assignPermissions: boolean };
+
 /** Keeps a checkpoint after each successful step so partial saves can be retried safely. */
-export function useRoleSave(initialRole: Role | null, onReload: () => void, onSuccess: (created: boolean) => void) {
+export function useRoleSave(initialRole: Role | null, access: SaveAccess, onReload: () => void, onSuccess: (created: boolean) => void) {
   const checkpoint = useRef<Role | null>(initialRole);
   const saving = useRef(false);
   const created = useRef(false);
@@ -25,17 +27,18 @@ export function useRoleSave(initialRole: Role | null, onReload: () => void, onSu
     try {
       let current = checkpoint.current;
       if (!current) {
+        if (!access.create) return;
         current = await createRole({ codigo: values.codigo, nombre: values.nombre, descripcion: values.descripcion });
         created.current = true;
         remember(current);
-      } else {
+      } else if (access.update) {
         const mutable = { nombre: values.nombre, descripcion: values.descripcion, estado: current.codigo === ADMINISTRATOR_CODE ? current.estado : values.estado };
         if (Object.keys(changedRoleFields(current, mutable)).length) {
           current = await updateRole(current, mutable);
           remember(current);
         }
       }
-      if (current.codigo !== ADMINISTRATOR_CODE) {
+      if (access.assignPermissions && current.codigo !== ADMINISTRATOR_CODE) {
         for (const permission of catalog) {
           const has: boolean = current.permisos.includes(permission.codigo);
           const wants = selected.has(permission.codigo);

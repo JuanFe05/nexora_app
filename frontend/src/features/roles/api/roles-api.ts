@@ -37,7 +37,7 @@ export function roleErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     switch (error.status) {
       case 401: return "Sesión expirada. Vuelve a iniciar sesión.";
-      case 403: return "No tienes autorización para administrar roles.";
+      case 403: return error.detail;
       case 404: return "El rol o permiso ya no existe. Actualiza los datos.";
       case 409: return error.detail;
       case 422: return "Revisa los datos del formulario. No cumplen las reglas del servidor.";

@@ -43,7 +43,7 @@ describe("roles API", () => {
   });
   it.each([
     [401, "Sesión expirada. Vuelve a iniciar sesión."],
-    [403, "No tienes autorización para administrar roles."],
+    [403, "Este rol tiene usuarios asignados"],
     [404, "El rol o permiso ya no existe. Actualiza los datos."],
     [409, "Este rol tiene usuarios asignados"],
     [422, "Revisa los datos del formulario. No cumplen las reglas del servidor."],

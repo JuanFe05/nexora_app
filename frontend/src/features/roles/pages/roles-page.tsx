@@ -4,6 +4,8 @@ import { DataTable, RowActionButton, usePagedQuery, type DataTableColumn } from 
 import { InlineAlert } from "@/components/shared/inline-alert";
 import { Button } from "@/components/ui/button";
 import { PlusIcon } from "@/icons";
+import { useAuth } from "@/features/auth/use-auth";
+import { PERMISSIONS } from "@/features/auth/permissions";
 import { deleteRole, listRoles, roleErrorMessage } from "../api/roles-api";
 import { RoleDrawer } from "../components/role-drawer";
 import { canDeleteRole } from "../constants";
@@ -18,6 +20,10 @@ const columns: DataTableColumn<Role>[] = [
 ];
 
 export default function RolesPage() {
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission(PERMISSIONS.rolesCreate);
+  const canEdit = hasPermission(PERMISSIONS.rolesUpdate) || hasPermission(PERMISSIONS.rolesAssignPermissions);
+  const canDelete = hasPermission(PERMISSIONS.rolesDelete);
   const query = usePagedQuery({ fetcher: listRoles, initialPageSize: 10 });
   const [drawer, setDrawer] = useState<{ role: Role | null } | null>(null);
   const [deleting, setDeleting] = useState<Role | null>(null);
@@ -28,7 +34,7 @@ export default function RolesPage() {
 
   function openDrawer(role: Role | null) { setSuccess(null); setDrawer({ role }); }
   async function confirmDelete() {
-    if (!deleting || deleteLock.current || !canDeleteRole(deleting.codigo)) return;
+    if (!canDelete || !deleting || deleteLock.current || !canDeleteRole(deleting.codigo)) return;
     deleteLock.current = true;
     setPendingDelete(true);
     setDeleteError(null);
@@ -46,9 +52,9 @@ export default function RolesPage() {
   }
   return <div className="space-y-5">
     {success && <InlineAlert variant="success">{success}</InlineAlert>}
-    <DataTable title="Roles" description="Administración de roles y sus permisos" columns={columns} rows={query.items} getRowId={row => row.id} loading={query.loading} error={query.error ? { message: roleErrorMessage(query.error), onRetry: query.reload } : null} total={query.total} page={query.page} pageSize={query.pageSize} onPageChange={query.setPage} onPageSizeChange={query.setPageSize} search={query.search} onSearchChange={query.setSearch} searchPlaceholder="Buscar roles" headerAction={<Button onClick={() => openDrawer(null)}><PlusIcon aria-hidden="true" />Nuevo rol</Button>} emptyState={{ title: "No hay roles", description: "Crea el primer rol para comenzar." }} rowActions={row => <>
-      <RowActionButton aria-label={`Editar ${row.nombre}`} onClick={() => openDrawer(row)} />
-      <RowActionButton variant="danger" aria-label={`Eliminar ${row.nombre}`} disabled={!canDeleteRole(row.codigo)} title={!canDeleteRole(row.codigo) ? "Los roles del sistema no se pueden eliminar." : undefined} onClick={() => { setSuccess(null); setDeleteError(null); setDeleting(row); }} />
+    <DataTable title="Roles" description="Administración de roles y sus permisos" columns={columns} rows={query.items} getRowId={row => row.id} loading={query.loading} error={query.error ? { message: roleErrorMessage(query.error), onRetry: query.reload } : null} total={query.total} page={query.page} pageSize={query.pageSize} onPageChange={query.setPage} onPageSizeChange={query.setPageSize} search={query.search} onSearchChange={query.setSearch} searchPlaceholder="Buscar roles" headerAction={canCreate ? <Button onClick={() => openDrawer(null)}><PlusIcon aria-hidden="true" />Nuevo rol</Button> : undefined} emptyState={{ title: "No hay roles", description: "Crea el primer rol para comenzar." }} rowActions={row => <>
+      {canEdit && <RowActionButton aria-label={`Editar ${row.nombre}`} onClick={() => openDrawer(row)} />}
+      {canDelete && canDeleteRole(row.codigo) && <RowActionButton variant="danger" aria-label={`Eliminar ${row.nombre}`} onClick={() => { setSuccess(null); setDeleteError(null); setDeleting(row); }} />}
     </>} />
     {drawer && <RoleDrawer role={drawer.role} onClose={() => setDrawer(null)} onReload={query.reload} onSuccess={created => { setDrawer(null); setSuccess(created ? "Rol creado correctamente." : "Rol actualizado correctamente."); }} />}
     <ConfirmDialog open={deleting !== null} onOpenChange={open => { if (!open && !pendingDelete) { setDeleting(null); setDeleteError(null); } }} title="Eliminar rol" description={<><span>¿Eliminar el rol {deleting?.nombre}? Esta acción no se puede deshacer.</span>{deleteError && <InlineAlert variant="error" className="mt-3">{deleteError}</InlineAlert>}</>} confirmLabel="Eliminar" variant="danger" pending={pendingDelete} onConfirm={() => { void confirmDelete(); }} />

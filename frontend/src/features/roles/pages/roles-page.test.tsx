@@ -4,6 +4,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/http/api-error";
+import { PERMISSIONS as P } from "@/features/auth/permissions";
+
+const auth = vi.hoisted(() => ({ codes: new Set<string>() }));
+vi.mock("@/features/auth/use-auth", () => ({ useAuth: () => ({ hasPermission: (code: string) => auth.codes.has(code) }) }));
 import * as api from "../api/roles-api";
 import * as options from "../api/permission-options";
 import type { Role } from "../types";
@@ -21,6 +25,7 @@ const catalog = [
   { id: "p3", codigo: "caja.ver", nombre: "Ver caja", modulo: "Caja", descripcion: null },
 ];
 beforeEach(() => {
+  auth.codes = new Set(Object.values(P));
   vi.mocked(api.listRoles).mockResolvedValue({ items: [role], total: 21 });
   vi.mocked(options.loadPermissionOptions).mockResolvedValue(catalog);
   vi.mocked(api.createRole).mockResolvedValue({ ...role, descripcion: null, permisos: [] });
@@ -36,6 +41,132 @@ async function openEdit() {
   return screen.findByRole("dialog", { name: "Editar rol" });
 }
 function change(label: string, value: string) { fireEvent.change(screen.getByLabelText(label, { exact: true }), { target: { value } }); }
+
+describe("granular permissions and FormDialog", () => {
+  it.each([
+    ["view", [], false, false, false],
+    ["create", [P.rolesCreate], true, false, false],
+    ["update", [P.rolesUpdate], false, true, false],
+    ["delete", [P.rolesDelete], false, false, true],
+    ["assign without catalog", [P.rolesAssignPermissions], false, true, false],
+    ["assign with catalog", [P.rolesAssignPermissions, P.permissionsView], false, true, false],
+    ["all", Object.values(P), true, true, true],
+  ] as const)("shows independent actions: %s", async (_name, codes, create, edit, remove) => {
+    auth.codes = new Set([P.rolesView, ...codes]);
+    render(<RolesPage />);
+    await screen.findByText("VENTAS");
+    expect(!!screen.queryByRole("button", { name: "Nuevo rol" })).toBe(create);
+    expect(!!screen.queryByRole("button", { name: "Editar Ventas" })).toBe(edit);
+    expect(!!screen.queryByRole("button", { name: "Eliminar Ventas" })).toBe(remove);
+    expect(options.loadPermissionOptions).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["update only", [P.rolesUpdate], true, false, false],
+    ["update and catalog", [P.rolesUpdate, P.permissionsView], true, false, true],
+    ["assign without catalog", [P.rolesAssignPermissions], false, false, false],
+    ["assign with catalog", [P.rolesAssignPermissions, P.permissionsView], false, true, true],
+    ["all", Object.values(P), true, true, true],
+  ] as const)("gates edit fields and outgoing mutations: %s", async (_name, codes, fields, permissions, catalogAccess) => {
+    auth.codes = new Set([P.rolesView, ...codes]);
+    const dialog = await openEdit();
+    expect(screen.getByLabelText("Nombre", { exact: true }).hasAttribute("readonly")).toBe(!fields);
+    expect(screen.getByLabelText("Descripción", { exact: true }).hasAttribute("readonly")).toBe(!fields);
+    expect(screen.getByLabelText("Estado", { exact: true })).toHaveProperty("disabled", !fields);
+    if (catalogAccess) {
+      const checkbox = await screen.findByRole("checkbox", { name: "Ver caja" });
+      expect(checkbox.getAttribute("aria-disabled") === "true").toBe(!permissions);
+      await userEvent.click(checkbox);
+      expect(options.loadPermissionOptions).toHaveBeenCalledTimes(1);
+    } else {
+      expect(options.loadPermissionOptions).not.toHaveBeenCalled();
+      expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+      if ((codes as readonly string[]).includes(P.rolesAssignPermissions)) expect(screen.getByText(/Se requiere.*identity.permissions.view/)).toBeVisible();
+    }
+    if (fields) {
+      change("Nombre", "Comercial");
+      change("Descripción", "Nueva descripción");
+      fireEvent.change(screen.getByLabelText("Estado", { exact: true }), { target: { value: "inactivo" } });
+    }
+    if (fields || permissions) await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    else {
+      expect(screen.queryByRole("button", { name: "Guardar" })).not.toBeInTheDocument();
+      const footer = dialog.querySelector('[data-slot="dialog-footer"]') as HTMLElement;
+      expect(within(footer).getByRole("button", { name: "Cerrar" })).toBeVisible();
+      await userEvent.click(within(footer).getByRole("button", { name: "Cerrar" }));
+    }
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    if (fields) expect(api.updateRole).toHaveBeenCalledExactlyOnceWith(role, { nombre: "Comercial", descripcion: "Nueva descripción", estado: "inactivo" });
+    else expect(api.updateRole).not.toHaveBeenCalled();
+    if (permissions) expect(api.assignPermission).toHaveBeenCalledExactlyOnceWith("r1", "p3");
+    else expect(api.assignPermission).not.toHaveBeenCalled();
+    expect(api.revokePermission).not.toHaveBeenCalled();
+    expect(api.createRole).not.toHaveBeenCalled();
+    expect(api.deleteRole).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["create only", [P.rolesCreate], false],
+    ["create and catalog without assign", [P.rolesCreate, P.permissionsView], false],
+    ["create and assign without catalog", [P.rolesCreate, P.rolesAssignPermissions], false],
+    ["all", Object.values(P), true],
+  ] as const)("gates creation permission selection: %s", async (_name, codes, selectable) => {
+    auth.codes = new Set([P.rolesView, ...codes]);
+    render(<RolesPage />);
+    await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
+    change("Código", "VENTAS"); change("Nombre", "Ventas");
+    if (selectable) await userEvent.click(await screen.findByRole("checkbox", { name: "Ver caja" }));
+    else {
+      expect(options.loadPermissionOptions).not.toHaveBeenCalled();
+      expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    }
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(api.createRole).toHaveBeenCalledExactlyOnceWith({ codigo: "VENTAS", nombre: "Ventas", descripcion: "" });
+    expect(api.updateRole).not.toHaveBeenCalled();
+    expect(api.assignPermission).toHaveBeenCalledTimes(selectable ? 1 : 0);
+    if (selectable) expect(api.assignPermission).toHaveBeenCalledWith("r1", "p3");
+    expect(api.revokePermission).not.toHaveBeenCalled();
+  });
+
+  it.each(["Escape", "Cancelar", "Cerrar"])("uses centered scrollable dialog and closes via %s without writes", async method => {
+    const dialog = await openEdit();
+    expect(dialog).toHaveAttribute("data-slot", "dialog-content");
+    expect(dialog.className).toContain("max-h-[calc(100dvh-2rem)]");
+    expect(dialog.className).toContain("grid-rows-[auto_minmax(0,1fr)_auto]");
+    expect(dialog.querySelector(".overflow-y-auto")).toContainElement(await screen.findByRole("region", { name: "Permisos del rol" }));
+    if (method === "Escape") await userEvent.keyboard("{Escape}");
+    else await userEvent.click(screen.getByRole("button", { name: method }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(api.updateRole).not.toHaveBeenCalled();
+    expect(api.assignPermission).not.toHaveBeenCalled();
+    expect(api.revokePermission).not.toHaveBeenCalled();
+  });
+
+  it("allows delete without create, update or assignment and sends only the selected id", async () => {
+    auth.codes = new Set([P.rolesView, P.rolesDelete]);
+    render(<RolesPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Eliminar Ventas" }));
+    await userEvent.click(screen.getByRole("button", { name: "Eliminar" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(api.deleteRole).toHaveBeenCalledExactlyOnceWith("r1");
+    expect(api.createRole).not.toHaveBeenCalled();
+    expect(api.updateRole).not.toHaveBeenCalled();
+    expect(api.assignPermission).not.toHaveBeenCalled();
+    expect(api.revokePermission).not.toHaveBeenCalled();
+    expect(options.loadPermissionOptions).not.toHaveBeenCalled();
+  });
+
+  it("shows the backend 403 detail and preserves the edit for retry", async () => {
+    vi.mocked(api.updateRole).mockRejectedValue(new ApiError(403, "No puedes cambiar este rol", {}));
+    await openEdit(); change("Nombre", "Comercial");
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No puedes cambiar este rol");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nombre", { exact: true })).toHaveValue("Comercial");
+    expect(api.assignPermission).not.toHaveBeenCalled();
+  });
+});
 
 describe("Roles page", () => {
   it("lists real rows with count/summary, pages and page size from the shared query", async () => {
@@ -83,7 +214,7 @@ describe("Roles page", () => {
     expect(screen.getByText("Rol creado correctamente.")).toBeVisible();
     expect(api.listRoles).toHaveBeenCalledTimes(2);
   });
-  it("keeps duplicate 409 message in drawer without changing permissions", async () => {
+  it("keeps duplicate 409 message in dialog without changing permissions", async () => {
     vi.mocked(api.createRole).mockRejectedValue(new ApiError(409, "Ya existe un rol con ese código", {}));
     render(<RolesPage />);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
@@ -153,7 +284,7 @@ describe("Roles page", () => {
     vi.mocked(api.listRoles).mockResolvedValue({ items: ["ADMINISTRADOR", "ESTADISTICA", "FACTURACION"].map((codigo, i) => ({ ...role, id: String(i), codigo, nombre: codigo })), total: 3 });
     render(<RolesPage />);
     await screen.findByRole("button", { name: "Editar ADMINISTRADOR" });
-    for (const code of ["ADMINISTRADOR", "ESTADISTICA", "FACTURACION"]) expect(screen.getByRole("button", { name: `Eliminar ${code}` })).toBeDisabled();
+    for (const code of ["ADMINISTRADOR", "ESTADISTICA", "FACTURACION"]) expect(screen.queryByRole("button", { name: `Eliminar ${code}` })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Editar ADMINISTRADOR" }));
     expect(screen.getByLabelText("Estado", { exact: true })).toBeDisabled();
     await screen.findByRole("checkbox", { name: "Ver ventas" });
@@ -183,7 +314,7 @@ describe("Roles page", () => {
   it("shows server error with retry then the empty state", async () => {
     vi.mocked(api.listRoles).mockRejectedValueOnce(new ApiError(403, "Forbidden", {})).mockResolvedValue({ items: [], total: 0 });
     render(<RolesPage />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("No tienes autorización para administrar roles.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Forbidden");
     await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(await screen.findByText("No hay roles")).toBeVisible();
   });
@@ -237,6 +368,7 @@ describe("Roles page", () => {
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
     expect(screen.getByLabelText("Nombre", { exact: true })).toBeDisabled();
     await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: "Cerrar" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     await act(async () => resolve({ ...role, nombre: "Comercial" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
