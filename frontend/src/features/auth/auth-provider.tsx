@@ -7,10 +7,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void authSession.restore();
+    return authSession.watchPrincipal(window, document);
   }, []);
 
   return (
-    <AuthContext value={{ ...state, login: authSession.login, logout: authSession.logout, hasPermission: authSession.hasPermission }}>
+    <AuthContext value={{ ...state, login: authSession.login, logout: authSession.logout, hasPermission: authSession.hasPermission, reloadPrincipal: authSession.reloadPrincipal }}>
       {children}
     </AuthContext>
   );

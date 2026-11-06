@@ -13,6 +13,7 @@ export type HttpResult<T> = { data: T; headers: Headers };
 type AuthHandlers = {
   getAccessToken?: () => string | null | undefined;
   refreshSession?: () => Promise<void>;
+  onForbidden?: () => void | Promise<void>;
 };
 
 type HttpClientConfig = AuthHandlers & {
@@ -39,8 +40,8 @@ function errorDetail(body: unknown): string {
   return messages.join("; ") || RESPONSE_ERROR;
 }
 
-export function createHttpClient({ baseUrl, getAccessToken, refreshSession, fetchImpl }: HttpClientConfig) {
-  let auth: AuthHandlers = { getAccessToken, refreshSession };
+export function createHttpClient({ baseUrl, getAccessToken, refreshSession, onForbidden, fetchImpl }: HttpClientConfig) {
+  let auth: AuthHandlers = { getAccessToken, refreshSession, onForbidden };
 
   async function request<T>(method: string, path: string, options: HttpOptions = {}, retried = false): Promise<HttpResult<T>> {
     const { body, headers: extraHeaders, ...rest } = options;
@@ -72,6 +73,14 @@ export function createHttpClient({ baseUrl, getAccessToken, refreshSession, fetc
         throw new ApiError(401, "No autenticado", null, response.headers.get("Retry-After"));
       }
       return request<T>(method, path, options, true);
+    }
+    if (response.status === 403 && !isAuthEndpoint) {
+      try {
+        // Notification only: preserve the original error and never retry a forbidden operation.
+        void Promise.resolve(auth.onForbidden?.()).catch(() => undefined);
+      } catch {
+        // A consumer callback must not replace the HTTP error.
+      }
     }
     if (response.status === 204 && response.ok) return { data: undefined as T, headers: response.headers };
 

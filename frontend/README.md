@@ -41,7 +41,7 @@ src/
 ├── routes/index.tsx         # Único registro; páginas con React.lazy
 ├── config/
 │   ├── env.ts               # Variables públicas, valores por defecto y validación
-│   └── navigation.ts        # Secciones INFORMES y CONFIGURACIONES, iconos y roles
+│   └── navigation.ts        # Secciones INFORMES y CONFIGURACIONES, iconos y permisos
 ├── lib/http/                # Cliente fetch y ApiError
 ├── features/auth/
 │   ├── api/auth-api.ts      # Login, refresh, logout y me mediante httpClient
@@ -67,20 +67,30 @@ src/
 ```
 
 Rutas actuales: `/` y `/configuracion/perfil` requieren sesión; `/signin` solo admite visitantes anónimos.
-`/configuracion/usuarios`, `/configuracion/permisos` y `/configuracion/roles` requieren además el rol
-`ADMINISTRADOR`; `RequireRole` redirige a `/` si falta ese rol. Las cuatro páginas de configuración son
-marcadores delgados en `features/{profile,users,permissions,roles}/pages/`, cargados con `React.lazy`,
-sin llamadas nuevas al backend. El menú «Configuración de la cuenta» lleva a `/configuracion/perfil`.
-La ruta provisional de cuenta se retiró; cualquier URL no registrada → 404. El guard conserva la ruta,
-consulta y fragmento solicitados para volver después del acceso.
+`RequirePermission`, anidado bajo `ProtectedRoute`, exige el permiso efectivo de consulta de cada módulo:
+
+| Ruta / entrada del sidebar | Permiso requerido |
+| --- | --- |
+| `/` (Inicio / Dashboard), `/configuracion/perfil` (Perfil de usuario) | Cualquier usuario autenticado |
+| `/configuracion/usuarios` (Usuarios) | `identity.users.view` |
+| `/configuracion/permisos` (Permisos) | `identity.permissions.view` |
+| `/configuracion/roles` (Roles) | `identity.roles.view` |
+
+Los códigos se reutilizan desde `features/auth/permissions.ts`; ningún nombre de rol concede acceso por sí solo.
+Las páginas conservan sus cargas con `React.lazy`. El menú «Configuración de la cuenta» lleva a
+`/configuracion/perfil`; cualquier URL no registrada → 404. Un visitante anónimo va a `/signin`, sin guardar
+un destino de retorno. **Después de un login correcto siempre se abre `/`**, incluso si se intentó abrir otra
+ruta antes o existía un antiguo `location.state.from`. Una visita autenticada a `/signin` también vuelve a `/`.
 
 El sidebar conserva el diseño TailAdmin: **INFORMES** contiene Inicio y **CONFIGURACIONES** contiene
-Perfil de usuario, Usuarios, Permisos y Roles. Filtra por los roles de `useAuth()` y oculta secciones vacías;
-contraído muestra iconos y puntos en los títulos. Perfil está disponible para cualquier usuario autenticado;
-las otras tres entradas solo para `ADMINISTRADOR` (constante compartida en `features/auth/roles.ts`).
-Los roles `ESTADISTICA` y `FACTURACION` no habilitan administración. Este filtro y los guards son
-presentación: la autorización real debe aplicarse también en el backend.
-Una visita autenticada directa a `/signin` vuelve a `/`. No hay registro público, recuperador de contraseña,
+Perfil de usuario, Usuarios, Permisos y Roles. Cada entrada puede declarar `requiredPermission`;
+el sidebar filtra con `useAuth().hasPermission` y oculta secciones sin entradas visibles.
+Contraído muestra iconos y puntos en los títulos. Perfil no requiere un permiso adicional.
+Solo `view` abre un módulo: tener `delete`, `create` o `update` no implica consulta ni ninguna otra acción.
+Cada página evalúa sus botones y catálogos auxiliares con `hasPermission` de forma independiente.
+Este filtro y los guards son presentación: **la autorización real corresponde al backend**.
+Si se pierde el permiso de consulta mientras el módulo está abierto, `RequirePermission` redirige a `/` con `replace`.
+No hay registro público, recuperador de contraseña,
 «mantener la sesión iniciada», login social, perfiles, buscador ni notificaciones de demostración.
 Textos en español, sin i18n. Se usó `es.json` de TailAdmin donde hay traducción; la vista de acceso original
 contiene texto inglés sin claves equivalentes, traducido directamente aquí.
@@ -123,8 +133,12 @@ Los errores FastAPI conservan `status`, `detail` y `body` en `ApiError`; la list
 Fallo de red: `status: 0`, mensaje genérico y `body: null`. `ApiError.retryAfter` conserva la cabecera `Retry-After`,
 incluso si la respuesta no es JSON. Ante un 401 fuera de `/auth/*`, la instancia compartida intenta un refresh y
 repite la petición una sola vez, conservando cuerpo, cabeceras y señal. Nunca reintenta los endpoints de auth ni
-otros errores. Cada reintento obtiene el token vigente. Si falla el refresh o la carga de `/auth/me`, la sesión
-pasa a anónima y se descarta el token. `T` tipa el resultado; no sustituye validación de datos en tiempo de ejecución.
+otros errores. Cada reintento obtiene el token vigente. Si falla el refresh o la carga inicial de `/auth/me`
+durante login/refresh, la sesión pasa a anónima y se descarta el token. Una recarga del principal ya autenticado
+no cierra la sesión por fallos de red. El callback opcional genérico `onForbidden` notifica un 403 fuera de
+`/auth/*` (incluso sin JSON), sin repetir la operación ni sustituir su `ApiError`; la sesión lo conecta para
+recargar permisos. Los 403 de auth no notifican, evitando ciclos. `T` tipa el resultado; no sustituye
+validación de datos en tiempo de ejecución.
 
 ## Tablas paginadas y confirmaciones
 
@@ -259,8 +273,19 @@ corepack pnpm test src/lib/http/http-meta.test.ts src/components/shared/data-tab
 - Se mantiene el mismo origen a través de los proxies de desarrollo y producción; no usar otro origen para
   la API de sesión sin revisar cookies, CSRF y la configuración del backend.
 - `useAuth()` expone `status` (`loading`, `authenticated`, `anonymous`), `user`, `roles`, `permissions`,
-  `login`, `logout` y `hasPermission`. Mientras se restaura la sesión, los guards muestran un estado de carga.
-  `hasPermission` facilita presentación; **la autorización real siempre corresponde al backend**.
+  `login`, `logout`, `hasPermission` y `reloadPrincipal(): Promise<void>`. Mientras se restaura la sesión,
+  los guards muestran un estado de carga. `hasPermission` facilita presentación;
+  **la autorización real siempre corresponde al backend**.
+- `reloadPrincipal()` consulta `GET /auth/me` con el cliente autenticado y comparte una única petición en vuelo.
+  Solo publica usuario, roles y permisos si cambian; respuestas idénticas no notifican a los suscriptores.
+  Los permisos efectivos se obtienen del backend, **nunca del JWT**. Las páginas pueden ejecutar
+  `await reloadPrincipal()` tras una mutación para actualizar sidebar, guards y botones sin otro login.
+  Un error de red o 403 conserva la sesión anterior; un 401 usa el mismo refresh de sesión existente y,
+  si falla, pasa a anónimo. Una respuesta tardía no puede restaurar una sesión cerrada.
+- Al recuperar foco o visibilidad, con sesión autenticada y pestaña visible, se recarga como máximo una vez
+  cada **30 segundos**. Un burst de 403 ajenos a auth se agrupa con debounce de **100 ms** y un intervalo
+  mínimo de **30 segundos** entre recargas automáticas por 403. No se repiten operaciones prohibidas ni se
+  encadenan recargas desde `/auth/me`; el desmontaje del provider retira listeners y cancela el debounce pendiente.
 - El menú de usuario de la cabecera no utiliza avatar, fotografía ni iniciales: muestra `nombre_usuario`, `correo`,
   «Configuración de la cuenta» y «Cerrar sesión» (icono y texto rojos, también en oscuro y con foco).
   Se abre por clic o teclado; las flechas recorren opciones,
@@ -276,10 +301,14 @@ corepack pnpm test src/lib/http/http-meta.test.ts src/components/shared/data-tab
 ### Pruebas
 
 `corepack pnpm test` ejecuta pruebas deterministas con fetch simulado, sin solicitudes al backend.
-Las pruebas de autenticación están junto a las del cliente en `src/lib/http/http-client.test.ts`, uno de los
-puntos de entrada permitidos por la configuración Vitest del shell. Cubren contratos y CSRF, token en memoria,
+Las pruebas de autenticación viven en `src/features/auth/` y junto a las del cliente en
+`src/lib/http/http-client.test.ts`. Cubren contratos y CSRF, token en memoria,
 restauración única y single-flight, recuperación 401 con un solo reintento, fallo a anónimo, logout y mensajes
-401/429/422/red. Las pruebas de componentes usan Testing Library y `// @vitest-environment jsdom` por archivo;
+401/429/422/red. También prueban principal cambiado/idéntico, single-flight, fallo de red sin logout,
+foco/visibilidad con throttle, debounce 403 sin ciclos, limpieza y actualización de sidebar/guard/acciones sin login.
+Las pruebas de rutas mantienen las páginas simuladas; sidebar y guards cubren combinaciones de permisos,
+incluido solo delete (sin acceso), y el redirect incondicional a Inicio.
+Las pruebas de componentes usan Testing Library y `// @vitest-environment jsdom` por archivo;
 las demás siguen en Node. Se simula `useAuth` en su límite público, no HTTP, para comprobar validación,
 foco, errores, visibilidad de contraseña y menú. El botón de tema conserva el contorno y las esquinas de TailAdmin,
 sin forma circular: luna para activar oscuro y sol para activar claro. Usa el `ThemeProvider` real,

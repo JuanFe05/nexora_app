@@ -142,6 +142,39 @@ describe("memory session", () => {
   });
 });
 
+describe("forbidden notifications", () => {
+  it.each(["get", "getWithMeta", "post", "put", "patch", "delete"] as const)("%s notifica 403 sin reintentar ni alterar el error", async (method) => {
+    const onForbidden = vi.fn();
+    const refreshSession = vi.fn();
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ detail: "Sin permiso" }, { status: 403 }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl });
+    client.configureAuth({ onForbidden, refreshSession });
+    await expect(client[method]("/roles")).rejects.toMatchObject({ status: 403, detail: "Sin permiso" });
+    expect(onForbidden).toHaveBeenCalledTimes(1);
+    expect(refreshSession).not.toHaveBeenCalled();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+  it.each(["/auth/login", "auth/refresh", "/auth/logout", "/auth/me?check=1"])("no notifica 403 en %s para evitar bucles", async (path) => {
+    const onForbidden = vi.fn();
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}, { status: 403 }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, onForbidden });
+    await expect(client.get(path)).rejects.toMatchObject({ status: 403 });
+    expect(onForbidden).not.toHaveBeenCalled();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+  it("notifica incluso un 403 no JSON y aísla fallos del callback", async () => {
+    const onForbidden = vi.fn(() => { throw new Error("callback"); });
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response("Forbidden", { status: 403 }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, onForbidden });
+    await expect(client.get("/roles")).rejects.toMatchObject({ status: 403, body: null });
+    expect(onForbidden).toHaveBeenCalledTimes(1);
+  });
+  it("sin hook un 403 sigue siendo el mismo ApiError", async () => {
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl: vi.fn<typeof fetch>().mockResolvedValue(Response.json({ detail: "Sin permiso" }, { status: 403 })) });
+    await expect(client.get("/roles")).rejects.toMatchObject({ status: 403, detail: "Sin permiso" });
+  });
+});
+
 describe("authenticated HTTP recovery", () => {
   it("configures the shared-client hooks without changing ordinary GET behavior", async () => {
     const store = createTokenStore();

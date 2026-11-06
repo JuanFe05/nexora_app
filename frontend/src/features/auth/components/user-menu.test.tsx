@@ -56,11 +56,17 @@ describe("menú de usuario", () => {
     mount();
     const trigger = screen.getByRole("button", { name: /Menú de usuario: ana/ });
     await user.click(trigger);
+    // Base UI installs focus/dismissal after opening; wait for its public focus state
+    // before sending a keyboard event, including when the full suite is under load.
+    const menu = await screen.findByRole("menu");
+    await waitFor(() => expect(menu.contains(document.activeElement)).toBe(true));
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
     expect(trigger).toHaveFocus();
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     await user.click(trigger);
+    const reopenedMenu = await screen.findByRole("menu");
+    await waitFor(() => expect(reopenedMenu.contains(document.activeElement)).toBe(true));
     await user.click(screen.getByRole("button", { name: "Fuera" }));
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
   });

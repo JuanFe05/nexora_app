@@ -1,5 +1,6 @@
+import { ApiError } from "../../../lib/http/api-error";
 import type { AuthApi } from "../api/auth-api";
-import type { AuthState, LoginInput } from "../types";
+import type { AuthState, LoginInput, MeResponse } from "../types";
 import type { createTokenStore } from "./token-store";
 
 // The session controller is independent of React, so refresh and HTTP recovery share one flight.
@@ -9,6 +10,29 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
   let generation = 0;
   let refreshFlight: Promise<void> | null = null;
   let restoreFlight: Promise<void> | null = null;
+  let principalFlight: Promise<void> | null = null;
+  let principalRevision = 0;
+  let lastFocusReload = -Infinity;
+  let lastForbiddenReload = -Infinity;
+  let forbiddenTimer: ReturnType<typeof setTimeout> | undefined;
+  const reloadInterval = 30_000;
+
+  function cancelForbiddenReload() {
+    clearTimeout(forbiddenTimer);
+    forbiddenTimer = undefined;
+  }
+
+  function publishPrincipal(principal: MeResponse) {
+    ++principalRevision;
+    const user = state.user;
+    const sameUser = user !== null && (Object.keys(principal.usuario) as (keyof typeof user)[])
+      .every((key) => user[key] === principal.usuario[key]);
+    const sameCodes = (previous: string[], next: string[]) => previous.length === next.length
+      && next.every((code) => previous.includes(code));
+    if (state.status === "authenticated" && sameUser
+      && sameCodes(state.roles, principal.roles) && sameCodes(state.permissions, principal.permisos)) return;
+    publish({ status: "authenticated", user: principal.usuario, roles: principal.roles, permissions: principal.permisos });
+  }
 
   function publish(next: AuthState) {
     state = next;
@@ -16,7 +40,13 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
   }
 
   function clear() {
+    // Invalidate pending principal reads even when refresh (not explicit logout) clears auth.
+    ++principalRevision;
     store.clear();
+    principalFlight = null;
+    cancelForbiddenReload();
+    lastFocusReload = -Infinity;
+    lastForbiddenReload = -Infinity;
     publish({ status: "anonymous", user: null, roles: [], permissions: [] });
   }
 
@@ -25,7 +55,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     store.setAccessToken(token);
     const principal = await api.me();
     if (current !== generation) throw new Error("Sesión cancelada");
-    publish({ status: "authenticated", user: principal.usuario, roles: principal.roles, permissions: principal.permisos });
+    publishPrincipal(principal);
   }
 
   function refresh(): Promise<void> {
@@ -47,8 +77,60 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     return refreshFlight;
   }
 
+  // /auth/me deliberately bypasses HTTP's automatic 401 retry. Use the same session
+  // refresh path here, while keeping transient network/403 failures non-destructive.
+  function reloadPrincipal(): Promise<void> {
+    if (state.status !== "authenticated") return Promise.resolve();
+    if (refreshFlight) return refreshFlight.catch(() => undefined);
+    if (principalFlight) return principalFlight;
+    const current = generation;
+    const revision = principalRevision;
+    principalFlight = (async () => {
+      try {
+        const principal = await api.me();
+        if (current === generation && revision === principalRevision) publishPrincipal(principal);
+      } catch (error) {
+        if (current === generation && error instanceof ApiError && error.status === 401) {
+          await refresh().catch(() => undefined);
+        }
+      } finally {
+        if (current === generation) principalFlight = null;
+      }
+    })();
+    return principalFlight;
+  }
+
+  function onForbidden() {
+    if (state.status !== "authenticated" || Date.now() - lastForbiddenReload < reloadInterval) return;
+    cancelForbiddenReload();
+    forbiddenTimer = setTimeout(() => {
+      forbiddenTimer = undefined;
+      lastForbiddenReload = Date.now();
+      void reloadPrincipal();
+    }, 100);
+  }
+
+  function watchPrincipal(target: Window, document: Document) {
+    const onVisible = () => {
+      if (state.status !== "authenticated" || document.visibilityState !== "visible"
+        || Date.now() - lastFocusReload < reloadInterval) return;
+      lastFocusReload = Date.now();
+      void reloadPrincipal();
+    };
+    target.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      target.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+      cancelForbiddenReload();
+    };
+  }
+
   return {
     getSnapshot: () => state,
+    reloadPrincipal,
+    onForbidden,
+    watchPrincipal,
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => { listeners.delete(listener); };

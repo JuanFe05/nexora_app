@@ -7,12 +7,12 @@ import AppSidebarHeader from "./sidebar-header";
 
 export default function AppSidebar() {
   const { open, isMobile, isHovered, setOpenMobile } = useSidebar();
-  const { roles } = useAuth();
+  const { hasPermission } = useAuth();
   const { pathname } = useLocation();
   const showContent = open || isHovered || isMobile;
   const sections = navigation.map((section) => ({
     ...section,
-    items: section.items.filter((item) => !item.requiredRole || roles.includes(item.requiredRole)),
+    items: section.items.filter((item) => !item.requiredPermission || hasPermission(item.requiredPermission)),
   })).filter((section) => section.items.length > 0);
 
   return (

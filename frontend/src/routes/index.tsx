@@ -2,8 +2,8 @@ import { lazy } from "react";
 import type { RouteObject } from "react-router";
 import AppLayout from "@/components/layout/app-layout";
 import AuthLayout from "@/pages/others/auth/layout";
-import { ProtectedRoute, PublicOnlyRoute, RequireRole } from "@/features/auth/components/route-guards";
-import { ADMINISTRADOR } from "@/features/auth/roles";
+import { ProtectedRoute, PublicOnlyRoute, RequirePermission } from "@/features/auth/components/route-guards";
+import { PERMISSIONS } from "@/features/auth/permissions";
 
 const HomePage = lazy(() => import("@/pages/home"));
 const SignInPage = lazy(() => import("@/pages/others/auth/sign-in"));
@@ -18,9 +18,13 @@ export const routes: RouteObject[] = [
     { element: <AppLayout />, children: [
       { index: true, element: <HomePage /> },
       { path: "/configuracion/perfil", element: <ProfilePage /> },
-      { element: <RequireRole role={ADMINISTRADOR} />, children: [
+      { element: <RequirePermission permission={PERMISSIONS.usersView} />, children: [
         { path: "/configuracion/usuarios", element: <UsersPage /> },
+      ] },
+      { element: <RequirePermission permission={PERMISSIONS.permissionsView} />, children: [
         { path: "/configuracion/permisos", element: <PermissionsPage /> },
+      ] },
+      { element: <RequirePermission permission={PERMISSIONS.rolesView} />, children: [
         { path: "/configuracion/roles", element: <RolesPage /> },
       ] },
     ] },

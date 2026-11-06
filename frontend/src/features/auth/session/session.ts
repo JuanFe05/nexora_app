@@ -8,4 +8,5 @@ export const authSession = createAuthSession(authApi, tokenStore);
 httpClient.configureAuth({
   getAccessToken: tokenStore.getAccessToken,
   refreshSession: authSession.refresh,
+  onForbidden: authSession.onForbidden,
 });

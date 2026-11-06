@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation } from "react-router";
+import { Navigate, Outlet } from "react-router";
 import { useAuth } from "../use-auth";
 
 function SessionLoading() {
@@ -7,30 +7,20 @@ function SessionLoading() {
 
 export function ProtectedRoute() {
   const { status } = useAuth();
-  const location = useLocation();
   if (status === "loading") return <SessionLoading />;
-  if (status === "anonymous") {
-    return <Navigate to="/signin" replace state={{ from: `${location.pathname}${location.search}${location.hash}` }} />;
-  }
+  if (status === "anonymous") return <Navigate to="/signin" replace />;
   return <Outlet />;
 }
 
 // Nested under ProtectedRoute: session restoration and anonymous redirects stay there.
-export function RequireRole({ role }: { role: string }) {
-  const { roles } = useAuth();
-  return roles.includes(role) ? <Outlet /> : <Navigate to="/" replace />;
+export function RequirePermission({ permission }: { permission: string }) {
+  const { hasPermission } = useAuth();
+  return hasPermission(permission) ? <Outlet /> : <Navigate to="/" replace />;
 }
 
 export function PublicOnlyRoute() {
   const { status } = useAuth();
-  const location = useLocation();
   if (status === "loading") return <SessionLoading />;
-  if (status === "authenticated") {
-    // Only accept internal paths captured by ProtectedRoute, never an external redirect.
-    const from: unknown = location.state?.from;
-    const destination = typeof from === "string" && from.startsWith("/") && !from.startsWith("//")
-      && !from.startsWith("/signin") && !from.includes("\\") ? from : "/";
-    return <Navigate to={destination} replace />;
-  }
+  if (status === "authenticated") return <Navigate to="/" replace />;
   return <Outlet />;
 }

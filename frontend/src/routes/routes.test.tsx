@@ -7,7 +7,7 @@ import { createMemoryRouter, Outlet, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "./index";
 
-const { auth } = vi.hoisted(() => ({ auth: { status: "authenticated", roles: [] as string[] } }));
+const { auth } = vi.hoisted(() => ({ auth: { status: "authenticated", permissions: [] as string[], hasPermission: (code: string): boolean => auth.permissions.includes(code) } }));
 vi.mock("@/features/auth/use-auth", () => ({ useAuth: () => auth }));
 vi.mock("@/components/layout/app-layout", () => ({ default: () => <Outlet /> }));
 vi.mock("@/pages/others/auth/layout", () => ({ default: () => <Outlet /> }));
@@ -17,7 +17,7 @@ vi.mock("@/features/users/pages/users-page", () => ({ default: () => <h1>Usuario
 vi.mock("@/features/permissions/pages/permissions-page", () => ({ default: () => <h1>Permisos</h1> }));
 vi.mock("@/features/roles/pages/roles-page", () => ({ default: () => <h1>Roles</h1> }));
 afterEach(cleanup);
-beforeEach(() => { auth.status = "authenticated"; auth.roles = []; });
+beforeEach(() => { auth.status = "authenticated"; auth.permissions = []; });
 
 function mount(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
@@ -36,25 +36,26 @@ describe("páginas protegidas", () => {
     mount("/configuracion/perfil");
     expect(await screen.findByRole("heading", { name: "Perfil de usuario" })).toBeVisible();
   });
-  it.each(settings)("administrador accede a /configuracion/%s", async (path, title) => {
-    auth.roles = ["ADMINISTRADOR"];
+  it.each(settings)("permiso view permite /configuracion/%s", async (path, title) => {
+    const resource = { usuarios: "users", permisos: "permissions", roles: "roles" }[path];
+    auth.permissions = resource ? [`identity.${resource}.view`] : [];
     mount(`/configuracion/${path}`);
     expect(await screen.findByRole("heading", { name: title })).toBeVisible();
   });
-  it.each(["usuarios", "permisos", "roles"])("redirige no administrador desde %s a Inicio", async (path) => {
-    auth.roles = ["ESTADISTICA"];
+  it.each(["usuarios", "permisos", "roles"])("sin view redirige desde %s a Inicio aunque tenga delete", async (path) => {
+    auth.permissions = ["identity.users.delete", "identity.roles.delete", "identity.permissions.delete"];
     const router = mount(`/configuracion/${path}`);
     expect(await screen.findByRole("heading", { name: "Inicio" })).toBeVisible();
     expect(router.state.location.pathname).toBe("/");
     expect(router.state.historyAction).toBe("REPLACE");
   });
-  it.each(settings)("protege %s y conserva consulta y fragmento", async (path) => {
+  it.each(settings)("protege %s sin conservar un destino de retorno", async (path) => {
     auth.status = "anonymous";
     const destination = `/configuracion/${path}?pagina=2#datos`;
     const router = mount(destination);
     expect(await screen.findByRole("button", { name: "Iniciar sesión" })).toBeVisible();
     expect(router.state.location.pathname).toBe("/signin");
-    expect(router.state.location.state).toMatchObject({ from: destination });
+    expect(router.state.location.state).toBeNull();
   });
   it("mantiene el estado de carga y no expone páginas protegidas", () => {
     auth.status = "loading";

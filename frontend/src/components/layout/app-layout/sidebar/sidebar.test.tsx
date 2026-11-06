@@ -7,11 +7,11 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { navigation } from "@/config/navigation";
 import AppSidebar from "./index";
 
-const { auth } = vi.hoisted(() => ({ auth: { roles: ["ADMINISTRADOR"] } }));
+const { auth } = vi.hoisted(() => ({ auth: { permissions: [] as string[], hasPermission: (code: string): boolean => auth.permissions.includes(code) } }));
 vi.mock("@/features/auth/use-auth", () => ({ useAuth: () => auth }));
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 afterEach(cleanup);
-beforeEach(() => { auth.roles = ["ADMINISTRADOR"]; });
+beforeEach(() => { auth.permissions = ["identity.users.view", "identity.roles.view", "identity.permissions.view"]; });
 
 function mount(open = true) {
   return render(<MemoryRouter><SidebarProvider defaultOpen={open}><AppSidebar /></SidebarProvider></MemoryRouter>);
@@ -23,7 +23,7 @@ it("configura secciones e iconos tipados para cada entrada", () => {
   for (const section of navigation) for (const item of section.items) expect(item.icon).toEqual(expect.any(Function));
 });
 
-it("administrador ve las cuatro opciones de configuración y los títulos", () => {
+it("todos los permisos view muestran las cuatro opciones de configuración y los títulos", () => {
   mount();
   for (const title of ["INFORMES", "CONFIGURACIONES"]) expect(screen.getByRole("heading", { name: title })).toHaveClass("menu-group-title");
   for (const [label, path] of [["Perfil de usuario", "perfil"], ["Usuarios", "usuarios"], ["Permisos", "permisos"], ["Roles", "roles"]]) {
@@ -32,16 +32,26 @@ it("administrador ve las cuatro opciones de configuración y los títulos", () =
   expect(screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/configuracion/"))).toHaveLength(4);
 });
 
-it.each([{ roles: [] }, { roles: ["ESTADISTICA"] }, { roles: ["FACTURACION"] }])("no administrador $roles ve solo Perfil de usuario", ({ roles }) => {
-  auth.roles = roles;
+it.each([
+  { permissions: [], visible: [] },
+  { permissions: ["identity.users.view"], visible: ["Usuarios"] },
+  { permissions: ["identity.roles.view"], visible: ["Roles"] },
+  { permissions: ["identity.permissions.view"], visible: ["Permisos"] },
+  { permissions: ["identity.users.delete", "identity.roles.delete", "identity.permissions.delete"], visible: [] },
+])("filtra por permisos efectivos: $permissions", ({ permissions, visible }) => {
+  auth.permissions = permissions;
   mount();
   expect(screen.getByRole("link", { name: "Perfil de usuario" })).toBeVisible();
-  for (const label of ["Usuarios", "Permisos", "Roles"]) expect(screen.queryByRole("link", { name: label })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Inicio" })).toBeVisible();
+  for (const label of ["Usuarios", "Permisos", "Roles"]) {
+    if (visible.includes(label)) expect(screen.getByRole("link", { name: label })).toBeVisible();
+    else expect(screen.queryByRole("link", { name: label })).not.toBeInTheDocument();
+  }
 });
 
-it("omite una sección cuando todas sus entradas requieren un rol ausente", () => {
-  auth.roles = [];
-  const section = { title: "SOLO ADMIN", items: [{ ...navigation[0].items[0], requiredRole: "ADMINISTRADOR" }] };
+it("omite una sección cuando todas sus entradas requieren un permiso ausente", () => {
+  auth.permissions = [];
+  const section = { title: "SOLO ADMIN", items: [{ ...navigation[0].items[0], requiredPermission: "identity.roles.view" as const }] };
   navigation.push(section);
   try {
     mount();
