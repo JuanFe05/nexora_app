@@ -10,7 +10,10 @@ const Error404Page = lazy(() => import("@/pages/error-404"));
 
 export const routes: RouteObject[] = [
   { element: <ProtectedRoute />, children: [
-    { element: <AppLayout />, children: [{ index: true, element: <HomePage /> }] },
+    { element: <AppLayout />, children: [
+      { index: true, element: <HomePage /> },
+      { path: "/cuenta", element: <HomePage title="Configuración de la cuenta" /> },
+    ] },
   ] },
   { element: <PublicOnlyRoute />, children: [
     { element: <AuthLayout />, children: [{ path: "/signin", element: <SignInPage /> }] },

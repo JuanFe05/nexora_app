@@ -30,7 +30,7 @@ Las versiones conservadas se tomaron de las resoluciones del `package-lock.json`
 | `pnpm preview` | Sirve la compilación, con el mismo proxy de API |
 | `pnpm lint` | Oxlint con análisis de tipos y ESLint, configuraciones de TailAdmin |
 | `pnpm format` | Prettier con ordenación de clases Tailwind |
-| `pnpm test` | Vitest en Node: HTTP, autenticación y variables de entorno; sin navegador ni backend real |
+| `pnpm test` | Vitest: HTTP, autenticación y variables en Node; componentes e interacciones en jsdom, sin backend real |
 
 ## Estructura
 
@@ -66,7 +66,8 @@ src/
 └── utils/                   # cn y reglas Tailwind Merge
 ```
 
-Rutas actuales: `/` y su layout requieren sesión; `/signin` solo admite visitantes anónimos;
+Rutas actuales: `/` y `/cuenta` con su layout requieren sesión; `/signin` solo admite visitantes anónimos;
+`/cuenta` reutiliza el marcador de Inicio con el título «Configuración de la cuenta», sin funcionalidad de negocio ni enlace en el sidebar;
 cualquier otra URL → 404. El guard conserva la ruta, consulta y fragmento solicitados para volver después del acceso.
 Una visita autenticada directa a `/signin` vuelve a `/`. No hay registro público, recuperador de contraseña,
 «mantener la sesión iniciada», login social, perfiles, buscador ni notificaciones de demostración.
@@ -132,7 +133,10 @@ pasa a anónima y se descarta el token. `T` tipa el resultado; no sustituye vali
 - `useAuth()` expone `status` (`loading`, `authenticated`, `anonymous`), `user`, `roles`, `permissions`,
   `login`, `logout` y `hasPermission`. Mientras se restaura la sesión, los guards muestran un estado de carga.
   `hasPermission` facilita presentación; **la autorización real siempre corresponde al backend**.
-- El menú muestra `nombre_completo`, `correo` y «Cerrar sesion». Logout limpia token, usuario, roles y permisos
+- El menú de usuario de la cabecera muestra avatar con iniciales, `nombre_completo`, `correo`,
+  «Configuración de la cuenta» y «Cerrar sesión». Se abre por clic o teclado; las flechas recorren opciones,
+  Escape lo cierra y devuelve el foco, y un clic exterior lo cierra. No incluye perfil, soporte ni idioma.
+  Logout limpia token, usuario, roles y permisos
   inmediatamente, incluso si falla el servidor. Un refresh que termine después no puede restaurar ese estado.
   Si la petición de logout no llega al backend, la cookie HttpOnly puede seguir siendo válida hasta su vencimiento:
   una recarga podría restaurar esa sesión; JavaScript no puede revocarla localmente.
@@ -146,8 +150,16 @@ pasa a anónima y se descarta el token. `T` tipa el resultado; no sustituye vali
 Las pruebas de autenticación están junto a las del cliente en `src/lib/http/http-client.test.ts`, uno de los
 puntos de entrada permitidos por la configuración Vitest del shell. Cubren contratos y CSRF, token en memoria,
 restauración única y single-flight, recuperación 401 con un solo reintento, fallo a anónimo, logout y mensajes
-401/429/422/red. No se añaden jsdom ni Testing Library. La interacción visual y el acceso real se verifican
-por separado, sin registrar credenciales ni tokens.
+401/429/422/red. Las pruebas de componentes usan Testing Library y `// @vitest-environment jsdom` por archivo;
+las demás siguen en Node. Se simula `useAuth` en su límite público, no HTTP, para comprobar validación,
+foco, errores, visibilidad de contraseña y menú. El botón circular de tema usa el `ThemeProvider` real:
+luna sobre azul para activar oscuro, sol sobre fondo oscuro para activar claro; persiste la preferencia
+con el sistema de temas de TailAdmin.
+
+Ejecutar toda la batería: `corepack pnpm test`. Solo componentes: `corepack pnpm exec vitest run src/features/auth/components src/components/shared/header/theme-toggler`.
+El formulario valida campos obligatorios al enviar, muestra mensajes debajo de cada campo y conserva usuario o correo
+como identificador. Los errores de autenticación señalan ambos campos sin revelar cuál falló.
+La apariencia responsive y el acceso real requieren además comprobación en navegador, sin registrar credenciales ni tokens.
 
 ## Agregar un módulo en features/
 

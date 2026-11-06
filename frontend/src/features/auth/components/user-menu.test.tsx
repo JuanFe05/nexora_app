@@ -1,0 +1,76 @@
+// @vitest-environment jsdom
+import "@testing-library/jest-dom/vitest";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { UserMenu } from "./user-menu";
+
+const { logout, auth } = vi.hoisted(() => ({
+  logout: vi.fn(),
+  auth: { user: { id: "1", nombre_usuario: "ana", nombre_completo: "Ana García López", correo: "ana@example.com" } as { id: string; nombre_usuario: string; nombre_completo: string; correo: string } | null },
+}));
+vi.mock("../use-auth", () => ({ useAuth: () => ({ ...auth, logout }) }));
+afterEach(cleanup);
+beforeEach(() => { logout.mockReset(); });
+
+function mount() {
+  return render(<MemoryRouter><Routes>
+    <Route path="/" element={<><UserMenu /><button type="button">Fuera</button></>} />
+    <Route path="/cuenta" element={<h1>Destino cuenta</h1>} />
+  </Routes></MemoryRouter>);
+}
+
+describe("menú de usuario", () => {
+  it("abre, muestra identidad y únicamente cuenta/logout; cerrar sesión llama logout", async () => {
+    const user = userEvent.setup();
+    mount();
+    await user.click(screen.getByRole("button", { name: /Ana García López/ }));
+    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    expect(screen.getAllByText("Ana García López").length).toBeGreaterThan(0);
+    expect(screen.getByText("ana@example.com")).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: "Configuración de la cuenta" })).toBeVisible();
+    expect(screen.getAllByRole("menuitem")).toHaveLength(2);
+    expect(screen.queryByText(/perfil|soporte|idioma/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Cerrar sesión" }));
+    expect(logout).toHaveBeenCalledOnce();
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+  });
+
+  it("Escape devuelve el foco y click exterior cierra", async () => {
+    const user = userEvent.setup();
+    mount();
+    const trigger = screen.getByRole("button", { name: /Ana García López/ });
+    await user.click(trigger);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await user.click(trigger);
+    await user.click(screen.getByRole("button", { name: "Fuera" }));
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+  });
+
+  it("navega con flechas y abre /cuenta mediante el item", async () => {
+    const user = userEvent.setup();
+    mount();
+    screen.getByRole("button", { name: /Ana García López/ }).focus();
+    await user.keyboard("{ArrowDown}");
+    const account = await screen.findByRole("menuitem", { name: "Configuración de la cuenta" });
+    await waitFor(() => expect(account).toHaveFocus());
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitem", { name: "Cerrar sesión" })).toHaveFocus();
+    await user.keyboard("{ArrowUp}{Enter}");
+    expect(await screen.findByRole("heading", { name: "Destino cuenta" })).toBeInTheDocument();
+    expect(logout).not.toHaveBeenCalled();
+  });
+
+  it("no muestra menú sin usuario", () => {
+    const previousUser = auth.user;
+    auth.user = null;
+    try {
+      mount();
+      expect(screen.queryByRole("button", { name: /Ana/ })).not.toBeInTheDocument();
+    } finally { auth.user = previousUser; }
+  });
+});
