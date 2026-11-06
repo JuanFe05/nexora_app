@@ -17,10 +17,10 @@ nexora_app/
 ```bash
 cp .env.template .env          # completar POSTGRES_PASSWORD y NEXORA_JWT_SECRET
 docker compose up -d --build   # postgres -> migrate (alembic) -> api
-curl http://localhost:8000/health
+curl http://localhost:45335/health
 ```
 
-La API queda en <http://localhost:8000> y su OpenAPI en <http://localhost:8000/docs>.
+La API queda en <http://localhost:45335> y su OpenAPI en <http://localhost:45335/docs>.
 El servicio `migrate` aplica las migraciones de Alembic y la API no arranca hasta que termina
 correctamente.
 

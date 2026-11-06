@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     app_name: str = "NEXORA"
     environment: Environment = "development"
     api_prefix: str = "/api/v1"
-    database_url: str = "postgresql+psycopg://nexora:nexora@localhost:5434/nexora"
+    database_url: str = "postgresql+psycopg://nexora:nexora@localhost:45336/nexora"
     database_echo: bool = False
     allowed_origins: tuple[str, ...] = ("http://localhost:5173",)
 

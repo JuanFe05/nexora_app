@@ -21,7 +21,7 @@ Desarrollo con recarga en caliente, con la base en Docker y la API local:
 ```bash
 cd backend
 uv sync --all-groups                      # instala dependencias
-(cd .. && docker compose up -d postgres)  # PostgreSQL de desarrollo en el puerto 5434
+(cd .. && docker compose up -d postgres)  # PostgreSQL de desarrollo en el puerto 45336
 uv run alembic upgrade head               # aplica las migraciones
 uv run python main.py                     # API en http://127.0.0.1:8000 (OpenAPI en /docs)
 ```
@@ -39,7 +39,7 @@ uv run ruff format src tests  # formato
 uv run mypy                   # tipado estatico
 ```
 
-Las pruebas de integracion necesitan el contenedor `postgres-test` (puerto 5433), que vive bajo
+Las pruebas de integracion necesitan el contenedor `postgres-test` (puerto 45337), que vive bajo
 un profile para no levantarse en produccion:
 
 ```bash
@@ -64,9 +64,9 @@ tanto Docker Compose como Pydantic Settings. Las variables de la aplicacion usan
 | `POSTGRES_PASSWORD` | — (obligatoria) | Clave de PostgreSQL |
 | `POSTGRES_DB` | `nexora` | Base de datos de la aplicacion |
 | `POSTGRES_TEST_DB` | `nexora_test` | Base de datos de pruebas |
-| `POSTGRES_HOST_PORT` | `5434` | Puerto publicado de la base (en produccion, `127.0.0.1:5434` o ninguno) |
-| `POSTGRES_TEST_HOST_PORT` | `5433` | Puerto publicado de la base de pruebas |
-| `API_HOST_PORT` | `8000` | Puerto publicado de la API |
+| `POSTGRES_HOST_PORT` | `45336` | Puerto publicado de la base (en produccion, `127.0.0.1:45336` o ninguno) |
+| `POSTGRES_TEST_HOST_PORT` | `45337` | Puerto publicado de la base de pruebas |
+| `API_HOST_PORT` | `45335` | Puerto publicado de la API |
 | `API_WORKERS` | `1` | Procesos de uvicorn (en produccion, segun CPU) |
 | `RESTART_POLICY` | `unless-stopped` | Politica de reinicio de los servicios |
 | `NEXORA_IMAGE_TAG` | `local` | Etiqueta de la imagen del backend |
@@ -78,8 +78,8 @@ Todas usan el prefijo `NEXORA_`.
 | Variable | Valor por defecto | Descripcion |
 | --- | --- | --- |
 | `NEXORA_ENVIRONMENT` | `development` | `development`, `testing` o `production` |
-| `NEXORA_DATABASE_URL` | `postgresql+psycopg://nexora:nexora@localhost:5434/nexora` | Conexion asincrona |
-| `NEXORA_TEST_DATABASE_URL` | `postgresql+psycopg://nexora:nexora@localhost:5433/nexora_test` | Base de pruebas |
+| `NEXORA_DATABASE_URL` | `postgresql+psycopg://nexora:nexora@localhost:45336/nexora` | Conexion asincrona |
+| `NEXORA_TEST_DATABASE_URL` | `postgresql+psycopg://nexora:nexora@localhost:45337/nexora_test` | Base de pruebas |
 | `NEXORA_JWT_SECRET` | secreto de desarrollo | Obligatorio y de 32+ caracteres en produccion |
 | `NEXORA_JWT_ALGORITHM` | `HS256` | Solo `HS256`, `HS384` o `HS512` |
 | `NEXORA_JWT_ISSUER` | `nexora` | Claim `iss` |

@@ -1,6 +1,6 @@
 """Infraestructura de pruebas de integracion y de API contra PostgreSQL real.
 
-La base de pruebas se levanta con `docker compose up -d postgres-test` (puerto 5433).
+La base de pruebas se levanta con `docker compose up -d postgres-test` (puerto 45337).
 Las migraciones de Alembic son el unico mecanismo que crea el esquema, igual que en produccion.
 """
 
@@ -29,7 +29,7 @@ from nexora.identity_access.infrastructure.security.password_hasher import Argon
 #: El .env de la raiz es la fuente de configuracion local; la variable de entorno lo sobreescribe
 #: (es lo que usa CI). El valor por defecto solo cubre un arranque sin configurar.
 _ROOT_ENV = Path(__file__).resolve().parents[2].parent / ".env"
-_DEFAULT_TEST_DATABASE_URL = "postgresql+psycopg://nexora:nexora@localhost:5433/nexora_test"
+_DEFAULT_TEST_DATABASE_URL = "postgresql+psycopg://nexora:nexora@localhost:45337/nexora_test"
 
 
 def _test_database_url() -> str:
