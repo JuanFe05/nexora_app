@@ -66,12 +66,25 @@ def clear_auth_cookies(response: Response, settings: Settings) -> None:
         )
 
 
-def csrf_is_valid(request: Request, settings: Settings) -> bool:
+def csrf_failure_reason(request: Request, settings: Settings) -> str | None:
+    """Motivo no secreto por el que falla la validacion CSRF, o `None` si es valida.
+
+    Devuelve solo categorias fijas: nunca interpola valores controlados por el cliente
+    (tokens, cabeceras u origen), para que el motivo sea seguro de registrar en logs.
+    """
     cookie_token = request.cookies.get(settings.csrf_cookie_name)
     header_token = request.headers.get(settings.csrf_header_name)
-    if not cookie_token or not header_token:
-        return False
+    if not cookie_token:
+        return "falta la cookie CSRF"
+    if not header_token:
+        return "falta la cabecera CSRF"
     if not secrets.compare_digest(cookie_token, header_token):
-        return False
+        return "la cabecera CSRF no coincide con la cookie"
     origin = request.headers.get("origin")
-    return origin is None or origin in settings.allowed_origins
+    if origin is not None and origin not in settings.allowed_origins:
+        return "origen no permitido"
+    return None
+
+
+def csrf_is_valid(request: Request, settings: Settings) -> bool:
+    return csrf_failure_reason(request, settings) is None

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -17,6 +18,7 @@ from nexora.identity_access.application.use_cases.authentication.refresh import 
 from nexora.identity_access.domain.exceptions.identity import InvalidToken
 from nexora.identity_access.presentation.http.v1.cookies import (
     clear_auth_cookies,
+    csrf_failure_reason,
     csrf_is_valid,
     issue_csrf_token,
     set_auth_cookies,
@@ -37,6 +39,7 @@ from nexora.identity_access.presentation.http.v1.schemas.auth import (
     UsuarioResponse,
 )
 
+logger = logging.getLogger("nexora.auth")
 router = APIRouter(prefix="/auth", tags=["autenticacion"])
 
 
@@ -88,11 +91,14 @@ async def refresh(
     use_case: Annotated[RefreshSessionUseCase, Depends(get_refresh_use_case)],
 ) -> TokenResponse:
     settings = container.settings
-    if not csrf_is_valid(request, settings):
+    reason = csrf_failure_reason(request, settings)
+    if reason is not None:
+        logger.warning("Refresh rechazado por CSRF: %s", reason)
         raise InvalidToken("Solicitud sin token CSRF valido")
 
     refresh_token = request.cookies.get(settings.refresh_cookie_name)
     if not refresh_token:
+        logger.warning("Refresh rechazado: falta la cookie de refresh")
         raise InvalidToken("Falta la cookie de refresh")
 
     tokens = await use_case.execute(RefreshCommand(refresh_token=refresh_token))
