@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from nexora.identity_access.application.dto.auth import LoginCommand, UserView
 from nexora.identity_access.application.use_cases.authentication.login import LoginUseCase
 from nexora.identity_access.application.use_cases.authentication.logout import LogoutUseCase
+from nexora.identity_access.application.use_cases.authentication.logout_all import LogoutAllUseCase
 from nexora.identity_access.application.use_cases.authentication.refresh import (
     RefreshCommand,
     RefreshSessionUseCase,
@@ -24,6 +25,7 @@ from nexora.identity_access.presentation.http.v1.dependencies.auth import (
     ContainerDep,
     PrincipalDep,
     get_login_use_case,
+    get_logout_all_use_case,
     get_logout_use_case,
     get_refresh_use_case,
 )
@@ -125,6 +127,22 @@ async def logout(
 
     empty = Response(status_code=status.HTTP_204_NO_CONTENT)
     clear_auth_cookies(empty, settings)
+    return empty
+
+
+@router.post(
+    "/logout-all",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Revoca todas las sesiones del usuario autenticado",
+)
+async def logout_all(
+    principal: PrincipalDep,
+    container: ContainerDep,
+    use_case: Annotated[LogoutAllUseCase, Depends(get_logout_all_use_case)],
+) -> Response:
+    await use_case.execute(principal.user.id)
+    empty = Response(status_code=status.HTTP_204_NO_CONTENT)
+    clear_auth_cookies(empty, container.settings)
     return empty
 
 

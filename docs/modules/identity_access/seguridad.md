@@ -12,7 +12,10 @@
 | Revocacion inmediata | Cada request protegido verifica la sesion por `sid` y recarga roles y permisos efectivos en base de datos; roles inactivos no conceden acceso |
 | Administracion IAM | Permiso `identity.*` independiente por accion; 403 generico antes de consultar el recurso si falta el permiso (incluso IDs inexistentes) |
 | Anti-escalada | La aplicacion impide delegar permisos no poseidos; solo el rol `ADMINISTRADOR` puede asignar/revocar ese rol o editar/desactivar/eliminar administradores |
-| Rotacion y reuso | Rotacion atomica por JTI; un refresh reutilizado revoca la sesion |
+| Rotacion y reuso | UPDATE atomico por JTI vigente o anterior en gracia (30 s); JTI mas antiguo o anterior fuera de gracia revoca la sesion |
+| Duracion de sesion | Inactividad deslizante de 30 min y tope absoluto de 12 h; al alcanzarlos se revoca y confirma antes del 401 |
+| Actividad | Requests validos actualizan cada >= 60 s; refresh valido siempre actualiza, sin extender el absoluto |
+| Cierre global | `POST /auth/logout-all` usa Bearer, revoca todas las sesiones propias en una transaccion y borra cookies |
 | Fuerza bruta | Bloqueo temporal por IP + identificador |
 | Secretos | `NEXORA_JWT_SECRET` por entorno; en produccion se exige 32+ caracteres y se rechaza el secreto de desarrollo |
 | Minimizacion | Las respuestas nunca incluyen `hash_contrasena`, `refresh_token_jti` ni el JWT de refresh |
@@ -23,6 +26,27 @@ surte efecto con el mismo token en la peticion siguiente. Tener todos los permis
 a tener el rol `ADMINISTRADOR` para los limites anti-escalada. Una denegacion no altera datos
 administrativos; la autenticacion conserva su registro de actividad de sesion. Mapa completo,
 independencia de acciones y excepciones de delegacion en [administracion.md](administracion.md#autorizacion).
+
+## Configuracion de sesiones
+
+| Variable (`NEXORA_`) | Default | Limites admitidos |
+| --- | --- | --- |
+| `SESSION_IDLE_TIMEOUT_MINUTES` | 30 | 1-1440 minutos, no mayor que el absoluto |
+| `SESSION_ABSOLUTE_TIMEOUT_HOURS` | 12 | 1-168 horas |
+| `REFRESH_ROTATION_GRACE_SECONDS` | 30 | 1-300 segundos |
+| `SESSION_ACTIVITY_TOUCH_SECONDS` | 60 | 1-300 segundos |
+
+Restricciones de consistencia validadas al arrancar: la inactividad debe ser mayor que la vigencia
+del access token (el front renueva y registra actividad cerca de su vencimiento) y al menos el doble
+de `SESSION_ACTIVITY_TOUCH_SECONDS` (la actividad se escribe con ese retraso maximo), para que un
+usuario activo nunca venza por una configuracion incompatible.
+
+Access conserva 10 min; refresh conserva 7 dias como techo, con `exp` limitado por
+`fecha_vencimiento`. Firma, tipo y claims se validan siempre. Solo el caso de uso refresh
+admite decodificar un JWT firmado vencido para persistir la revocacion; no lo acepta para
+renovar. Un access vencido sigue respondiendo 401 sin revocar una sesion todavia activa,
+que puede renovarse por refresh. Las filas anteriores a 0002 conservan su vencimiento;
+ver [migracion](modelo-datos.md#migracion-0002).
 
 ## Politica de contrasenas
 
@@ -77,5 +101,8 @@ las operaciones concurrentes sobre la clave se serializan por usuario.
   peticion siguiente y una escritura ya autorizada que esta en curso puede completarse. No se
   reverifica dentro de la transaccion; las protecciones de consistencia si se comprueban bajo el
   lock. Cerrarlo del todo exigiria reevaluar el principal al escribir.
-- `GET /auth/me` escribe `fecha_ultima_actividad` en cada llamada; si el volumen lo exige, habra
-  que espaciar esa escritura.
+- La gracia conserva solo el JTI inmediatamente anterior. Reduce falsos positivos entre dos
+  peticiones concurrentes o un reintento por respuesta perdida; no tolera reuso de generaciones
+  mas antiguas ni elimina la necesidad de coordinar refresh entre pestanas.
+- El cliente debe renovar solo ante actividad real. El backend no distingue un request real de
+  un temporizador: aun con actividad continua, el tope absoluto impide sesiones ilimitadas.

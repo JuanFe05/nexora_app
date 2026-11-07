@@ -7,7 +7,7 @@ asignaciones y sesiones. Implementa el flujo de autenticacion y la administracio
 
 - [arquitectura.md](arquitectura.md): capas, dependencias y decisiones.
 - [modelo-datos.md](modelo-datos.md): las seis tablas del esquema `iam` y sus reglas.
-- [flujos-autenticacion.md](flujos-autenticacion.md): login, refresh, logout y `me`.
+- [flujos-autenticacion.md](flujos-autenticacion.md): login, refresh, logout, logout-all y `me`.
 - [contratos-api.md](contratos-api.md): endpoints, entradas y salidas.
 - [perfil.md](perfil.md): perfil propio y cambio de contrasena para cualquier usuario autenticado.
 - [administracion.md](administracion.md): siembra de roles, permisos y administrador; API de gestion.
@@ -21,8 +21,11 @@ asignaciones y sesiones. Implementa el flujo de autenticacion y la administracio
 | Error generico ante credenciales invalidas | Implementado |
 | Usuario inactivo no puede autenticarse | Implementado |
 | Access token JWT de 10 minutos (configurable) | Implementado |
-| Refresh token de 7 dias en cookie HttpOnly (configurable) | Implementado |
-| Rotacion atomica del refresh token | Implementado |
+| Refresh en cookie HttpOnly, techo de 7 dias limitado por el absoluto | Implementado |
+| Sesion deslizante por actividad: 30 min idle, 12 h absoluto configurable | Implementado |
+| Touch de requests con umbral de 60 s; refresh siempre registra actividad | Implementado |
+| Rotacion atomica con JTI anterior y gracia configurable de 30 s | Implementado |
+| Cierre global de sesiones propias por Bearer (`POST /auth/logout-all`) | Implementado |
 | Deteccion de reutilizacion y revocacion de la sesion | Implementado |
 | Revocacion inmediata verificada por `sid` en cada request | Implementado |
 | Permisos efectivos por union de roles activos | Implementado |
@@ -34,6 +37,17 @@ asignaciones y sesiones. Implementa el flujo de autenticacion y la administracio
 | Consulta y edicion del perfil propio para cualquier usuario autenticado | Implementado |
 | Cambio de contrasena actual con throttle y cierre de otras sesiones | Implementado |
 | Restablecimiento administrativo supervisado | Fuera de alcance de esta entrega |
+
+## Politica de sesiones
+
+La actividad conserva la sesion dentro del timeout de inactividad, pero nunca extiende
+`fecha_vencimiento`. El access sigue durando 10 min: el cliente renueva por refresh ante
+actividad real. Las opciones `NEXORA_SESSION_IDLE_TIMEOUT_MINUTES=30`,
+`NEXORA_SESSION_ABSOLUTE_TIMEOUT_HOURS=12`, `NEXORA_REFRESH_ROTATION_GRACE_SECONDS=30`
+y `NEXORA_SESSION_ACTIVITY_TOUCH_SECONDS=60` se validan al arrancar. Expiracion real y
+reuso revocan en base antes del 401. La migracion reversible 0002 agrega los metadatos de
+gracia y conserva el vencimiento de filas existentes. Detalles en [seguridad](seguridad.md)
+y [modelo de datos](modelo-datos.md#migracion-0002).
 
 ## Requisitos no funcionales
 

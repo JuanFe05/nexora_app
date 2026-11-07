@@ -114,24 +114,21 @@ class FakeSessionRepository:
         session_id: UUID,
         expected_jti: UUID,
         new_jti: UUID,
-        expires_at: datetime,
         now: datetime,
+        idle_timeout: timedelta,
+        rotation_grace: timedelta,
     ) -> bool:
-        session = self.sessions.get(session_id)
-        if session is None or not session.is_usable(now):
+        session = await self.get(session_id)
+        if session is None or not session.is_usable(now, idle_timeout):
             return False
-        if session.refresh_token_jti != expected_jti:
+        if not session.accepts_refresh_jti(expected_jti, now, rotation_grace):
             return False
-        self.sessions[session_id] = Session(
-            id=session.id,
-            user_id=session.user_id,
+        self.sessions[session_id] = replace(
+            session,
+            previous_refresh_token_jti=session.refresh_token_jti,
             refresh_token_jti=new_jti,
-            created_at=session.created_at,
+            refresh_rotated_at=now,
             last_activity_at=now,
-            expires_at=expires_at,
-            revoked_at=None,
-            ip_address=session.ip_address,
-            user_agent=session.user_agent,
         )
         return True
 
@@ -139,40 +136,32 @@ class FakeSessionRepository:
         session = self.sessions.get(session_id)
         if session is None or session.is_revoked:
             return
-        self.sessions[session_id] = Session(
-            id=session.id,
-            user_id=session.user_id,
-            refresh_token_jti=session.refresh_token_jti,
-            created_at=session.created_at,
-            last_activity_at=session.last_activity_at,
-            expires_at=session.expires_at,
-            revoked_at=now,
-            ip_address=session.ip_address,
-            user_agent=session.user_agent,
-        )
+        self.sessions[session_id] = replace(session, revoked_at=now, last_activity_at=now)
 
-    async def touch(self, session_id: UUID, now: datetime) -> None:
-        session = self.sessions.get(session_id)
-        if session is None:
-            return
-        self.sessions[session_id] = Session(
-            id=session.id,
-            user_id=session.user_id,
-            refresh_token_jti=session.refresh_token_jti,
-            created_at=session.created_at,
-            last_activity_at=now,
-            expires_at=session.expires_at,
-            revoked_at=session.revoked_at,
-            ip_address=session.ip_address,
-            user_agent=session.user_agent,
-        )
+    async def touch(
+        self, session_id: UUID, now: datetime, *, idle_timeout: timedelta,
+        activity_touch_interval: timedelta,
+    ) -> None:
+        session = await self.get(session_id)
+        if (
+            session is not None
+            and session.is_usable(now, idle_timeout)
+            and now - session.last_activity_at >= activity_touch_interval
+        ):
+            self.sessions[session_id] = replace(session, last_activity_at=now)
+
+    async def revoke_all_for_user(self, user_id: UUID, now: datetime) -> None:
+        for session in list(self.sessions.values()):
+            if session.user_id == user_id:
+                await self.revoke(session.id, now)
 
     async def revoke_all_except(self, user_id: UUID, keep_session_id: UUID, now: datetime) -> None:
         for session in list(self.sessions.values()):
             if (
                 session.user_id == user_id
                 and session.id != keep_session_id
-                and session.is_usable(now)
+                and not session.is_revoked
+                and session.expires_at > now
             ):
                 await self.revoke(session.id, now)
 
@@ -206,12 +195,16 @@ class FakeTokenService:
         self.issued.append(issued)
         return issued
 
-    def issue_refresh_token(self, *, user_id: UUID, session_id: UUID, now: datetime) -> IssuedToken:
+    def issue_refresh_token(
+        self, *, user_id: UUID, session_id: UUID, now: datetime,
+        absolute_expires_at: datetime | None = None,
+    ) -> IssuedToken:
         token_id = uuid4()
         issued = IssuedToken(
             value=f"refresh:{user_id}:{session_id}:{token_id}",
             token_id=token_id,
-            expires_at=now + timedelta(days=self.refresh_ttl_days),
+            expires_at=min(now + timedelta(days=self.refresh_ttl_days), absolute_expires_at)
+            if absolute_expires_at is not None else now + timedelta(days=self.refresh_ttl_days),
         )
         self.issued.append(issued)
         return issued
@@ -222,7 +215,9 @@ class FakeTokenService:
             user_id=user_id, session_id=session_id, token_id=token_id, expires_at=expires_at
         )
 
-    def decode_refresh_token(self, token: str) -> RefreshTokenClaims:
+    def decode_refresh_token(
+        self, token: str, *, allow_expired: bool = False
+    ) -> RefreshTokenClaims:
         user_id, session_id, token_id, expires_at = self._parse(token, "refresh")
         return RefreshTokenClaims(
             user_id=user_id, session_id=session_id, token_id=token_id, expires_at=expires_at

@@ -43,9 +43,28 @@ Indice por `rol_id`.
 
 `id` (PK, es el `sid` del JWT), `usuario_id` (FK, indexado), `refresh_token_jti` (UNIQUE),
 `direccion_ip` (`INET`), `agente_usuario`, `fecha_creacion`, `fecha_ultima_actividad`,
-`fecha_vencimiento`, `fecha_revocacion`.
+`fecha_vencimiento`, `fecha_revocacion`, `refresh_token_jti_anterior` (UUID nullable),
+`fecha_rotacion_refresh` (TIMESTAMPTZ nullable).
 
-Solo se guarda el JTI del refresh token: **nunca el JWT completo**.
+Solo se guardan los JTI vigente y anterior: **nunca el JWT completo**. El anterior se acepta
+solo durante la gracia configurada desde `fecha_rotacion_refresh` (30 s por defecto).
+Cada rotacion atomica copia vigente a anterior y actualiza vigente, rotacion y actividad.
+Un JTI mas antiguo o anterior fuera de gracia provoca revocacion.
+
+`fecha_vencimiento` es el tope absoluto (login + 12 h por defecto) y no cambia al refrescar.
+`fecha_ultima_actividad` controla la inactividad deslizante (30 min por defecto); los requests
+la actualizan como maximo cada 60 s y cada refresh valido la actualiza. Ambos limites son
+estrictos: al alcanzarlos la sesion deja de ser usable y se persiste `fecha_revocacion`.
+
+### Migracion 0002
+
+`src/nexora/migrations/versions/0002_session_refresh_grace.py` sigue a `0001_iam_schema`.
+Las dos columnas nullable distinguen concurrencia legitima/respuesta perdida de reutilizacion,
+sin almacenar secretos. Upgrade agrega columnas y downgrade las elimina en orden inverso.
+**Las filas existentes conservan su `fecha_vencimiento` actual**: no se recalcula ni se extiende.
+Se les aplica inmediatamente la politica de inactividad; su primer refresh inicializa la gracia.
+Nuevos logins usan el limite absoluto configurado. Antes de downgrade, detener la version de
+la API que requiere estas columnas.
 
 ## Permisos efectivos
 

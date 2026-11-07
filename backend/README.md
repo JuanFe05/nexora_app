@@ -85,7 +85,11 @@ Todas usan el prefijo `NEXORA_`.
 | `NEXORA_JWT_ISSUER` | `nexora` | Claim `iss` |
 | `NEXORA_JWT_AUDIENCE` | `nexora-app` | Claim `aud` |
 | `NEXORA_ACCESS_TOKEN_TTL_MINUTES` | `10` | Vigencia del access token |
-| `NEXORA_REFRESH_TOKEN_TTL_DAYS` | `7` | Vigencia del refresh token y de la sesion |
+| `NEXORA_REFRESH_TOKEN_TTL_DAYS` | `7` | Techo del refresh JWT, limitado por el absoluto de sesion |
+| `NEXORA_SESSION_IDLE_TIMEOUT_MINUTES` | `30` | Inactividad deslizante, 1-1440 min; no puede superar el absoluto, debe ser mayor que el access TTL y al menos el doble del umbral de actividad |
+| `NEXORA_SESSION_ABSOLUTE_TIMEOUT_HOURS` | `12` | Tope desde login que no se extiende, 1-168 h |
+| `NEXORA_REFRESH_ROTATION_GRACE_SECONDS` | `30` | Gracia para JTI anterior, 1-300 s |
+| `NEXORA_SESSION_ACTIVITY_TOUCH_SECONDS` | `60` | Umbral entre escrituras de actividad por request, 1-300 s |
 | `NEXORA_COOKIE_SAMESITE` | `lax` | `lax`, `strict` o `none` |
 | `NEXORA_CSRF_COOKIE_PATH` | `/` | Ruta de la cookie CSRF legible por el front |
 | `NEXORA_BOOTSTRAP_ADMIN_USERNAME` | — | Administrador inicial; obligatorio en produccion si no hay administrador |
@@ -95,6 +99,25 @@ Todas usan el prefijo `NEXORA_`.
 | `NEXORA_LOGIN_MAX_ATTEMPTS` | `5` | Intentos antes del bloqueo |
 | `NEXORA_LOGIN_ATTEMPT_WINDOW_SECONDS` | `300` | Ventana de conteo |
 | `NEXORA_LOGIN_BLOCK_SECONDS` | `900` | Duracion del bloqueo |
+
+### Sesiones y cierre global
+
+La entidad `Session` usa el instante del reloj inyectado: no revocada, ahora < vencimiento
+absoluto y tiempo desde ultima actividad < timeout idle. Login fija el absoluto; refresh
+nunca lo extiende y emite `exp = min(ahora + TTL refresh, absoluto)`. Un request valido
+registra actividad cada >= umbral; un refresh valido siempre la registra. Expiracion idle o
+absoluta revoca y confirma antes del 401. El access conserva 10 min y puede renovarse si la
+sesion sigue activa; el cliente solo debe refrescar ante actividad real.
+
+El UPDATE atomico de refresh acepta el JTI vigente o anterior en gracia (30 s inclusivos),
+y guarda vigente como anterior, nuevo JTI, fecha de rotacion y actividad. Esto tolera dos
+refresh concurrentes y un reintento por respuesta perdida; un JTI mas antiguo o fuera de
+gracia revoca. Solo hay una generacion anterior, no una ventana de tokens ilimitada.
+
+`POST /api/v1/auth/logout-all`: Bearer, sin cuerpo ni CSRF, 204 vacio. Revoca todas las
+sesiones propias, incluida la actual, en una transaccion y reutiliza el borrado de cookies
+(refresh `/api/v1/auth`, CSRF `/`). Otros usuarios no cambian. Sin autenticacion valida: 401.
+Ver [contrato API](../docs/modules/identity_access/contratos-api.md).
 
 ### Politica de contrasenas nuevas
 
@@ -127,3 +150,13 @@ uv run alembic revision -m "descripcion"   # revisar siempre el archivo generado
 
 Alembic es el unico mecanismo de evolucion del esquema: no se usa `Base.metadata.create_all()`
 ni se modifica la base a mano.
+
+`0002_session_refresh_grace` sigue a `0001_iam_schema`: agrega en `iam.sesion`
+`refresh_token_jti_anterior` (UUID nullable) y `fecha_rotacion_refresh` (TIMESTAMPTZ nullable),
+necesarios para distinguir concurrencia legitima de reuso. **Las filas existentes conservan
+su `fecha_vencimiento` actual** y reciben la politica idle; nuevos logins usan el absoluto
+configurado. Downgrade elimina solo esas columnas; detener antes la API que las requiere.
+
+Para comprobar ida/vuelta, apuntar explicitamente a la base de pruebas mediante
+`alembic -x url=<NEXORA_TEST_DATABASE_URL>` y ejecutar `upgrade head`, `downgrade -1`,
+`upgrade head`. Nunca usar la base de desarrollo o produccion para esa comprobacion.

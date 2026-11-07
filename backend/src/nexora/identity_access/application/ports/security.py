@@ -50,12 +50,17 @@ class TokenService(Protocol):
     ) -> IssuedToken: ...
 
     def issue_refresh_token(
-        self, *, user_id: UUID, session_id: UUID, now: datetime
+        self, *, user_id: UUID, session_id: UUID, now: datetime,
+        absolute_expires_at: datetime | None = None,
     ) -> IssuedToken: ...
 
     def decode_access_token(self, token: str) -> AccessTokenClaims: ...
 
-    def decode_refresh_token(self, token: str) -> RefreshTokenClaims: ...
+    def decode_refresh_token(
+        self, token: str, *, allow_expired: bool = False
+    ) -> RefreshTokenClaims:
+        """allow_expired permite revocar una sesion vencida, nunca autenticar sin validar exp."""
+        ...
 
 
 class LoginThrottle(Protocol):

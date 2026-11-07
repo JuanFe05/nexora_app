@@ -187,7 +187,8 @@ class Seeder:
                 await self._session.execute(
                     text(
                         "SELECT id, usuario_id, refresh_token_jti, direccion_ip, agente_usuario,"
-                        " fecha_revocacion, fecha_vencimiento FROM iam.sesion WHERE id = :id"
+                        " fecha_revocacion, fecha_vencimiento, fecha_ultima_actividad"
+                        " FROM iam.sesion WHERE id = :id"
                     ),
                     {"id": session_id},
                 )

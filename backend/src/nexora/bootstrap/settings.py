@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from nexora.identity_access.domain.value_objects.password_policy import validate_password_policy
@@ -50,6 +50,23 @@ class Settings(BaseSettings):
     jwt_audience: str = "nexora-app"
     access_token_ttl_minutes: int = 10
     refresh_token_ttl_days: int = 7
+    session_idle_timeout_minutes: int = Field(default=30, gt=0, le=1440)
+    session_absolute_timeout_hours: int = Field(default=12, gt=0, le=168)
+    refresh_rotation_grace_seconds: int = Field(default=30, gt=0, le=300)
+    session_activity_touch_seconds: int = Field(default=60, gt=0, le=300)
+
+    @model_validator(mode="after")
+    def _validate_session_timeouts(self) -> Settings:
+        if self.session_idle_timeout_minutes > self.session_absolute_timeout_hours * 60:
+            raise ValueError("La inactividad no puede superar el limite absoluto de sesion")
+        # La actividad se escribe con un retraso de hasta `touch` segundos: debe caber dos veces
+        # en la ventana de inactividad, o un usuario activo podria vencer sin registrar actividad.
+        if self.session_idle_timeout_minutes * 60 < 2 * self.session_activity_touch_seconds:
+            raise ValueError("La inactividad debe ser al menos el doble del umbral de actividad")
+        # El front renueva el access token (y con ello la actividad) cerca de su vencimiento.
+        if self.session_idle_timeout_minutes <= self.access_token_ttl_minutes:
+            raise ValueError("La inactividad debe ser mayor que la vigencia del access token")
+        return self
 
     refresh_cookie_name: str = "nexora_refresh_token"
     csrf_cookie_name: str = "nexora_csrf_token"

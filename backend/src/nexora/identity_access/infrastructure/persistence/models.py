@@ -174,6 +174,12 @@ class SessionModel(Base):
     refresh_token_jti: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), nullable=False, unique=True
     )
+    previous_refresh_token_jti: Mapped[uuid.UUID | None] = mapped_column(
+        "refresh_token_jti_anterior", PGUUID(as_uuid=True)
+    )
+    refresh_rotated_at: Mapped[datetime | None] = mapped_column(
+        "fecha_rotacion_refresh", DateTime(timezone=True)
+    )
     ip_address: Mapped[str | None] = mapped_column("direccion_ip", INET)
     user_agent: Mapped[str | None] = mapped_column("agente_usuario", String(255))
     created_at: Mapped[datetime] = mapped_column(

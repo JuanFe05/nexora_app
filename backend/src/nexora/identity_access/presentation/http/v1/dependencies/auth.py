@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable, Coroutine
+from datetime import timedelta
 from typing import Annotated, Any
 
 from fastapi import Depends, Request
@@ -21,6 +22,7 @@ from nexora.identity_access.application.use_cases.authentication.authenticate_re
 )
 from nexora.identity_access.application.use_cases.authentication.login import LoginUseCase
 from nexora.identity_access.application.use_cases.authentication.logout import LogoutUseCase
+from nexora.identity_access.application.use_cases.authentication.logout_all import LogoutAllUseCase
 from nexora.identity_access.application.use_cases.authentication.refresh import (
     RefreshSessionUseCase,
 )
@@ -62,6 +64,7 @@ def get_login_use_case(container: ContainerDep, session: SessionDep) -> LoginUse
         throttle=container.throttle,
         clock=container.clock,
         transaction=SqlAlchemyTransaction(session),
+        absolute_timeout=timedelta(hours=container.settings.session_absolute_timeout_hours),
     )
 
 
@@ -71,11 +74,21 @@ def get_refresh_use_case(container: ContainerDep, session: SessionDep) -> Refres
         tokens=container.tokens,
         clock=container.clock,
         transaction=SqlAlchemyTransaction(session),
+        idle_timeout=timedelta(minutes=container.settings.session_idle_timeout_minutes),
+        rotation_grace=timedelta(seconds=container.settings.refresh_rotation_grace_seconds),
     )
 
 
 def get_logout_use_case(container: ContainerDep, session: SessionDep) -> LogoutUseCase:
     return LogoutUseCase(
+        sessions=SqlAlchemySessionRepository(session),
+        clock=container.clock,
+        transaction=SqlAlchemyTransaction(session),
+    )
+
+
+def get_logout_all_use_case(container: ContainerDep, session: SessionDep) -> LogoutAllUseCase:
+    return LogoutAllUseCase(
         sessions=SqlAlchemySessionRepository(session),
         clock=container.clock,
         transaction=SqlAlchemyTransaction(session),
@@ -92,6 +105,8 @@ def get_authenticate_use_case(
         tokens=container.tokens,
         clock=container.clock,
         transaction=SqlAlchemyTransaction(session),
+        idle_timeout=timedelta(minutes=container.settings.session_idle_timeout_minutes),
+        activity_touch_interval=timedelta(seconds=container.settings.session_activity_touch_seconds),
     )
 
 
@@ -153,6 +168,7 @@ def get_profile_service(container: ContainerDep, session: SessionDep) -> Profile
         throttle=container.throttle,
         clock=container.clock,
         transaction=SqlAlchemyTransaction(session),
+        idle_timeout=timedelta(minutes=container.settings.session_idle_timeout_minutes),
     )
 
 

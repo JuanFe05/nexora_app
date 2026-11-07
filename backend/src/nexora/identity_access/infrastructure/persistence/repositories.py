@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import CursorResult, func, or_, select, update
+from sqlalchemy import CursorResult, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -78,7 +78,7 @@ class SqlAlchemySessionRepository:
         await self._session.flush()
 
     async def get(self, session_id: UUID) -> Session | None:
-        model = await self._session.get(SessionModel, session_id)
+        model = await self._session.get(SessionModel, session_id, populate_existing=True)
         return session_to_domain(model) if model is not None else None
 
     async def rotate_refresh_token(
@@ -87,19 +87,33 @@ class SqlAlchemySessionRepository:
         session_id: UUID,
         expected_jti: UUID,
         new_jti: UUID,
-        expires_at: datetime,
         now: datetime,
+        idle_timeout: timedelta,
+        rotation_grace: timedelta,
     ) -> bool:
-        """Rotacion atomica: una sola sentencia condicionada al JTI vigente."""
+        """Postgres reevalua el predicado tras esperar el lock de un refresh concurrente."""
         stmt = (
             update(SessionModel)
             .where(
                 SessionModel.id == session_id,
-                SessionModel.refresh_token_jti == expected_jti,
+                or_(
+                    SessionModel.refresh_token_jti == expected_jti,
+                    and_(
+                        SessionModel.previous_refresh_token_jti == expected_jti,
+                        SessionModel.refresh_rotated_at >= now - rotation_grace,
+                    ),
+                ),
                 SessionModel.revoked_at.is_(None),
                 SessionModel.expires_at > now,
+                SessionModel.last_activity_at > now - idle_timeout,
             )
-            .values(refresh_token_jti=new_jti, expires_at=expires_at, last_activity_at=now)
+            .values(
+                previous_refresh_token_jti=SessionModel.refresh_token_jti,
+                refresh_token_jti=new_jti,
+                refresh_rotated_at=now,
+                last_activity_at=now,
+            )
+            .execution_options(synchronize_session=False)
         )
         result = cast("CursorResult[Any]", await self._session.execute(stmt))
         return bool(result.rowcount)
@@ -111,9 +125,27 @@ class SqlAlchemySessionRepository:
             .values(revoked_at=now, last_activity_at=now)
         )
 
-    async def touch(self, session_id: UUID, now: datetime) -> None:
+    async def touch(
+        self, session_id: UUID, now: datetime, *, idle_timeout: timedelta,
+        activity_touch_interval: timedelta,
+    ) -> None:
         await self._session.execute(
-            update(SessionModel).where(SessionModel.id == session_id).values(last_activity_at=now)
+            update(SessionModel)
+            .where(
+                SessionModel.id == session_id,
+                SessionModel.revoked_at.is_(None),
+                SessionModel.expires_at > now,
+                SessionModel.last_activity_at > now - idle_timeout,
+                SessionModel.last_activity_at <= now - activity_touch_interval,
+            )
+            .values(last_activity_at=now)
+        )
+
+    async def revoke_all_for_user(self, user_id: UUID, now: datetime) -> None:
+        await self._session.execute(
+            update(SessionModel)
+            .where(SessionModel.user_id == user_id, SessionModel.revoked_at.is_(None))
+            .values(revoked_at=now, last_activity_at=now)
         )
 
     async def revoke_all_except(self, user_id: UUID, keep_session_id: UUID, now: datetime) -> None:

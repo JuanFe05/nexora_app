@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from datetime import timedelta
 
 from nexora.identity_access.application.dto.auth import AuthenticatedPrincipal
 from nexora.identity_access.application.ports.administration import AdministrationRepository
@@ -52,6 +53,7 @@ class ProfileService:
         throttle: LoginThrottle,
         clock: Clock,
         transaction: Transaction,
+        idle_timeout: timedelta = timedelta(minutes=30),
     ) -> None:
         self._users = users
         self._sessions = sessions
@@ -61,6 +63,7 @@ class ProfileService:
         self._throttle = throttle
         self._clock = clock
         self._tx = transaction
+        self._idle_timeout = idle_timeout
 
     async def get(self, principal: AuthenticatedPrincipal) -> UserDetail:
         user = await self._users.get_by_id(principal.user.id)
@@ -120,7 +123,10 @@ class ProfileService:
             now = self._clock.now()
             # Una sesion revocada mientras esperaba el bloqueo no puede cambiar la clave.
             session = await self._sessions.get(principal.session_id)
-            if session is None or session.user_id != user.id or not session.is_usable(now):
+            if (
+                session is None or session.user_id != user.id
+                or not session.is_usable(now, self._idle_timeout)
+            ):
                 raise SessionNotActive
             if not self._hasher.verify(user.password_hash, command.current_password):
                 self._throttle.register_failure(key)

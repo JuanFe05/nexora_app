@@ -1,13 +1,9 @@
-"""Rotacion del refresh token (S7).
-
-La rotacion es una unica sentencia condicionada al JTI vigente: si no afecta ninguna fila, o la
-sesion murio o el token presentado ya habia sido rotado (reutilizacion), y entonces se revoca.
-"""
+"""Refresh con limite absoluto, inactividad y rotacion atomica con gracia acotada."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import NoReturn
 from uuid import UUID
 
@@ -16,6 +12,7 @@ from nexora.identity_access.application.ports.repositories import SessionReposit
 from nexora.identity_access.application.ports.security import Clock, TokenService
 from nexora.identity_access.application.ports.transaction import Transaction
 from nexora.identity_access.domain.exceptions.identity import (
+    InvalidToken,
     RefreshTokenReused,
     SessionNotActive,
 )
@@ -23,7 +20,7 @@ from nexora.identity_access.domain.exceptions.identity import (
 
 @dataclass(frozen=True, slots=True)
 class RefreshCommand:
-    refresh_token: str
+    refresh_token: str = field(repr=False)
 
 
 class RefreshSessionUseCase:
@@ -34,25 +31,40 @@ class RefreshSessionUseCase:
         tokens: TokenService,
         clock: Clock,
         transaction: Transaction,
+        idle_timeout: timedelta = timedelta(minutes=30),
+        rotation_grace: timedelta = timedelta(seconds=30),
     ) -> None:
         self._sessions = sessions
         self._tokens = tokens
         self._clock = clock
         self._transaction = transaction
+        self._idle_timeout = idle_timeout
+        self._rotation_grace = rotation_grace
 
     async def execute(self, command: RefreshCommand) -> IssuedTokens:
-        claims = self._tokens.decode_refresh_token(command.refresh_token)
+        # Firma, tipo y claims siempre se verifican. exp se comprueba abajo con el reloj
+        # inyectado para poder persistir la revocacion aun cuando el JWT alcanzo el tope.
+        claims = self._tokens.decode_refresh_token(command.refresh_token, allow_expired=True)
         now = self._clock.now()
+        session = await self._sessions.get(claims.session_id)
+        if session is None or session.user_id != claims.user_id:
+            raise SessionNotActive
+        if not session.is_usable(now, self._idle_timeout):
+            await self._fail_rotation(session.id, now)
+        if claims.expires_at <= now:
+            raise InvalidToken
 
         refresh = self._tokens.issue_refresh_token(
-            user_id=claims.user_id, session_id=claims.session_id, now=now
+            user_id=claims.user_id, session_id=claims.session_id, now=now,
+            absolute_expires_at=session.expires_at,
         )
         rotated = await self._sessions.rotate_refresh_token(
             session_id=claims.session_id,
             expected_jti=claims.token_id,
             new_jti=refresh.token_id,
-            expires_at=refresh.expires_at,
             now=now,
+            idle_timeout=self._idle_timeout,
+            rotation_grace=self._rotation_grace,
         )
         if not rotated:
             await self._fail_rotation(claims.session_id, now)
@@ -70,11 +82,13 @@ class RefreshSessionUseCase:
         )
 
     async def _fail_rotation(self, session_id: UUID, now: datetime) -> NoReturn:
+        # El repositorio relee despues del UPDATE fallido, no usa un snapshot ORM viejo.
         session = await self._sessions.get(session_id)
-        if session is not None and session.is_usable(now):
-            # La sesion vive pero el JTI presentado ya fue rotado: token reutilizado.
+        if session is not None and not session.is_revoked:
             await self._sessions.revoke(session_id, now)
             await self._transaction.commit()
-            raise RefreshTokenReused
+            if session.is_usable(now, self._idle_timeout):
+                raise RefreshTokenReused
+            raise SessionNotActive
         await self._transaction.rollback()
         raise SessionNotActive

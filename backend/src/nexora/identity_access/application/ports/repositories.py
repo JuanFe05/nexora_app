@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID
 
@@ -36,19 +36,24 @@ class SessionRepository(Protocol):
         session_id: UUID,
         expected_jti: UUID,
         new_jti: UUID,
-        expires_at: datetime,
         now: datetime,
+        idle_timeout: timedelta,
+        rotation_grace: timedelta,
     ) -> bool:
-        """Rota el JTI en una sola sentencia atomica.
+        """UPDATE atomico: sesion usable y JTI vigente o anterior dentro de la gracia.
 
-        Devuelve False cuando la sesion no esta activa o el JTI presentado no es el vigente,
-        que es como se detecta la reutilizacion de un refresh token.
+        Conserva el limite absoluto, mueve vigente a anterior y actualiza actividad/rotacion.
         """
         ...
 
     async def revoke(self, session_id: UUID, now: datetime) -> None: ...
 
-    async def touch(self, session_id: UUID, now: datetime) -> None: ...
+    async def touch(
+        self, session_id: UUID, now: datetime, *, idle_timeout: timedelta,
+        activity_touch_interval: timedelta,
+    ) -> None: ...
+
+    async def revoke_all_for_user(self, user_id: UUID, now: datetime) -> None: ...
 
     async def revoke_all_except(
         self, user_id: UUID, keep_session_id: UUID, now: datetime

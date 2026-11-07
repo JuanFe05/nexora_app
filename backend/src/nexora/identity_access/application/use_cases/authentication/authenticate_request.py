@@ -6,6 +6,8 @@ una sesion o cambiar una asignacion de rol tiene efecto inmediato.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from nexora.identity_access.application.dto.auth import AuthenticatedPrincipal, UserView
 from nexora.identity_access.application.ports.repositories import (
     AccessRepository,
@@ -27,6 +29,8 @@ class AuthenticateRequestUseCase:
         tokens: TokenService,
         clock: Clock,
         transaction: Transaction,
+        idle_timeout: timedelta = timedelta(minutes=30),
+        activity_touch_interval: timedelta = timedelta(seconds=60),
     ) -> None:
         self._users = users
         self._sessions = sessions
@@ -34,13 +38,20 @@ class AuthenticateRequestUseCase:
         self._tokens = tokens
         self._clock = clock
         self._transaction = transaction
+        self._idle_timeout = idle_timeout
+        self._activity_touch_interval = activity_touch_interval
 
     async def execute(self, access_token: str) -> AuthenticatedPrincipal:
         claims = self._tokens.decode_access_token(access_token)
         now = self._clock.now()
 
         session = await self._sessions.get(claims.session_id)
-        if session is None or not session.is_usable(now) or session.user_id != claims.user_id:
+        if session is None or session.user_id != claims.user_id:
+            raise SessionNotActive
+        if not session.is_usable(now, self._idle_timeout):
+            if not session.is_revoked:
+                await self._sessions.revoke(session.id, now)
+                await self._transaction.commit()
             raise SessionNotActive
 
         user = await self._users.get_by_id(claims.user_id)
@@ -48,8 +59,13 @@ class AuthenticateRequestUseCase:
             raise SessionNotActive
 
         roles, permissions = await self._access.effective_access(user.id)
-        await self._sessions.touch(session.id, now)
-        await self._transaction.commit()
+        if now - session.last_activity_at >= self._activity_touch_interval:
+            await self._sessions.touch(
+                session.id, now,
+                idle_timeout=self._idle_timeout,
+                activity_touch_interval=self._activity_touch_interval,
+            )
+            await self._transaction.commit()
 
         return AuthenticatedPrincipal(
             user=UserView(

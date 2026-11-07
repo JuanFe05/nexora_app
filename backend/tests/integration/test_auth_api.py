@@ -178,7 +178,7 @@ async def test_me_sin_token_o_con_token_invalido_devuelve_401(client: AsyncClien
     ).status_code == 401
 
 
-async def test_refresh_rota_la_cookie_y_el_token_anterior_queda_inservible(
+async def test_refresh_rota_la_cookie_y_un_token_mas_antiguo_que_el_anterior_no_sirve(
     client: AsyncClient, seeder: Seeder
 ) -> None:
     await seeder.create_user()
@@ -190,6 +190,9 @@ async def test_refresh_rota_la_cookie_y_el_token_anterior_queda_inservible(
     assert primera.status_code == 200
     assert primera.json()["access_token"]
     assert client.cookies["nexora_refresh_token"] != cookie_original
+    # Dos rotaciones dejan el original fuera de la unica generacion de gracia.
+    segunda = await client.post(REFRESH_URL, headers=csrf_headers(client))
+    assert segunda.status_code == 200
 
     client.cookies.set("nexora_refresh_token", cookie_original, path="/api/v1/auth")
     reutilizado = await client.post(REFRESH_URL, headers=csrf_headers(client))

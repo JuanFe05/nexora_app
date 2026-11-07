@@ -8,6 +8,7 @@ Reglas no negociables:
 
 from __future__ import annotations
 
+from datetime import timedelta
 from uuid import uuid4
 
 from nexora.identity_access.application.dto.auth import (
@@ -44,6 +45,7 @@ class LoginUseCase:
         throttle: LoginThrottle,
         clock: Clock,
         transaction: Transaction,
+        absolute_timeout: timedelta = timedelta(hours=12),
     ) -> None:
         self._users = users
         self._sessions = sessions
@@ -52,6 +54,7 @@ class LoginUseCase:
         self._throttle = throttle
         self._clock = clock
         self._transaction = transaction
+        self._absolute_timeout = absolute_timeout
 
     async def execute(self, command: LoginCommand) -> LoginResult:
         identifier = LoginIdentifier(command.identifier)
@@ -66,7 +69,11 @@ class LoginUseCase:
         assert user is not None  # noqa: S101  (garantizado por _is_authentic)
         now = self._clock.now()
         session_id = uuid4()
-        refresh = self._tokens.issue_refresh_token(user_id=user.id, session_id=session_id, now=now)
+        absolute_expires_at = now + self._absolute_timeout
+        refresh = self._tokens.issue_refresh_token(
+            user_id=user.id, session_id=session_id, now=now,
+            absolute_expires_at=absolute_expires_at,
+        )
         access = self._tokens.issue_access_token(user_id=user.id, session_id=session_id, now=now)
 
         await self._sessions.add(
@@ -76,7 +83,7 @@ class LoginUseCase:
                 refresh_token_jti=refresh.token_id,
                 created_at=now,
                 last_activity_at=now,
-                expires_at=refresh.expires_at,
+                expires_at=absolute_expires_at,
                 ip_address=command.ip_address,
                 user_agent=command.user_agent,
             )

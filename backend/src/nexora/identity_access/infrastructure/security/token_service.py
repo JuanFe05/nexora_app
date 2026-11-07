@@ -31,8 +31,13 @@ class JwtTokenService:
         ttl = timedelta(minutes=self._settings.access_token_ttl_minutes)
         return self._issue(ACCESS_TOKEN_TYPE, user_id, session_id, now, ttl)
 
-    def issue_refresh_token(self, *, user_id: UUID, session_id: UUID, now: datetime) -> IssuedToken:
+    def issue_refresh_token(
+        self, *, user_id: UUID, session_id: UUID, now: datetime,
+        absolute_expires_at: datetime | None = None,
+    ) -> IssuedToken:
         ttl = timedelta(days=self._settings.refresh_token_ttl_days)
+        if absolute_expires_at is not None:
+            ttl = min(ttl, absolute_expires_at - now)
         return self._issue(REFRESH_TOKEN_TYPE, user_id, session_id, now, ttl)
 
     def decode_access_token(self, token: str) -> AccessTokenClaims:
@@ -42,8 +47,10 @@ class JwtTokenService:
             user_id=user_id, session_id=session_id, token_id=token_id, expires_at=expires_at
         )
 
-    def decode_refresh_token(self, token: str) -> RefreshTokenClaims:
-        payload = self._decode(token, REFRESH_TOKEN_TYPE)
+    def decode_refresh_token(
+        self, token: str, *, allow_expired: bool = False
+    ) -> RefreshTokenClaims:
+        payload = self._decode(token, REFRESH_TOKEN_TYPE, allow_expired=allow_expired)
         user_id, session_id, token_id, expires_at = self._read_claims(payload)
         return RefreshTokenClaims(
             user_id=user_id, session_id=session_id, token_id=token_id, expires_at=expires_at
@@ -76,7 +83,9 @@ class JwtTokenService:
         )
         return IssuedToken(value=value, token_id=token_id, expires_at=expires_at)
 
-    def _decode(self, token: str, expected_type: str) -> dict[str, Any]:
+    def _decode(
+        self, token: str, expected_type: str, *, allow_expired: bool = False
+    ) -> dict[str, Any]:
         try:
             payload = jwt.decode(
                 token,
@@ -84,7 +93,10 @@ class JwtTokenService:
                 algorithms=[self._settings.jwt_algorithm],
                 issuer=self._settings.jwt_issuer,
                 audience=self._settings.jwt_audience,
-                options={"require": ["exp", "iat", "sub", "sid", "jti", "iss", "aud"]},
+                options={
+                    "require": ["exp", "iat", "sub", "sid", "jti", "iss", "aud"],
+                    "verify_exp": not allow_expired,
+                },
             )
         except jwt.PyJWTError as error:
             raise InvalidToken from error

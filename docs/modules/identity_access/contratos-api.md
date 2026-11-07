@@ -29,8 +29,11 @@ Salida `200`:
 }
 ```
 
-Ademas establece las cookies `nexora_refresh_token` (`HttpOnly`) y `nexora_csrf_token`, ambas con
-`Path=/api/v1/auth`. Roles y permisos no viajan aqui: se consultan en `GET /auth/me`.
+Ademas establece `nexora_refresh_token` (`HttpOnly`, `Path=/api/v1/auth`) y
+`nexora_csrf_token` (legible por el front, `Path=/`, configurable con
+`NEXORA_CSRF_COOKIE_PATH`). Roles y permisos se consultan en `GET /auth/me`.
+El refresh vence como maximo al limite absoluto de sesion (12 h desde login por defecto),
+aunque su TTL configurado siga siendo 7 dias como techo.
 
 Errores: `401` credenciales invalidas (usuario inexistente, inactivo o contrasena incorrecta),
 `422` cuerpo invalido, `429` demasiados intentos (con `Retry-After`).
@@ -40,12 +43,28 @@ Errores: `401` credenciales invalidas (usuario inexistente, inactivo o contrasen
 Sin cuerpo. Requiere la cookie de refresh y la cabecera `X-CSRF-Token` igual a la cookie CSRF.
 
 Salida `200`: `{"access_token": "<jwt>", "token_type": "bearer", "expires_in": 600}` y cookies
-rotadas. Errores: `401` por falta de CSRF, origen no permitido, token invalido o vencido, sesion
-revocada o refresh reutilizado.
+rotadas. Acepta JTI vigente o anterior dentro de 30 s de la ultima rotacion (configurable).
+Un duplicado concurrente o reintento por respuesta perdida puede tener exito en esa ventana;
+un JTI mas antiguo o anterior fuera de gracia revoca la sesion.
+Cada refresh valido cuenta como actividad, pero nunca extiende el vencimiento absoluto.
+Errores: `401` por falta de CSRF, origen no permitido, token invalido o vencido, sesion
+revocada, vencida por inactividad/absoluto (`"Sesion no activa"`) o refresh reutilizado
+(`"Refresh token reutilizado"`). Expiracion y reuso se confirman como revocacion antes del 401.
 
 ## POST /api/v1/auth/logout
 
 Sin cuerpo. Requiere CSRF si hay cookie de refresh. Salida `204` y cookies borradas.
+
+## POST /api/v1/auth/logout-all
+
+Cabecera `Authorization: Bearer <access_token>`. Sin cuerpo. No exige CSRF ni cookie de
+refresh: autentica por el principal Bearer, sin permisos adicionales.
+
+Salida `204`, cuerpo vacio. Revoca **todas** las sesiones del usuario autenticado (incluida
+la actual) en una transaccion; las de otros usuarios no cambian. Borra refresh en
+`/api/v1/auth` y CSRF en `/` usando los mismos atributos de logout. Access y refresh viejos
+son rechazados desde la siguiente peticion. Errores: `401` sin Bearer valido, usuario
+inactivo o sesion no activa; no borra cookies ni revoca otras sesiones si falla autenticacion.
 
 ## GET /api/v1/auth/me
 
@@ -60,7 +79,10 @@ Cabecera `Authorization: Bearer <access_token>`.
 }
 ```
 
-Errores: `401` sin token, token invalido o vencido, sesion revocada o usuario desactivado.
+Errores: `401` sin token, token invalido o vencido, sesion revocada, inactiva/vencida o usuario
+desactivado. Todos los endpoints protegidos aplican inactividad de 30 min y absoluto de 12 h,
+configurables. Actualizan actividad solo cada >= 60 s; alcanzar cualquiera de los limites
+revoca y confirma antes del 401. Un access vencido con sesion activa puede renovarse por refresh.
 
 ## Administracion IAM (permisos por accion)
 

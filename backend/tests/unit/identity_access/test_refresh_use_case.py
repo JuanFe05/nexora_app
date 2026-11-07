@@ -76,6 +76,7 @@ async def test_reutilizar_un_refresh_ya_rotado_revoca_la_sesion() -> None:
     use_case, parts = build_case()
     session_id, primero = await seed_session(parts)
     await use_case.execute(RefreshCommand(refresh_token=primero.value))
+    parts["clock"].advance(timedelta(seconds=31))
 
     with pytest.raises(RefreshTokenReused):
         await use_case.execute(RefreshCommand(refresh_token=primero.value))

@@ -118,3 +118,31 @@ def test_token_sin_firma_alg_none_es_rechazado() -> None:
 
     with pytest.raises(InvalidToken):
         service.decode_access_token(unsigned)
+
+
+def test_refresh_cap_is_minimum_of_ttl_and_absolute_expiration() -> None:
+    service = build_service()
+    now = datetime.now(UTC).replace(microsecond=0)
+    for absolute in (now + timedelta(hours=12), now + timedelta(days=8)):
+        issued = service.issue_refresh_token(
+            user_id=uuid4(), session_id=uuid4(), now=now, absolute_expires_at=absolute
+        )
+        expected = min(now + timedelta(days=7), absolute)
+        assert issued.expires_at == expected
+        assert service.decode_refresh_token(issued.value).expires_at == expected
+
+
+def test_expired_refresh_is_rejected_by_default_and_only_decodable_for_revocation() -> None:
+    service = build_service()
+    issued = service.issue_refresh_token(
+        user_id=uuid4(), session_id=uuid4(), now=datetime.now(UTC) - timedelta(days=8)
+    )
+    with pytest.raises(InvalidToken):
+        service.decode_refresh_token(issued.value)
+    claims = service.decode_refresh_token(issued.value, allow_expired=True)
+    assert claims.token_id == issued.token_id
+    access = service.issue_access_token(
+        user_id=uuid4(), session_id=uuid4(), now=datetime.now(UTC)
+    )
+    with pytest.raises(InvalidToken):
+        service.decode_refresh_token(access.value, allow_expired=True)
