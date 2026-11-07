@@ -99,12 +99,9 @@ describe("seguridad y sesiones", () => {
 });
 
 describe("presentación TailAdmin", () => {
-  it("mantiene nombres accesibles e iconos decorativos; neutral para editar/cambiar y rojo para cerrar sesiones", async () => {
+  it("mantiene nombres accesibles e iconos decorativos con un único estilo de botón para las tres acciones", async () => {
     await loaded();
-    const logoutAll = screen.getByRole("button", { name: "Cerrar todas las sesiones" });
-    expect(logoutAll.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
-    expect(logoutAll).toHaveClass("h-9", "bg-red-500", "text-white", "hover:bg-red-600", "focus-visible:ring-3");
-    const buttons = ["Editar", "Cambiar contraseña"].map((name) => screen.getByRole("button", { name }));
+    const buttons = ["Editar", "Cambiar contraseña", "Cerrar todas las sesiones"].map((name) => screen.getByRole("button", { name }));
     for (const button of buttons) {
       expect(button).toHaveAccessibleName(button.textContent);
       expect(button.querySelectorAll("svg")).toHaveLength(1);

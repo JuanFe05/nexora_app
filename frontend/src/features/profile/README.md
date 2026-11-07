@@ -38,7 +38,7 @@ El cliente HTTP compartido añade `/api/v1` y gestiona la sesión. La UI no reci
 - `types.ts` / `validation.ts`: contrato cerrado, diferencias y validación pura.
 - `hooks/`: carga de perfil y foco después de habilitar los controles.
 - `components/`: formularios pequeños sobre las primitivas compartidas de TailAdmin.
-- `components/security-section.tsx`: tarjeta única estilo Danger Zone: dos filas separadas por divisores (descripción a la izquierda, botón a la derecha desde `sm`; apiladas en móvil), botón neutral para cambiar contraseña y rojo para cerrar sesiones,, confirmación y estado pendiente del cierre global.
+- `components/security-section.tsx`: tarjeta única estilo Danger Zone: dos filas separadas por divisores (descripción a la izquierda, botón a la derecha desde `sm`; apiladas en móvil), los tres botones comparten el estilo outline,, confirmación y estado pendiente del cierre global.
 - `pages/profile-page.tsx`: composición del perfil, sin cambiar ruta ni exportación por defecto.
 
 Desde `frontend/`: `npx vitest run`, `npx tsc -b` y `npm run lint`. Las pruebas de página simulan las API y ejercitan el controlador de sesión y el guard de ruta; las del adaptador simulan el cliente HTTP compartido. No realizan solicitudes de red ni requieren credenciales. La comprobación visual en navegador y la integración contra un backend activo quedan fuera de estas pruebas deterministas.

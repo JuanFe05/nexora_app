@@ -41,7 +41,7 @@ export function SecuritySection() {
             <h3 id="logout-all-title" className="text-base font-medium text-gray-800 dark:text-white/90">Cerrar todas las sesiones</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">Cierra el acceso en todos tus dispositivos, incluido este.</p>
           </div>
-          <Button variant="destructive" size="sm" className="w-full shrink-0 sm:w-auto"
+          <Button variant="outline" size="sm" className="w-full shrink-0 sm:w-auto"
             onClick={() => setOpen(true)}><LogOutIcon aria-hidden="true" className="size-5" />Cerrar todas las sesiones</Button>
         </div>
       </div>
