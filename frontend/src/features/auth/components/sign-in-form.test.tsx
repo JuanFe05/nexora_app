@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ToastProvider } from "@/components/shared/toast/toast-provider";
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -22,7 +23,7 @@ const password = () => screen.getByLabelText(/^Contraseña/);
 describe("formulario de acceso", () => {
   it("valida debajo de cada campo, enfoca el primero y limpia al editar sin llamar login", async () => {
     const user = userEvent.setup();
-    render(<SignInForm />);
+    render(<ToastProvider><SignInForm /></ToastProvider>);
     await user.click(screen.getByRole("button", { name: "Iniciar sesión" }));
     expect(login).not.toHaveBeenCalled();
     expect(identifier()).toHaveFocus();
@@ -41,7 +42,7 @@ describe("formulario de acceso", () => {
 
   it("envía el identificador recortado y conserva la contraseña", async () => {
     const user = userEvent.setup();
-    render(<SignInForm />);
+    render(<ToastProvider><SignInForm /></ToastProvider>);
     await user.type(identifier(), " usuario@example.com ");
     await user.type(password(), " secreto ");
     await user.click(screen.getByRole("button", { name: "Iniciar sesión" }));
@@ -52,7 +53,7 @@ describe("formulario de acceso", () => {
     let rejectLogin!: (failure: unknown) => void;
     login.mockImplementation(() => new Promise((_resolve, reject) => { rejectLogin = reject; }));
     const user = userEvent.setup();
-    render(<SignInForm />);
+    render(<ToastProvider><SignInForm /></ToastProvider>);
     await user.type(identifier(), "usuario");
     await user.type(password(), "secreto");
     await user.click(screen.getByRole("button", { name: "Iniciar sesión" }));
@@ -70,7 +71,7 @@ describe("formulario de acceso", () => {
 
   it("muestra y oculta contraseña con estado accesible", async () => {
     const user = userEvent.setup();
-    render(<SignInForm />);
+    render(<ToastProvider><SignInForm /></ToastProvider>);
     expect(password()).toHaveAttribute("type", "password");
     expect(screen.getByRole("button", { name: "Mostrar contraseña" })).toHaveAttribute("aria-pressed", "false");
     await user.click(screen.getByRole("button", { name: "Mostrar contraseña" }));
@@ -81,7 +82,7 @@ describe("formulario de acceso", () => {
   });
 
   it("mantiene dimensiones estándar dentro de la columna max-w-md", () => {
-    render(<HelmetProvider><MemoryRouter><SignInPage /></MemoryRouter></HelmetProvider>);
+    render(<HelmetProvider><MemoryRouter><ToastProvider><SignInPage /></ToastProvider></MemoryRouter></HelmetProvider>);
     expect(identifier().closest(".max-w-md")).toBeInTheDocument();
     expect(password().closest(".max-w-md")).toBeInTheDocument();
     expect(identifier()).toHaveClass("h-11", "rounded-[10px]");
@@ -94,18 +95,18 @@ describe("formulario de acceso", () => {
   it.each([2026, 2031])("muestra el pie debajo del formulario con el año dinámico %s", (year) => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(`${year}-07-01T12:00:00Z`));
-    render(<HelmetProvider><MemoryRouter><SignInPage /></MemoryRouter></HelmetProvider>);
+    render(<HelmetProvider><MemoryRouter><ToastProvider><SignInPage /></ToastProvider></MemoryRouter></HelmetProvider>);
     const footer = screen.getByRole("contentinfo");
     expect(footer).toHaveTextContent(`NEXORA © ${year}. Todos los derechos reservados. El uso de este sistema de software está sujeto a los términos de licencia`);
-    expect(footer).toHaveClass("text-xs", "text-gray-500", "dark:text-gray-400", "pb-24", "lg:pb-6");
+    expect(footer).toHaveClass("text-xs", "text-gray-500", "dark:text-gray-400", "pb-24", "lg:hidden");
     expect(screen.getByRole("button", { name: "Iniciar sesión" }).compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(footer).not.toHaveClass("fixed", "absolute");
   });
 
   it("presenta fotografía decorativa, marca y slogan también en móvil, sin enlace de regreso", () => {
-    render(<HelmetProvider><MemoryRouter><ThemeProvider><Routes>
+    render(<HelmetProvider><MemoryRouter><ThemeProvider><ToastProvider><Routes>
       <Route element={<AuthLayout />}><Route index element={<SignInPage />} /></Route>
-    </Routes></ThemeProvider></MemoryRouter></HelmetProvider>);
+    </Routes></ToastProvider></ThemeProvider></MemoryRouter></HelmetProvider>);
     const slogan = "Transformamos datos en decisiones inteligentes";
     expect(screen.getAllByText("NEXORA")).toHaveLength(2);
     expect(screen.getAllByText(slogan)).toHaveLength(2);
@@ -117,6 +118,16 @@ describe("formulario de acceso", () => {
     expect(image).toHaveAttribute("height", "1067");
     expect(image).toHaveAttribute("decoding", "async");
     expect(image?.parentElement).toHaveClass("hidden", "lg:grid");
+    const panelCopyright = document.querySelector("p.absolute") as HTMLElement;
+    expect(panelCopyright).toHaveClass("xl:bottom-6", "min-h-11", "items-center", "justify-center", "text-center", "font-normal", "[&>span]:whitespace-nowrap");
+    expect(panelCopyright).not.toHaveClass("font-bold");
+    expect(Array.from(panelCopyright.querySelectorAll("span")).map((line) => line.textContent)).toEqual([
+      `NEXORA © ${new Date().getFullYear()}. Todos los derechos reservados.`,
+      "El uso de este sistema de software está sujeto a los términos de licencia.",
+    ]);
+    expect(panelCopyright.parentElement).toHaveClass("hidden", "lg:grid");
+    expect(screen.getByRole("button", { name: "Activar tema oscuro" }).parentElement).toHaveClass("fixed", "inset-e-6", "bottom-6");
+    expect(screen.getByRole("button", { name: "Activar tema oscuro" })).toHaveClass("bg-brand-500", "text-white", "rounded-[10px]");
     expect(screen.queryByText(/Volver a la página de inicio/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Volver/ })).not.toBeInTheDocument();
   });

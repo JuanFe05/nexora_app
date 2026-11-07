@@ -324,7 +324,7 @@ La apariencia responsive y el acceso real requieren además comprobación en nav
 El formulario conserva la columna `max-w-md` y los inputs estándar de TailAdmin (`h-11`), con mensajes y
 estados de validación accesibles. En escritorio se muestra un panel fotográfico; por debajo de `lg`, la marca
 NEXORA y «Transformamos datos en decisiones inteligentes» aparecen encima del formulario. Ambos temas
-conservan el selector fijo de TailAdmin desde `sm`. El componente `LoginFooter` queda al pie de la columna
+conservan el selector fijo desde `sm`, con el estilo del botón «Iniciar sesión» (variante `default` de `Button`). En `lg` el copyright se muestra en el panel fotográfico, abajo y a la altura del selector de tema; por debajo de `lg` el componente `LoginFooter` queda al pie de la columna
 del formulario, en flujo normal, con texto gris claro/oscuro y espacio inferior para evitar el selector fijo
 en móvil/tableta. Muestra el nombre de `env.appName`, © y el año actual (helper `getCurrentYear`, inicializado
 fuera del render mediante estado), seguido de «Todos los derechos reservados. El uso de este sistema de
