@@ -6,6 +6,7 @@ export type Role = {
   descripcion: string | null;
   estado: RoleStatus;
   permisos: string[];
+  usuarios_asignados: number;
 };
 export type PermissionOption = {
   id: string;

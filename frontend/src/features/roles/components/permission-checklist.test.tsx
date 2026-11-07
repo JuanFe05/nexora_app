@@ -31,7 +31,17 @@ describe("module permission accordion", () => {
     expect(screen.getByRole("checkbox", { name: "Crear usuarios" })).toBeVisible();
     expect(screen.getByRole("checkbox", { name: "Ver caja" })).toBeVisible();
     expect(identity.querySelector('[data-slot="permission-grid"]')).toHaveClass("grid-cols-1", "sm:grid-cols-2");
-    expect(screen.getByText("Consulta del directorio")).toBeVisible();
+    for (const permission of options) {
+      const checkbox = screen.getByRole("checkbox", { name: permission.nombre });
+      expect(checkbox).toBeVisible();
+      const input = screen.getByLabelText(permission.nombre, { exact: true, selector: 'input[type="checkbox"]' });
+      const card = checkbox.closest("label")!;
+      expect(card).toContainElement(input);
+      expect(card.textContent).toBe(permission.nombre);
+      expect(card).toHaveAttribute("for", input.id);
+      expect(screen.queryByText(permission.codigo, { exact: true })).not.toBeInTheDocument();
+      if (permission.descripcion) expect(screen.queryByText(permission.descripcion)).not.toBeInTheDocument();
+    }
     await userEvent.click(screen.getByRole("button", { name: "Contraer todos" }));
     expect(screen.queryByRole("checkbox", { name: "Crear usuarios" })).not.toBeInTheDocument();
     expect(screen.getByText("0 de 3 seleccionados")).toBeVisible();

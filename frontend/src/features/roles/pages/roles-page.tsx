@@ -17,6 +17,7 @@ const columns: DataTableColumn<Role>[] = [
   { id: "descripcion", header: "Descripción", cell: row => row.descripcion || "—", className: "min-w-40 max-w-xs whitespace-normal" },
   { id: "estado", header: "Estado", cell: row => <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${row.estado === "activo" ? "bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"}`}>{row.estado === "activo" ? "Activo" : "Inactivo"}</span> },
   { id: "permisos", header: "Permisos", cell: row => <div className="max-w-xs"><span className="font-medium">{row.permisos.length} {row.permisos.length === 1 ? "permiso" : "permisos"}</span><p className="mt-1 break-all text-xs text-gray-500 dark:text-gray-400" title={row.permisos.join(", ")}>{row.permisos.slice(0, 2).join(", ") || "Sin permisos"}{row.permisos.length > 2 ? ` y ${row.permisos.length - 2} más` : ""}</p></div> },
+  { id: "usuarios_asignados", header: "Usuarios asignados", cell: row => row.usuarios_asignados, className: "text-end tabular-nums" },
 ];
 
 export default function RolesPage() {

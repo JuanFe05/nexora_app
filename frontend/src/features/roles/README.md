@@ -25,6 +25,15 @@ ninguna parte editable ofrece **Cerrar** en lugar de **Guardar cambios**.
 
 - La tabla busca en el servidor después de 300 ms, permite cambiar el tamaño de página y usa
   `X-Total-Count` para paginar. El resumen de permisos muestra códigos, no identificadores.
+  **Usuarios asignados**, después de **Permisos**, muestra `usuarios_asignados` como entero
+  alineado a la derecha con cifras tabulares y los estilos claro/oscuro de DataTable.
+  Sin usuarios muestra `0`; un campo ausente o inválido también se normaliza a `0` en el
+  adaptador API. Es de solo lectura y nunca se envía en los cuerpos de creación o edición.
+  Cada consulta de la lista obtiene el contador del backend, sin cálculos locales.
+  Crear, editar y eliminar recargan la tabla (también tras un guardado parcial).
+  Al salir y volver a esta página, `usePagedQuery` consulta de nuevo al montarse: así refleja
+  asignaciones o revocaciones de roles realizadas en la administración de usuarios.
+  No hay actualización en tiempo real mientras se permanece en la página.
 - **Nuevo rol** abre el Dialog with Form de TailAdmin. El código usa de 2 a 50 caracteres
   (`A-Z`, `0-9`, `_`) y empieza con una letra. Nombre: 1–100 caracteres; descripción opcional:
   1–255. Se recortan espacios. Creación y edición usan `sm:max-w-6xl` y dos paneles
@@ -51,8 +60,10 @@ ninguna parte editable ofrece **Cerrar** en lugar de **Guardar cambios**.
   Todos empiezan contraídos tanto al crear como al editar; después manda la navegación del
   usuario, no los cambios de selección. El catálogo deshabilitado permite inspeccionar
   módulos, pero no cambiar asignaciones. Durante el guardado el formulario bloquea controles.
-- El contenido muestra nombres descriptivos, `descripcion` si existe y código técnico
-  secundario. La cuadrícula conserva el orden del catálogo: una columna en móvil y dos
+- Cada tarjeta de permiso muestra únicamente su nombre descriptivo (`nombre`), sin
+  descripción repetida ni código técnico. El nombre sigue siendo la etiqueta accesible
+  del checkbox real; los códigos se conservan para selección y payloads, no como texto.
+  La cuadrícula conserva el orden del catálogo: una columna en móvil y dos
   desde `sm`, con selección, hover, foco y deshabilitado en temas claro y oscuro.
   `permission-grid.ts` ahora agrupa el catálogo; se retiró el algoritmo de columnas equilibradas.
 - El backend no ofrece descripciones de módulos. El mapa visual local para `identity`
@@ -93,10 +104,13 @@ Pruebas deterministas desde `frontend/`: `npx vitest run`.
 La página se simula en el límite de sus módulos API y de useAuth; la matriz cubre permisos
 independientes, campos, catálogo, creación, edición, eliminación y mutaciones autorizadas.
 Las pruebas del Accordion y checklist cubren teclado, apertura múltiple, controles globales,
-selección parcial y por módulo, independencia de acciones, descripciones, columnas y estados
+selección parcial y por módulo, independencia de acciones, etiquetas sin texto secundario,
+columnas y estados
 vacío/deshabilitado. La página verifica paneles responsive, permisos precargados y persistencia
 solo de diferencias, incluidos reintentos parciales y códigos fuera del catálogo.
-Las pruebas del adaptador comprueban los cuerpos PATCH mínimos y las llamadas HTTP.
+La tabla prueba conteos `0`, `1` y múltiples usuarios, alineación y recarga al volver a montar.
+Las pruebas del adaptador comprueban los cuerpos PATCH mínimos, las llamadas HTTP y la
+normalización de conteos ausentes o inválidos en lista, creación, edición y asignación de permisos.
 Las pruebas no necesitan un backend ni credenciales. La estructura de scroll se comprueba
 con jsdom; la comprobación visual responsive en navegador y la integración contra un backend
 en ejecución son verificaciones separadas de esta batería.

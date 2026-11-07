@@ -19,7 +19,7 @@ vi.mock("../api/roles-api", async importOriginal => {
   return { ...original, listRoles: vi.fn(), createRole: vi.fn(), updateRole: vi.fn(), deleteRole: vi.fn(), assignPermission: vi.fn(), revokePermission: vi.fn() };
 });
 vi.mock("../api/permission-options", () => ({ loadPermissionOptions: vi.fn() }));
-const role: Role = { id: "r1", codigo: "VENTAS", nombre: "Ventas", descripcion: "Equipo comercial", estado: "activo", permisos: ["ventas.ver"] };
+const role: Role = { id: "r1", codigo: "VENTAS", nombre: "Ventas", descripcion: "Equipo comercial", estado: "activo", permisos: ["ventas.ver"], usuarios_asignados: 0 };
 const catalog = [
   { id: "p1", codigo: "ventas.ver", nombre: "Ver ventas", modulo: "Ventas", descripcion: null },
   { id: "p2", codigo: "ventas.editar", nombre: "Editar ventas", modulo: "Ventas", descripcion: null },
@@ -318,6 +318,34 @@ describe("role form presentation", () => {
 });
 
 describe("Roles page", () => {
+  it("shows assigned-user counts after permissions for zero, one and many users", async () => {
+    vi.mocked(api.listRoles).mockResolvedValue({ items: [0, 1, 42].map((count, index) => ({ ...role, id: `r${index}`, codigo: `ROL${index}`, usuarios_asignados: count })), total: 3 });
+    render(<ToastProvider><RolesPage /></ToastProvider>);
+    await screen.findByText("ROL0");
+    const table = screen.getByRole("table", { name: "Roles" });
+    const headers = within(table).getAllByRole("columnheader");
+    const countIndex = headers.findIndex(header => header.textContent === "Usuarios asignados");
+    expect(countIndex).toBe(headers.findIndex(header => header.textContent === "Permisos") + 1);
+    expect(headers[countIndex]).toHaveClass("text-end", "tabular-nums");
+    for (const [index, count] of [0, 1, 42].entries()) {
+      const row = within(table).getByText(`ROL${index}`).closest("tr")!;
+      const cell = within(row).getAllByRole("cell")[countIndex];
+      expect(cell.textContent).toBe(String(count));
+      expect(cell).toHaveClass("text-end", "tabular-nums");
+    }
+  });
+  it("refetches backend counts on return after user-role assignment or revocation elsewhere", async () => {
+    vi.mocked(api.listRoles).mockResolvedValueOnce({ items: [role], total: 1 }).mockResolvedValueOnce({ items: [{ ...role, usuarios_asignados: 7 }], total: 1 }).mockResolvedValueOnce({ items: [role], total: 1 });
+    for (const count of [0, 7, 0]) {
+      const view = render(<ToastProvider><RolesPage /></ToastProvider>);
+      const row = (await screen.findByText("VENTAS")).closest("tr")!;
+      expect(within(row).getByRole("cell", { name: String(count) })).toBeVisible();
+      view.unmount();
+    }
+    expect(api.listRoles).toHaveBeenCalledTimes(3);
+    expect(api.assignPermission).not.toHaveBeenCalled();
+    expect(api.revokePermission).not.toHaveBeenCalled();
+  });
   it("uses the main Users heading hierarchy without replacing the table heading", async () => {
     render(<ToastProvider><RolesPage /></ToastProvider>);
     expect(screen.getByRole("heading", { level: 1, name: "Administración de roles" })).toHaveClass("text-title-lg", "font-semibold", "text-gray-800", "dark:text-white/90");
@@ -328,7 +356,7 @@ describe("Roles page", () => {
     render(<ToastProvider><RolesPage /></ToastProvider>);
     expect(await screen.findByText("VENTAS")).toBeVisible();
     expect(screen.getByRole("table", { name: "Roles" })).toBeVisible();
-    for (const header of ["Código", "Nombre", "Descripción", "Estado", "Permisos", "Acciones"]) expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
+    for (const header of ["Código", "Nombre", "Descripción", "Estado", "Permisos", "Usuarios asignados", "Acciones"]) expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
     expect(screen.getByText("ventas.ver")).toBeVisible();
     expect(screen.getByText("Activo")).toBeVisible();
     expect(screen.getByText("Mostrando 1 a 10 de 21 registros")).toBeVisible();
@@ -395,6 +423,7 @@ describe("Roles page", () => {
     expect(api.revokePermission).toHaveBeenCalledExactlyOnceWith("r1", "p1");
     expect(vi.mocked(api.updateRole).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(api.assignPermission).mock.invocationCallOrder[0]);
     expect(screen.getByText("Rol actualizado correctamente.")).toBeVisible();
+    await waitFor(() => expect(api.listRoles).toHaveBeenCalledTimes(2));
   });
   it("groups by module, counts selection, and selects/clears an entire module", async () => {
     await openEdit();
@@ -469,6 +498,7 @@ describe("Roles page", () => {
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     expect(api.deleteRole).toHaveBeenLastCalledWith("r1");
     expect(screen.getByText("Rol eliminado correctamente.")).toBeVisible();
+    await waitFor(() => expect(api.listRoles).toHaveBeenCalledTimes(3));
   });
   it("shows server error with retry then the empty state", async () => {
     vi.mocked(api.listRoles).mockRejectedValueOnce(new ApiError(403, "Forbidden", {})).mockResolvedValue({ items: [], total: 0 });

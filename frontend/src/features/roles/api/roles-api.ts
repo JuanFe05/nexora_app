@@ -3,14 +3,23 @@ import { ApiError } from "@/lib/http/api-error";
 import { httpClient } from "@/lib/http/http-client";
 import type { Role, RoleMutableValues } from "../types";
 
+type RoleResponse = Omit<Role, "usuarios_asignados"> & { usuarios_asignados?: unknown };
+
+/** The count is read-only; older or malformed responses display zero. */
+function normalizeRole(response: RoleResponse): Role {
+  const count = response.usuarios_asignados;
+  return { ...response, usuarios_asignados: typeof count === "number" && Number.isInteger(count) && count >= 0 ? count : 0 };
+}
+
 export async function listRoles({ q, limit, offset, signal }: PagedQueryParams) {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (q) params.set("q", q);
-  return pagedResult(await httpClient.getWithMeta<Role[]>(`/roles?${params}`, { signal }));
+  const result = pagedResult(await httpClient.getWithMeta<RoleResponse[]>(`/roles?${params}`, { signal }));
+  return { ...result, items: result.items.map(normalizeRole) };
 }
-export function createRole(values: { codigo: string; nombre: string; descripcion: string }) {
+export async function createRole(values: { codigo: string; nombre: string; descripcion: string }) {
   const descripcion = values.descripcion.trim();
-  return httpClient.post<Role>("/roles", { body: { codigo: values.codigo.trim(), nombre: values.nombre.trim(), ...(descripcion ? { descripcion } : {}) } });
+  return normalizeRole(await httpClient.post<RoleResponse>("/roles", { body: { codigo: values.codigo.trim(), nombre: values.nombre.trim(), ...(descripcion ? { descripcion } : {}) } }));
 }
 /** PATCH forbids null and code changes. An unchanged form never makes a request. */
 export function changedRoleFields(previous: Role, values: RoleMutableValues) {
@@ -22,13 +31,13 @@ export function changedRoleFields(previous: Role, values: RoleMutableValues) {
 }
 export async function updateRole(previous: Role, values: RoleMutableValues): Promise<Role> {
   const body = changedRoleFields(previous, values);
-  return Object.keys(body).length ? httpClient.patch<Role>(`/roles/${encodeURIComponent(previous.id)}`, { body }) : previous;
+  return Object.keys(body).length ? normalizeRole(await httpClient.patch<RoleResponse>(`/roles/${encodeURIComponent(previous.id)}`, { body })) : previous;
 }
 export function deleteRole(id: string) {
   return httpClient.delete<void>(`/roles/${encodeURIComponent(id)}`);
 }
-export function assignPermission(roleId: string, permissionId: string) {
-  return httpClient.put<Role>(`/roles/${encodeURIComponent(roleId)}/permissions/${encodeURIComponent(permissionId)}`);
+export async function assignPermission(roleId: string, permissionId: string) {
+  return normalizeRole(await httpClient.put<RoleResponse>(`/roles/${encodeURIComponent(roleId)}/permissions/${encodeURIComponent(permissionId)}`));
 }
 export function revokePermission(roleId: string, permissionId: string) {
   return httpClient.delete<void>(`/roles/${encodeURIComponent(roleId)}/permissions/${encodeURIComponent(permissionId)}`);

@@ -67,7 +67,7 @@ export function PermissionChecklist({ options, selected, onChange, disabled = fa
             <div data-slot="permission-grid" className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
               {permissions.map(permission => <Label key={permission.id} htmlFor={`role-permission-${permission.id}`} className={`min-w-0 cursor-pointer items-start gap-3 rounded-lg border p-3 leading-normal transition-colors has-focus-visible:ring-3 has-focus-visible:ring-brand-500/20 has-[[data-disabled]]:cursor-not-allowed has-[[data-disabled]]:opacity-50 ${selected.has(permission.codigo) ? "border-brand-500 bg-brand-50 dark:border-brand-400 dark:bg-brand-500/10" : "border-gray-200 bg-white hover:border-brand-300 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:border-brand-500 dark:hover:bg-gray-800"}`}>
                 <Checkbox id={`role-permission-${permission.id}`} aria-label={permission.nombre} checked={selected.has(permission.codigo)} disabled={disabled} onCheckedChange={checked => toggle([permission.codigo], checked)} />
-                <span className="min-w-0"><span className="block break-words font-semibold text-gray-800 dark:text-white/90">{permission.nombre}</span>{permission.descripcion && <span className="mt-1 block break-words text-xs font-normal text-gray-600 dark:text-gray-400">{permission.descripcion}</span>}<span className="mt-1 block break-all text-xs font-normal text-gray-500 dark:text-gray-400">{permission.codigo}</span></span>
+                <span className="min-w-0 break-words font-semibold text-gray-800 dark:text-white/90">{permission.nombre}</span>
               </Label>)}
             </div>
           </AccordionPanel>

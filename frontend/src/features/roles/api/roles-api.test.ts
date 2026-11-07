@@ -5,9 +5,24 @@ import { assignPermission, createRole, deleteRole, listRoles, revokePermission, 
 import { loadPermissionOptions } from "./permission-options";
 import type { Role } from "../types";
 
-const role: Role = { id: "r1", codigo: "VENTAS", nombre: "Ventas", descripcion: null, estado: "activo", permisos: [] };
+const role: Role = { id: "r1", codigo: "VENTAS", nombre: "Ventas", descripcion: null, estado: "activo", permisos: [], usuarios_asignados: 0 };
 afterEach(() => vi.restoreAllMocks());
 describe("roles API", () => {
+  it.each([0, 1, 42, undefined, null, -1, 1.5, "3", NaN, Infinity])("normalizes assigned-user counts from every role response: %s", async count => {
+    const response: Omit<Role, "usuarios_asignados"> & { usuarios_asignados?: unknown } = { ...role, usuarios_asignados: count };
+    if (count === undefined) delete response.usuarios_asignados;
+    const expected = { ...role, usuarios_asignados: typeof count === "number" && Number.isInteger(count) && count >= 0 ? count : 0 };
+    vi.spyOn(httpClient, "getWithMeta").mockResolvedValue({ data: [response], headers: new Headers({ "X-Total-Count": "1" }) });
+    const post = vi.spyOn(httpClient, "post").mockResolvedValue(response);
+    const patch = vi.spyOn(httpClient, "patch").mockResolvedValue(response);
+    vi.spyOn(httpClient, "put").mockResolvedValue(response);
+    expect(await listRoles({ q: "", limit: 10, offset: 0, signal: new AbortController().signal })).toEqual({ items: [expected], total: 1 });
+    expect(await createRole({ codigo: "VENTAS", nombre: "Ventas", descripcion: "" })).toEqual(expected);
+    expect(await updateRole(role, { nombre: "Nueva", descripcion: "", estado: "activo" })).toEqual(expected);
+    expect(await assignPermission("r1", "p1")).toEqual(expected);
+    expect(post).toHaveBeenCalledExactlyOnceWith("/roles", { body: { codigo: "VENTAS", nombre: "Ventas" } });
+    expect(patch).toHaveBeenCalledExactlyOnceWith("/roles/r1", { body: { nombre: "Nueva" } });
+  });
   it("uses paginated query parameters and total header, forwarding cancellation", async () => {
     const get = vi.spyOn(httpClient, "getWithMeta").mockResolvedValue({ data: [role], headers: new Headers({ "X-Total-Count": "61" }) });
     const signal = new AbortController().signal;
