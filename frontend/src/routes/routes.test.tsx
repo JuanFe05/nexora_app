@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ToastProvider } from "@/components/shared/toast/toast-provider";
 import "@testing-library/jest-dom/vitest";
 import { Suspense } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -21,7 +22,7 @@ beforeEach(() => { auth.status = "authenticated"; auth.permissions = []; });
 
 function mount(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
-  render(<HelmetProvider><Suspense fallback="Cargando"><RouterProvider router={router} /></Suspense></HelmetProvider>);
+  render(<HelmetProvider><ToastProvider><Suspense fallback="Cargando"><RouterProvider router={router} /></Suspense></ToastProvider></HelmetProvider>);
   return router;
 }
 

@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import { FormDialog } from "@/components/shared/form-dialog";
-import { InlineAlert } from "@/components/shared/inline-alert";
+import { useToast } from "@/components/shared/toast/use-toast";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { createPermission, permissionErrorMessage, updatePermission } from "../api/permissions-api";
@@ -16,7 +16,7 @@ type Props = {
 export function PermissionFormDialog({ permission, onClose, onSaved }: Props) {
   const [values, setValues] = useState(() => permissionValues(permission));
   const [errors, setErrors] = useState<PermissionErrors>({});
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -26,7 +26,6 @@ export function PermissionFormDialog({ permission, onClose, onSaved }: Props) {
     if (submitting.current) return;
     const nextErrors = validatePermission(values, permission);
     setErrors(nextErrors);
-    setError(null);
     const firstInvalid = permissionFields.find(field => nextErrors[field.name]);
     if (firstInvalid) {
       (formRef.current?.elements.namedItem(firstInvalid.name) as HTMLInputElement | null)?.focus();
@@ -43,7 +42,7 @@ export function PermissionFormDialog({ permission, onClose, onSaved }: Props) {
       else await createPermission(values);
       onSaved(permission ? "Permiso actualizado correctamente." : "Permiso creado correctamente.", true);
     } catch (cause: unknown) {
-      setError(permissionErrorMessage(cause));
+      toast.error(permissionErrorMessage(cause));
     } finally {
       submitting.current = false;
       setPending(false);
@@ -55,7 +54,6 @@ export function PermissionFormDialog({ permission, onClose, onSaved }: Props) {
       description={permission ? "Actualiza los datos del permiso. El código no se puede modificar." : "Agrega un permiso al catálogo. Los campos con * son obligatorios."}
       formId="permission-form" pending={pending}>
       <form ref={formRef} id="permission-form" noValidate onSubmit={submit} className="space-y-5 py-4">
-        {error && <InlineAlert variant="error">{error}</InlineAlert>}
         {permissionFields.map(field => {
           const invalid = errors[field.name];
           const id = `permission-${field.name}`;

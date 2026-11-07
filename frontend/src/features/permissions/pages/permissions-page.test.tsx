@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ToastProvider } from "@/components/shared/toast/toast-provider";
 import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -21,7 +22,7 @@ beforeEach(() => {
   vi.mocked(api.deletePermission).mockResolvedValue(undefined);
 });
 afterEach(() => { cleanup(); vi.resetAllMocks(); vi.useRealTimers(); });
-async function loaded() { render(<PermissionsPage />); await screen.findByRole("cell", { name: permission.codigo }); }
+async function loaded() { render(<ToastProvider><PermissionsPage /></ToastProvider>); await screen.findByRole("cell", { name: permission.codigo }); }
 async function createForm() {
   await userEvent.click(screen.getByRole("button", { name: "Nuevo permiso" }));
   fireEvent.change(screen.getByLabelText(/^Código/), { target: { value: "identity.users.view" } });
@@ -154,7 +155,7 @@ describe("Permisos", () => {
   });
   it("debounces search for 300ms", async () => {
     vi.useFakeTimers();
-    render(<PermissionsPage />);
+    render(<ToastProvider><PermissionsPage /></ToastProvider>);
     await act(async () => {});
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "identity" } });
     await act(async () => { vi.advanceTimersByTime(299); });
@@ -230,19 +231,20 @@ describe("Permisos", () => {
     await loaded();
     await userEvent.click(screen.getByRole("button", { name: "Eliminar permiso Ver usuarios" }));
     await userEvent.click(screen.getByRole("button", { name: "Eliminar" }));
-    expect(await within(screen.getByRole("alertdialog")).findByRole("alert")).toHaveTextContent(message);
+    expect(await within(screen.getByRole("region", { name: "Notificaciones" })).findByRole("alert")).toHaveTextContent(message);
+    expect(screen.getByRole("alertdialog")).not.toHaveTextContent(message);
     expect(api.listPermissions).toHaveBeenCalledTimes(1);
   });
   it("shows empty catalog and search-empty states", async () => {
     vi.mocked(api.listPermissions).mockResolvedValue({ items: [], total: 0 });
-    render(<PermissionsPage />);
+    render(<ToastProvider><PermissionsPage /></ToastProvider>);
     expect(await screen.findByText("No hay permisos")).toBeVisible();
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "nadie" } });
     expect(await screen.findByText("No se encontraron resultados")).toBeVisible();
   });
   it("shows safe load errors and supports retry", async () => {
     vi.mocked(api.listPermissions).mockRejectedValueOnce(new ApiError(403, "Forbidden", null));
-    render(<PermissionsPage />);
+    render(<ToastProvider><PermissionsPage /></ToastProvider>);
     expect(await screen.findByRole("alert")).toHaveTextContent("Forbidden");
     await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(await screen.findByRole("cell", { name: permission.codigo })).toBeVisible();

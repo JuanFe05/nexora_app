@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { FormDialog } from "@/components/shared/form-dialog";
 import { InlineAlert } from "@/components/shared/inline-alert";
+import { useToast } from "@/components/shared/toast/use-toast";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,8 @@ export function RoleDrawer({ role, onClose, onReload, onSuccess }: Props) {
   const [revision, setRevision] = useState(0);
   const form = useRef<HTMLFormElement>(null);
   const mutation = useRoleSave(role, { create: canCreate, update: canUpdate, assignPermissions: canAssign && canViewCatalog }, onReload, onSuccess);
+  const toast = useToast();
+  useEffect(() => { if (mutation.error) toast.error(mutation.error); }, [mutation.error, toast]);
   const administrator = mutation.savedRole?.codigo === ADMINISTRATOR_CODE;
   const canEditFields = mutation.savedRole ? canUpdate : canCreate;
   const canEditPermissions = canAssign && canViewCatalog && !administrator;
@@ -67,7 +70,6 @@ export function RoleDrawer({ role, onClose, onReload, onSuccess }: Props) {
   }
   return <FormDialog open onOpenChange={open => { if (!open && !mutation.pending) onClose(); }} title={role ? "Editar rol" : "Nuevo rol"} description="Administra los datos del rol y sus permisos." formId="role-form" submitLabel={readOnly ? "Cerrar" : "Guardar"} pending={mutation.pending}>
     <form id="role-form" ref={form} onSubmit={submit} noValidate className="space-y-5 py-4">
-      {mutation.error && <InlineAlert variant="error">{mutation.error}</InlineAlert>}
       <fieldset disabled={mutation.pending} className="space-y-5">
         {([['codigo', 'Código'], ['nombre', 'Nombre'], ['descripcion', 'Descripción']] as const).map(([field, label]) => <Field key={field} controlId={`role-${field}`} data-invalid={!!errors[field]}>
           <FieldLabel>{label}</FieldLabel>

@@ -1,7 +1,7 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { FormDialog } from "@/components/shared/form-dialog";
 import { useUserPermissions } from "../hooks/use-user-permissions";
-import { InlineAlert } from "@/components/shared/inline-alert";
+import { useToast } from "@/components/shared/toast/use-toast";
 import { useRoleOptions } from "../hooks/use-role-options";
 import { useUserSave } from "../hooks/use-user-save";
 import { userValues, validateUser } from "../hooks/user-validation";
@@ -17,7 +17,7 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
   const [values, setValues] = useState(() => userValues(user));
   const [selected, setSelected] = useState(user?.roles ?? []);
   const [errors, setErrors] = useState<UserFieldErrors>({});
-  const [message, setMessage] = useState<string | null>(null);
+  const toast = useToast();
   const permissions = useUserPermissions();
   const { save, pending, createdUser } = useUserSave(user, permissions);
   const personalEditable = user ? permissions.update : permissions.create && !createdUser;
@@ -42,15 +42,14 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
       }
     }
     setErrors(nextErrors);
-    setMessage(null);
     if (Object.keys(nextErrors).length) { focusError(nextErrors); return; }
-    if (!catalog.ready) { setMessage("Carga el catálogo completo de roles antes de guardar."); return; }
+    if (!catalog.ready) { toast.error("Carga el catálogo completo de roles antes de guardar."); return; }
     const result = await save(submitted, selected, catalog.items);
     if (password) password.value = "";
     if (result.ok) onSaved();
     else {
       setErrors(result.fields);
-      setMessage(result.message);
+      toast.error(result.message);
       focusError(result.fields);
       onFailed();
     }
@@ -58,7 +57,6 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
 
   return <FormDialog open onOpenChange={open => { if (!open) onClose(); }} title={user ? `Editar usuario: ${user.nombre_usuario}` : "Nuevo usuario"} description={user ? "Edita los datos personales, el estado y los roles. Los cambios se guardan por pasos; no se cambia la contraseña." : "Los campos con * son obligatorios."} formId={formId} pending={pending} submitLabel={canSave ? "Guardar" : "Cerrar"}>
     <form id={formId} ref={formRef} onSubmit={event => { void submit(event); }} noValidate className="space-y-5 py-4">
-      {message && <InlineAlert variant="error">{message}</InlineAlert>}
       <fieldset disabled={pending} className="space-y-5">
         <UserFields values={values} errors={errors} editing={!!user} personalEditable={personalEditable} statusEditable={permissions.deactivate} onChange={(name, value) => {
           setValues(current => ({ ...current, [name]: value }));

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ToastProvider } from "@/components/shared/toast/toast-provider";
 import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -31,7 +32,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 async function openEdit() {
-  render(<UsersPage />);
+  render(<ToastProvider><UsersPage /></ToastProvider>);
   await userEvent.click(await screen.findByRole("button", { name: "Editar ana" }));
   return screen.findByRole("checkbox", { name: /Facturación/ });
 }
@@ -43,7 +44,7 @@ async function fillCreate() {
 }
 describe("Usuarios", () => {
   it("renders real rows, role/status badges, full name and named icon actions", async () => {
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     expect(await screen.findByRole("button", { name: "Editar ana" })).toBeVisible();
     expect(screen.getAllByRole("heading", { name: "Usuarios" })).toHaveLength(1);
     const table = screen.getByRole("table", { name: "Usuarios" });
@@ -55,7 +56,7 @@ describe("Usuarios", () => {
   });
   it("debounces search and forwards server pagination and page size", async () => {
     vi.useFakeTimers();
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await act(async () => {});
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "ana" } });
     await act(async () => { vi.advanceTimersByTime(299); });
@@ -70,7 +71,7 @@ describe("Usuarios", () => {
     expect(api.listUsers).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 25, offset: 0, q: "ana" }));
   });
   it("validates fields accessibly and focuses the first invalid field without a request", async () => {
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
     expect(screen.getByLabelText(/^Nombre de usuario/)).toHaveAttribute("aria-invalid", "true");
@@ -79,17 +80,17 @@ describe("Usuarios", () => {
     expect(api.createUser).not.toHaveBeenCalled();
   });
   it("creates, closes and reloads with a status message", async () => {
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await fillCreate();
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
     await waitFor(() => expect(api.createUser).toHaveBeenCalledWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "Nueva", primer_apellido: "Sol", contrasena: "123456789012" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(screen.getByText("Usuario creado correctamente.")).toHaveAttribute("role", "status");
+    expect(within(screen.getByRole("region", { name: "Notificaciones" })).getByText("Usuario creado correctamente.").closest("[data-toast]")).toHaveAttribute("role", "status");
     expect(api.listUsers).toHaveBeenCalledTimes(2);
   });
   it("shows backend duplicate detail and clears the password on create failure", async () => {
     vi.mocked(api.createUser).mockRejectedValue(new ApiError(409, "El nombre de usuario o el correo ya estan registrados", null));
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await fillCreate();
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("El nombre de usuario o el correo ya estan registrados");
@@ -135,7 +136,7 @@ describe("Usuarios", () => {
   });
   it("shows 422 field messages without echoing passwords", async () => {
     vi.mocked(api.createUser).mockRejectedValue(new ApiError(422, "raw secret", { detail: [{ loc: ["body", "correo"], msg: "raw secret" }] }));
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await fillCreate();
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
     expect(await screen.findByText("Revisa este campo.")).toBeVisible();
@@ -144,7 +145,7 @@ describe("Usuarios", () => {
   });
   it("requires a complete role catalog before editing and offers retry", async () => {
     vi.mocked(loadRoleOptions).mockRejectedValueOnce(new ApiError(403, "No tienes permisos para consultar roles.", null));
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(await screen.findByRole("button", { name: "Editar ana" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permisos");
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
@@ -154,7 +155,7 @@ describe("Usuarios", () => {
   });
   it("cancel never deletes; confirm shows last-admin conflict and keeps the dialog open", async () => {
     vi.mocked(api.deleteUser).mockRejectedValue(new ApiError(409, "No se puede dejar al sistema sin un administrador activo", null));
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(await screen.findByRole("button", { name: "Eliminar ana" }));
     expect(screen.getByRole("alertdialog")).toHaveTextContent("ana");
     await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
@@ -167,7 +168,7 @@ describe("Usuarios", () => {
   });
   it("deletes and clamps a now-empty last page", async () => {
     vi.mocked(api.listUsers).mockResolvedValue({ items: [ana], total: 11 });
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await screen.findByRole("button", { name: "Eliminar ana" });
     await userEvent.click(screen.getByRole("button", { name: "Página siguiente" }));
     await userEvent.click(await screen.findByRole("button", { name: "Eliminar ana" }));
@@ -175,11 +176,11 @@ describe("Usuarios", () => {
     await userEvent.click(screen.getByRole("button", { name: "Eliminar" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     await waitFor(() => expect(api.listUsers).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 0 })));
-    expect(screen.getByText("Usuario eliminado correctamente.")).toHaveAttribute("role", "status");
+    expect(within(screen.getByRole("region", { name: "Notificaciones" })).getByText("Usuario eliminado correctamente.").closest("[data-toast]")).toHaveAttribute("role", "status");
   });
   it("shows empty state and server error with retry through DataTable", async () => {
     vi.mocked(api.listUsers).mockRejectedValueOnce(new ApiError(403, "No tienes permisos para consultar usuarios.", null)).mockResolvedValue({ items: [], total: 0 });
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permisos");
     await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(await screen.findByText("No hay usuarios")).toBeVisible();

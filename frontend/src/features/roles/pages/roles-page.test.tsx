@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ToastProvider } from "@/components/shared/toast/toast-provider";
 import "@testing-library/jest-dom/vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -36,7 +37,7 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.resetAllMocks(); vi.useRealTimers(); });
 async function openEdit() {
-  render(<RolesPage />);
+  render(<ToastProvider><RolesPage /></ToastProvider>);
   await userEvent.click(await screen.findByRole("button", { name: "Editar Ventas" }));
   return screen.findByRole("dialog", { name: "Editar rol" });
 }
@@ -53,7 +54,7 @@ describe("granular permissions and FormDialog", () => {
     ["all", Object.values(P), true, true, true],
   ] as const)("shows independent actions: %s", async (_name, codes, create, edit, remove) => {
     auth.codes = new Set([P.rolesView, ...codes]);
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     await screen.findByText("VENTAS");
     expect(!!screen.queryByRole("button", { name: "Nuevo rol" })).toBe(create);
     expect(!!screen.queryByRole("button", { name: "Editar Ventas" })).toBe(edit);
@@ -112,7 +113,7 @@ describe("granular permissions and FormDialog", () => {
     ["all", Object.values(P), true],
   ] as const)("gates creation permission selection: %s", async (_name, codes, selectable) => {
     auth.codes = new Set([P.rolesView, ...codes]);
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
     change("Código", "VENTAS"); change("Nombre", "Ventas");
     if (selectable) await userEvent.click(await screen.findByRole("checkbox", { name: "Ver caja" }));
@@ -145,7 +146,7 @@ describe("granular permissions and FormDialog", () => {
 
   it("allows delete without create, update or assignment and sends only the selected id", async () => {
     auth.codes = new Set([P.rolesView, P.rolesDelete]);
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(await screen.findByRole("button", { name: "Eliminar Ventas" }));
     await userEvent.click(screen.getByRole("button", { name: "Eliminar" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
@@ -170,7 +171,7 @@ describe("granular permissions and FormDialog", () => {
 
 describe("Roles page", () => {
   it("lists real rows with count/summary, pages and page size from the shared query", async () => {
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     expect(await screen.findByText("VENTAS")).toBeVisible();
     expect(screen.getByRole("table", { name: "Roles" })).toBeVisible();
     for (const header of ["Código", "Nombre", "Descripción", "Estado", "Permisos", "Acciones"]) expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
@@ -184,7 +185,7 @@ describe("Roles page", () => {
   });
   it("debounces server search by 300 ms", async () => {
     vi.useFakeTimers();
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     await act(async () => {});
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "venta" } });
     await act(async () => { vi.advanceTimersByTime(299); });
@@ -193,7 +194,7 @@ describe("Roles page", () => {
     expect(api.listRoles).toHaveBeenLastCalledWith(expect.objectContaining({ q: "venta", offset: 0 }));
   });
   it("validates fields in Spanish, marks invalid and focuses first; no API writes", async () => {
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
     expect(screen.getByLabelText("Código", { exact: true })).toHaveAttribute("aria-invalid", "true");
@@ -203,7 +204,7 @@ describe("Roles page", () => {
     expect(api.createRole).not.toHaveBeenCalled();
   });
   it("creates a role and assigns selected permissions after creation", async () => {
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
     change("Código", "VENTAS"); change("Nombre", "Ventas");
     await userEvent.click(await screen.findByRole("checkbox", { name: "Ver caja" }));
@@ -216,7 +217,7 @@ describe("Roles page", () => {
   });
   it("keeps duplicate 409 message in dialog without changing permissions", async () => {
     vi.mocked(api.createRole).mockRejectedValue(new ApiError(409, "Ya existe un rol con ese código", {}));
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
     change("Código", "VENTAS"); change("Nombre", "Ventas");
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
@@ -267,7 +268,7 @@ describe("Roles page", () => {
   });
   it("retains a created role after assignment failure and never creates it twice on retry", async () => {
     vi.mocked(api.assignPermission).mockRejectedValueOnce(new ApiError(403, "Forbidden", {})).mockResolvedValue(role);
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
     change("Código", "VENTAS"); change("Nombre", "Ventas");
     await userEvent.click(await screen.findByRole("checkbox", { name: "Ver caja" }));
@@ -282,7 +283,7 @@ describe("Roles page", () => {
   });
   it("protects all system role deletions and locks ADMINISTRADOR status/permissions", async () => {
     vi.mocked(api.listRoles).mockResolvedValue({ items: ["ADMINISTRADOR", "ESTADISTICA", "FACTURACION"].map((codigo, i) => ({ ...role, id: String(i), codigo, nombre: codigo })), total: 3 });
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     await screen.findByRole("button", { name: "Editar ADMINISTRADOR" });
     for (const code of ["ADMINISTRADOR", "ESTADISTICA", "FACTURACION"]) expect(screen.queryByRole("button", { name: `Eliminar ${code}` })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Editar ADMINISTRADOR" }));
@@ -297,7 +298,7 @@ describe("Roles page", () => {
   });
   it("delete cancel does not mutate; 409 stays visible and retry succeeds", async () => {
     vi.mocked(api.deleteRole).mockRejectedValueOnce(new ApiError(409, "El rol tiene usuarios asignados", {})).mockResolvedValue(undefined);
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(await screen.findByRole("button", { name: "Eliminar Ventas" }));
     await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
@@ -313,7 +314,7 @@ describe("Roles page", () => {
   });
   it("shows server error with retry then the empty state", async () => {
     vi.mocked(api.listRoles).mockRejectedValueOnce(new ApiError(403, "Forbidden", {})).mockResolvedValue({ items: [], total: 0 });
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     expect(await screen.findByRole("alert")).toHaveTextContent("Forbidden");
     await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(await screen.findByText("No hay roles")).toBeVisible();
@@ -344,7 +345,7 @@ describe("Roles page", () => {
   });
   it("requires a complete catalog, retries loading and preserves unsaved input", async () => {
     vi.mocked(options.loadPermissionOptions).mockRejectedValueOnce(new ApiError(401, "expired", {})).mockResolvedValue(catalog);
-    render(<RolesPage />);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
     change("Código", "VENTAS"); change("Nombre", "Ventas");
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo cargar el catálogo de permisos. Sesión expirada.");

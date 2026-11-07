@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import type { AlertVariant } from "../inline-alert";
+import type { AlertVariant } from "../alert-styles";
 
 export type ToastOptions = {
   /** Título opcional sobre el mensaje. */

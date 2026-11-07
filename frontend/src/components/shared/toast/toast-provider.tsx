@@ -26,7 +26,7 @@ export function ToastProvider({ children, duration = DEFAULT_TOAST_DURATION }: {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <section aria-label="Notificaciones" className="pointer-events-none fixed inset-x-4 top-4 z-99999 sm:inset-x-auto sm:end-6 sm:top-6 sm:w-full sm:max-w-sm">
+      <section aria-label="Notificaciones" aria-live="polite" className="pointer-events-none fixed inset-x-4 top-4 z-99999 sm:inset-x-auto sm:end-6 sm:top-6 sm:w-full sm:max-w-sm">
         <ol className="flex flex-col gap-3">
           {toasts.map((toast) => <Toast key={toast.id} toast={toast} duration={duration} onDismiss={dismiss} />)}
         </ol>

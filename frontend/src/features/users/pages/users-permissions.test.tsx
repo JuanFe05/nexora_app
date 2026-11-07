@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ToastProvider } from "@/components/shared/toast/toast-provider";
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -44,7 +45,7 @@ const matrix = [
 describe("independent user permissions", () => {
   it.each(matrix)("$name: actions, field access and exact mutations", async ({ codes }) => {
     permissions(codes);
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await screen.findByText("Ana Sol");
     const has = (code: string) => codes.includes(code as typeof codes[number]);
     expect(!!screen.queryByRole("button", { name: "Nuevo usuario" })).toBe(has(P.usersCreate));
@@ -98,7 +99,7 @@ describe("independent user permissions", () => {
   });
   it.each([{ codes: [] }, { codes: [P.usersAssignRoles] }, { codes: [P.rolesView] }, { codes: [P.usersAssignRoles, P.rolesView] }])("create roles require both permissions: $codes", async ({ codes }) => {
     permissions([P.usersView, P.usersCreate, ...codes]);
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     const canRoles = codes.includes(P.usersAssignRoles) && codes.includes(P.rolesView);
     if (canRoles) await userEvent.click(await screen.findByRole("checkbox", { name: /Facturación/ }));
@@ -115,7 +116,7 @@ describe("independent user permissions", () => {
   });
   it("preserves roles returned by creation instead of revoking server defaults", async () => {
     vi.mocked(api.createUser).mockResolvedValue({ ...ana, roles: ["FACTURACION"] });
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     await screen.findByRole("checkbox", { name: /Facturación/ });
     for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "123456789012"]]) {
@@ -130,7 +131,7 @@ describe("independent user permissions", () => {
   it("delete alone confirms and deletes without implying other mutations", async () => {
     permissions([P.usersView, P.usersDelete]);
     vi.mocked(api.deleteUser).mockResolvedValue(undefined);
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(await screen.findByRole("button", { name: "Eliminar ana" }));
     expect(screen.getByRole("alertdialog")).toHaveTextContent("ana");
     await userEvent.click(screen.getByRole("button", { name: "Eliminar" }));
@@ -143,7 +144,7 @@ describe("independent user permissions", () => {
   it("retries role assignment after partial creation without creating twice or requiring the cleared password", async () => {
     vi.mocked(api.assignUserRole).mockRejectedValueOnce(new ApiError(403, "No puedes asignar este rol.", null)).mockResolvedValue(ana);
     permissions([P.usersView, P.usersCreate, P.usersAssignRoles, P.rolesView]);
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     await userEvent.click(await screen.findByRole("checkbox", { name: /Facturación/ }));
     for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "123456789012"]]) {
@@ -160,7 +161,7 @@ describe("independent user permissions", () => {
   });
   it("skips all mutations when nothing editable changed", async () => {
     permissions([P.usersView, P.usersUpdate]);
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(await screen.findByRole("button", { name: "Editar ana" }));
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -171,7 +172,7 @@ describe("independent user permissions", () => {
   it("shows backend 403 detail in the inline alert", async () => {
     permissions([P.usersView, P.usersUpdate]);
     vi.mocked(api.updateUser).mockRejectedValue(new ApiError(403, "No puedes modificar este usuario protegido.", null));
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(await screen.findByRole("button", { name: "Editar ana" }));
     fireEvent.change(screen.getByLabelText(/^Primer nombre/), { target: { value: "Luz" } });
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
@@ -182,7 +183,7 @@ describe("independent user permissions", () => {
 describe("user FormDialog", () => {
   it("keeps the long form and full role catalog in the constrained scrolling body", async () => {
     vi.mocked(loadRoleOptions).mockResolvedValue(Array.from({ length: 100 }, (_, i) => ({ id: String(i), codigo: `R${i}`, nombre: `Rol ${i}` })));
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(await screen.findByRole("button", { name: "Editar ana" }));
     const lastRole = await screen.findByRole("checkbox", { name: "Rol 99 (R99)" });
     const dialog = screen.getByRole("dialog");
@@ -192,7 +193,7 @@ describe("user FormDialog", () => {
     expect(dialog.querySelector(".overflow-y-auto")).not.toContainElement(screen.getByRole("button", { name: "Guardar" }));
   });
   it.each(["Escape", "Cancelar", "Cerrar"])("closes with %s without saving", async close => {
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveAttribute("data-slot", "dialog-content");
@@ -206,7 +207,7 @@ describe("user FormDialog", () => {
   it("blocks Escape, cancel and X during save", async () => {
     let resolve!: (value: User) => void;
     vi.mocked(api.updateUser).mockReturnValue(new Promise<User>(done => { resolve = done; }));
-    render(<UsersPage />);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(await screen.findByRole("button", { name: "Editar ana" }));
     await screen.findByRole("checkbox", { name: /Facturación/ });
     fireEvent.change(screen.getByLabelText(/^Primer nombre/), { target: { value: "Luz" } });

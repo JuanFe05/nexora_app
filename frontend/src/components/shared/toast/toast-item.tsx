@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { XIcon } from "@/icons";
 import { cn } from "@/utils";
-import { alertStyles } from "../inline-alert";
+import { alertStyles } from "../alert-styles";
 import type { ToastItem } from "./toast-context";
 
 export function Toast({ toast, duration, onDismiss }: { toast: ToastItem; duration: number; onDismiss: (id: number) => void }) {
