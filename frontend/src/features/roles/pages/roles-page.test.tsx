@@ -169,6 +169,107 @@ describe("granular permissions and FormDialog", () => {
   });
 });
 
+describe("role form presentation", () => {
+  it.each(["create", "edit"])("uses the same wider, responsive form and live description counter in %s", async mode => {
+    let dialog: HTMLElement;
+    if (mode === "edit") dialog = await openEdit();
+    else {
+      render(<ToastProvider><RolesPage /></ToastProvider>);
+      await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
+      dialog = await screen.findByRole("dialog", { name: "Nuevo rol" });
+    }
+    expect(dialog).toHaveClass("sm:max-w-3xl");
+    const codeField = screen.getByLabelText("Código", { exact: true }).closest('[data-slot="field"]')!;
+    const nameField = screen.getByLabelText("Nombre", { exact: true }).closest('[data-slot="field"]')!;
+    expect(codeField.parentElement).toBe(nameField.parentElement);
+    expect(codeField.parentElement).toHaveClass("grid", "grid-cols-1", "sm:grid-cols-2");
+    const description = screen.getByLabelText("Descripción", { exact: true });
+    expect(description.tagName).toBe("TEXTAREA");
+    expect(description).toHaveAttribute("maxlength", "255");
+    const counter = dialog.querySelector('#role-description-counter')!;
+    expect(counter).toHaveAttribute("aria-live", "polite");
+    expect(description).toHaveAttribute("aria-describedby", "role-description-counter");
+    expect(counter).toHaveTextContent(`${mode === "edit" ? 16 : 0}/255`);
+    change("Descripción", "  😀texto  ");
+    expect(counter).toHaveTextContent("6/255");
+    change("Descripción", "d".repeat(230));
+    expect(counter).toHaveClass("text-warning-600", "dark:text-warning-400");
+    change("Descripción", "d".repeat(255));
+    expect(counter).toHaveTextContent("255/255");
+    expect(counter).toHaveClass("text-red-500", "dark:text-red-400");
+    await userEvent.type(description, "x");
+    expect(description).toHaveValue("d".repeat(255));
+    expect(api.createRole).not.toHaveBeenCalled();
+    expect(api.updateRole).not.toHaveBeenCalled();
+  });
+
+  it.each(["create", "edit"])("validates an oversized description, focuses it and blocks all writes in %s", async mode => {
+    if (mode === "edit") await openEdit();
+    else {
+      render(<ToastProvider><RolesPage /></ToastProvider>);
+      await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
+      change("Código", "VENTAS"); change("Nombre", "Ventas");
+    }
+    await screen.findByRole("checkbox", { name: "Ver caja" });
+    change("Descripción", "😀".repeat(256));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    const description = screen.getByLabelText("Descripción", { exact: true });
+    expect(screen.getByText("La descripción debe tener entre 1 y 255 caracteres.")).toBeVisible();
+    expect(description).toHaveAttribute("aria-invalid", "true");
+    expect(description).toHaveAttribute("aria-describedby", "role-description-counter role-descripcion-error");
+    expect(description).toHaveFocus();
+    expect(description).toHaveValue("😀".repeat(256));
+    expect(screen.getByText(`${mode === "edit" ? 1 : 0} de 2 seleccionados`)).toBeVisible();
+    expect(api.createRole).not.toHaveBeenCalled();
+    expect(api.updateRole).not.toHaveBeenCalled();
+    expect(api.assignPermission).not.toHaveBeenCalled();
+    expect(api.revokePermission).not.toHaveBeenCalled();
+  });
+
+  it("preserves multiline text and whitespace at the existing save boundary", async () => {
+    render(<ToastProvider><RolesPage /></ToastProvider>);
+    await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
+    change("Código", " VENTAS "); change("Nombre", " Ventas ");
+    change("Descripción", "  Primera línea\n😀 Segunda línea  ");
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Seleccionar todos de Ventas" }));
+    expect(screen.getByText("2 de 2 seleccionados")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(api.createRole).toHaveBeenCalledExactlyOnceWith({ codigo: " VENTAS ", nombre: " Ventas ", descripcion: "  Primera línea\n😀 Segunda línea  " });
+    expect(vi.mocked(api.assignPermission).mock.calls).toEqual([["r1", "p1"], ["r1", "p2"]]);
+    expect(api.updateRole).not.toHaveBeenCalled();
+    expect(api.revokePermission).not.toHaveBeenCalled();
+  });
+
+  it.each([3, 6, 7, 13, 25])("renders %i permissions in balanced columns and keeps select-all/counter/payload", async count => {
+    const permissions = Array.from({ length: count }, (_, index) => ({ id: `p${index}`, codigo: `modulo.p${index}`, nombre: `Permiso ${index}`, modulo: "Módulo", descripcion: null }));
+    vi.mocked(options.loadPermissionOptions).mockResolvedValue(permissions);
+    vi.mocked(api.listRoles).mockResolvedValue({ items: [{ ...role, permisos: [] }], total: 1 });
+    await openEdit();
+    const group = await screen.findByRole("group", { name: "Módulo" });
+    const grid = group.querySelector('[data-slot="permission-grid"]')!;
+    expect(grid).toHaveClass("grid", "grid-cols-1", "sm:grid-cols-[var(--permission-sm-columns)]", "lg:grid-cols-[var(--permission-lg-columns)]", "xl:grid-cols-[var(--permission-xl-columns)]");
+    const expectedColumns = Math.ceil(count / 6);
+    for (const [breakpoint, cap] of [["sm", 2], ["lg", 3], ["xl", 4]] as const) {
+      expect((grid as HTMLElement).style.getPropertyValue(`--permission-${breakpoint}-columns`)).toBe(`repeat(${Math.min(cap, expectedColumns)}, minmax(0, 1fr))`);
+    }
+    const columns = Array.from(grid.children);
+    expect(columns).toHaveLength(expectedColumns);
+    const sizes = columns.map(column => within(column as HTMLElement).getAllByRole("checkbox").length);
+    expect(Math.max(...sizes)).toBe(Math.ceil(count / expectedColumns));
+    expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
+    expect(columns.flatMap(column => within(column as HTMLElement).getAllByRole("checkbox").map(checkbox => checkbox.getAttribute("aria-label")))).toEqual(permissions.map(permission => permission.nombre));
+    expect(within(group).getByText(`0 de ${count} seleccionados`)).toBeVisible();
+    await userEvent.click(within(group).getByRole("checkbox", { name: "Seleccionar todos de Módulo" }));
+    expect(within(group).getByText(`${count} de ${count} seleccionados`)).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(vi.mocked(api.assignPermission).mock.calls).toEqual(permissions.map(permission => ["r1", permission.id]));
+    expect(api.updateRole).not.toHaveBeenCalled();
+    expect(api.revokePermission).not.toHaveBeenCalled();
+  });
+});
+
 describe("Roles page", () => {
   it("uses the main Users heading hierarchy without replacing the table heading", async () => {
     render(<ToastProvider><RolesPage /></ToastProvider>);

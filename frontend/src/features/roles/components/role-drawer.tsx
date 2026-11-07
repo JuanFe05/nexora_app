@@ -5,11 +5,12 @@ import { useToast } from "@/components/shared/toast/use-toast";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { PERMISSIONS } from "@/features/auth/permissions";
 import { useAuth } from "@/features/auth/use-auth";
 import { loadPermissionOptions } from "../api/permission-options";
 import { roleErrorMessage } from "../api/roles-api";
-import { ADMINISTRATOR_CODE } from "../constants";
+import { ADMINISTRATOR_CODE, ROLE_DESCRIPTION_MAX_LENGTH } from "../constants";
 import { validateRole } from "../hooks/role-validation";
 import { useRoleSave } from "../hooks/use-role-save";
 import type { PermissionOption, Role, RoleFieldErrors, RoleValues } from "../types";
@@ -68,15 +69,24 @@ export function RoleDrawer({ role, onClose, onReload, onSuccess }: Props) {
     setValues(current => ({ ...current, [field]: value }));
     setErrors(current => ({ ...current, [field]: undefined }));
   }
-  return <FormDialog open onOpenChange={open => { if (!open && !mutation.pending) onClose(); }} title={role ? "Editar rol" : "Nuevo rol"} description="Administra los datos del rol y sus permisos." formId="role-form" submitLabel={readOnly ? "Cerrar" : "Guardar"} pending={mutation.pending}>
-    <form id="role-form" ref={form} onSubmit={submit} noValidate className="space-y-5 py-4">
-      <fieldset disabled={mutation.pending} className="space-y-5">
-        {([['codigo', 'Código'], ['nombre', 'Nombre'], ['descripcion', 'Descripción']] as const).map(([field, label]) => <Field key={field} controlId={`role-${field}`} data-invalid={!!errors[field]}>
+  const descriptionLength = Array.from(values.descripcion.trim()).length;
+  return <FormDialog className="sm:max-w-3xl" open onOpenChange={open => { if (!open && !mutation.pending) onClose(); }} title={role ? "Editar rol" : "Nuevo rol"} description="Administra los datos del rol y sus permisos." formId="role-form" submitLabel={readOnly ? "Cerrar" : "Guardar"} pending={mutation.pending}>
+    <form id="role-form" ref={form} onSubmit={submit} noValidate className="space-y-6 py-4">
+      <fieldset disabled={mutation.pending} className="space-y-6">
+        <div className="grid grid-cols-1 items-start gap-5 sm:grid-cols-2">
+        {([['codigo', 'Código'], ['nombre', 'Nombre']] as const).map(([field, label]) => <Field key={field} controlId={`role-${field}`} data-invalid={!!errors[field]}>
           <FieldLabel>{label}</FieldLabel>
           <Input name={field} value={values[field]} readOnly={!canEditFields || (field === "codigo" && !!mutation.savedRole)} onChange={event => update(field, event.target.value)} aria-invalid={!!errors[field]} aria-describedby={errors[field] ? `role-${field}-error` : field === "codigo" ? "role-code-hint" : undefined} />
           {field === "codigo" && <p id="role-code-hint" className="text-xs text-gray-500 dark:text-gray-400">{mutation.savedRole ? "El código no se puede modificar." : "De 2 a 50 caracteres: mayúsculas, números o guion bajo."}</p>}
           {errors[field] && <p id={`role-${field}-error`} className="text-sm text-red-500 dark:text-red-400">{errors[field]}</p>}
         </Field>)}
+        </div>
+        <Field controlId="role-descripcion" data-invalid={!!errors.descripcion}>
+          <FieldLabel>Descripción</FieldLabel>
+          <Textarea name="descripcion" value={values.descripcion} maxLength={ROLE_DESCRIPTION_MAX_LENGTH} readOnly={!canEditFields} onChange={event => update("descripcion", event.target.value)} aria-invalid={!!errors.descripcion} aria-describedby={`role-description-counter${errors.descripcion ? " role-descripcion-error" : ""}`} />
+          <p id="role-description-counter" aria-live="polite" aria-atomic="true" className={`text-right text-xs tabular-nums ${descriptionLength >= ROLE_DESCRIPTION_MAX_LENGTH ? "text-red-500 dark:text-red-400" : descriptionLength >= Math.ceil(ROLE_DESCRIPTION_MAX_LENGTH * 0.9) ? "text-warning-600 dark:text-warning-400" : "text-gray-500 dark:text-gray-400"}`}>{descriptionLength}/{ROLE_DESCRIPTION_MAX_LENGTH}</p>
+          {errors.descripcion && <p id="role-descripcion-error" className="text-sm text-red-500 dark:text-red-400">{errors.descripcion}</p>}
+        </Field>
         {mutation.savedRole && <Field controlId="role-estado">
           <FieldLabel>Estado</FieldLabel>
           <select id="role-estado" name="estado" value={values.estado} disabled={!canUpdate || administrator || mutation.pending} onChange={event => update("estado", event.target.value)} aria-describedby={administrator ? "role-status-hint" : undefined} className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 focus:ring-2 focus:ring-brand-500 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">

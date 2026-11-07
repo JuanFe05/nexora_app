@@ -27,9 +27,22 @@ ninguna parte editable ofrece **Cerrar** en lugar de Guardar.
   `X-Total-Count` para paginar. El resumen de permisos muestra códigos, no identificadores.
 - **Nuevo rol** abre el Dialog with Form de TailAdmin. El código usa de 2 a 50 caracteres
   (`A-Z`, `0-9`, `_`) y empieza con una letra. Nombre: 1–100 caracteres; descripción opcional:
-  1–255. Se recortan espacios.
+  1–255. Se recortan espacios. Creación y edición comparten el ancho `sm:max-w-3xl`
+  del formulario de usuarios: Código y Nombre van en una fila desde `sm`, apilados en móvil.
+  Descripción usa un textarea redimensionable con `maxLength=255` y un contador accesible
+  `n/255`: advertencia desde 230, rojo desde 255. El contador y la validación cuentan puntos
+  de código Unicode después de recortar espacios, sin modificar el texto ni el payload.
+  El límite proviene de `Description` (`RoleCreate`/`RoleUpdate`) en
+  `backend/src/nexora/identity_access/presentation/http/v1/schemas/administration.py`.
+  El atributo HTML `maxLength` cuenta unidades UTF-16; la entrada nativa de caracteres
+  suplementarios (por ejemplo, emoji) puede alcanzar ese tope antes del contador Unicode.
 - **Editar** conserva el código como solo lectura. El catálogo se agrupa por módulo;
   cada grupo permite seleccionar todos sus permisos y muestra el número seleccionado.
+  Las columnas mantienen el orden de arriba abajo y un máximo de seis permisos, repartidos
+  equilibradamente (`columnas = ceil(n/6)`, `filas = ceil(n/columnas)`). Se muestra una columna
+  en móvil, hasta dos desde `sm`, tres desde `lg` y cuatro desde `xl`; las columnas adicionales
+  pasan a otra fila dentro del mismo módulo. Las tarjetas conservan nombre y código, con
+  estados de selección, hover, foco y deshabilitado en temas claro y oscuro.
 - **Guardar** envía solamente los campos modificados autorizados y después las
   asignaciones/revocaciones necesarias, si están autorizadas. Sin cambios no hay mutaciones.
   Una descripción existente no puede vaciarse: el backend rechaza tanto `null` como una
@@ -59,7 +72,7 @@ administrativas. La autorización visual reutiliza `useAuth().hasPermission` y l
 Se reutilizan DataTable/usePagedQuery/pagedResult, FormDialog, ConfirmDialog, InlineAlert,
 las primitivas visuales y la instancia HTTP compartida (incluido su refresh de sesión).
 
-Pruebas deterministas desde `frontend/`: `corepack pnpm test src/features/roles`.
+Pruebas deterministas desde `frontend/`: `npx vitest run`.
 La página se simula en el límite de sus módulos API y de useAuth; la matriz cubre permisos
 independientes, campos, catálogo, creación, edición, eliminación y mutaciones autorizadas.
 Las pruebas del adaptador comprueban los cuerpos PATCH mínimos y las llamadas HTTP.

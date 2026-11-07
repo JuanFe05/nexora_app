@@ -13,6 +13,13 @@ describe("role validation mirrors backend trimmed lengths and immutable code", (
   it.each(["", "   ", "n".repeat(101)])("rejects invalid name", nombre => {
     expect(validateRole({ ...values, nombre }).nombre).toBe("El nombre debe tener entre 1 y 100 caracteres.");
   });
+  it("keeps trimmed Unicode code-point boundaries without changing the supplied text", () => {
+    const description = `  ${"😀".repeat(255)}  `;
+    const supplied = { ...values, descripcion: description };
+    expect(validateRole(supplied)).toEqual({});
+    expect(supplied.descripcion).toBe(description);
+    expect(validateRole({ ...values, descripcion: ` ${"😀".repeat(256)} ` })).toEqual({ descripcion: "La descripción debe tener entre 1 y 255 caracteres." });
+  });
   it("rejects an oversized description and clearing a saved description (PATCH cannot send null or empty)", () => {
     expect(validateRole({ ...values, descripcion: "d".repeat(256) }).descripcion).toBe("La descripción debe tener entre 1 y 255 caracteres.");
     expect(validateRole(values, { descripcion: "Existente" }).descripcion).toBe("No se puede vaciar una descripción existente; escribe una nueva.");
