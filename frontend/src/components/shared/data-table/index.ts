@@ -1,4 +1,6 @@
 export { DataTable } from "./data-table";
+export { CardHeader } from "./card-header";
+export type { DataTableHeaderProps } from "./card-header";
 export type { DataTableProps, DataTableColumn } from "./data-table";
 export { RowActionButton } from "./row-action-button";
 export type { RowActionButtonProps } from "./row-action-button";

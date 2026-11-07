@@ -11,6 +11,43 @@ function props(overrides: Partial<DataTableProps<Row>> = {}): DataTableProps<Row
   return { title: "Usuarios", description: "Administración", columns: [{ id: "name", header: "Nombre", cell: row => row.name }], rows: [{ id: "1", name: "Ana" }], getRowId: row => row.id, loading: false, total: 95, page: 1, pageSize: 10, pageSizeOptions: [10, 25, 50], onPageChange: vi.fn(), onPageSizeChange: vi.fn(), search: "", onSearchChange: vi.fn(), searchPlaceholder: "Buscar usuarios", ...overrides };
 }
 describe("DataTable", () => {
+  it("adds an optional decorative icon without changing controls or title names", () => {
+    const input = props({ icon: <svg data-testid="header-icon"><title>Decoración</title></svg>, headerAction: <button>Nuevo</button> });
+    const { rerender } = render(<DataTable {...input} />);
+    const title = screen.getByRole("heading", { level: 2, name: "Usuarios" });
+    const icon = screen.getByTestId("header-icon");
+    expect(icon.parentElement).toHaveAttribute("aria-hidden", "true");
+    expect(icon.parentElement).toHaveClass("size-9", "rounded-lg", "bg-gray-100", "text-gray-700", "dark:bg-white/5", "dark:text-gray-300");
+    expect(title).toHaveClass("text-lg", "font-semibold", "text-gray-800", "dark:text-white/90");
+    expect(screen.getByText("Administración")).toBeVisible();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar en Usuarios" }), { target: { value: "ana" } });
+    expect(input.onSearchChange).toHaveBeenCalledWith("ana");
+    fireEvent.change(screen.getByRole("combobox", { name: "Registros por página" }), { target: { value: "25" } });
+    expect(input.onPageSizeChange).toHaveBeenCalledWith(25);
+    expect(screen.getByRole("button", { name: "Nuevo" })).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("Mostrando 1 a 10 de 95 registros");
+    rerender(<DataTable {...input} icon={undefined} />);
+    expect(screen.queryByTestId("header-icon")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Usuarios" })).toBeVisible();
+  });
+
+  it("uses brand hover for editing while retaining destructive hover and equal icon dimensions", () => {
+    const edit = vi.fn();
+    render(<><RowActionButton aria-label="Editar Ana" onClick={edit} /><RowActionButton variant="danger" aria-label="Eliminar Ana" /></>);
+    const editButton = screen.getByRole("button", { name: "Editar Ana" });
+    const deleteButton = screen.getByRole("button", { name: "Eliminar Ana" });
+    expect(editButton).toHaveClass("hover:bg-brand-50", "hover:text-brand-500", "dark:hover:bg-brand-500/15", "dark:hover:text-brand-400");
+    expect(deleteButton).toHaveClass("text-red-500", "hover:bg-red-50", "hover:text-red-600", "dark:text-red-400", "dark:hover:bg-red-500/10");
+    for (const button of [editButton, deleteButton]) {
+      expect(button).toHaveClass("size-9");
+      expect(button.querySelector("svg")).toHaveClass("size-5");
+      expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    }
+    expect(editButton.querySelector("path")?.getAttribute("d")).not.toBe(deleteButton.querySelector("path")?.getAttribute("d"));
+    fireEvent.click(editButton);
+    expect(edit).toHaveBeenCalledOnce();
+  });
+
   it("renders typed columns, rows, description, header slot and trailing labelled actions", () => {
     const edit = vi.fn();
     render(<DataTable {...props({ headerAction: <button>Nuevo</button>, rowActions: row => <RowActionButton aria-label={`Editar ${row.name}`} onClick={edit}>E</RowActionButton> })} />);

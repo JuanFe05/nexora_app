@@ -1,3 +1,4 @@
+/** Text-only semantic pill; `brand` uses TailAdmin tokens with the default compact cell padding. */
 import type { ComponentProps } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/utils";
@@ -7,6 +8,7 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
+        brand: "bg-brand-50 text-brand-500 dark:bg-brand-500/15 dark:text-brand-400",
         success: "bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-400",
         error: "bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-400",
         warning: "bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",

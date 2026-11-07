@@ -1,3 +1,4 @@
+/** Table controls and heading; optional `icon` adds a decorative neutral tile without changing control labels. */
 // Adaptado de TailAdmin Free (MIT), table-three/card-header.tsx.
 import { useId, type ReactNode } from "react";
 import { SearchIcon } from "@/icons/search";
@@ -6,6 +7,7 @@ import { ChevronDownIcon } from "@/icons";
 export type DataTableHeaderProps = {
   title: string;
   description?: string;
+  icon?: ReactNode;
   search: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;
@@ -15,13 +17,16 @@ export type DataTableHeaderProps = {
   headerAction?: ReactNode;
 };
 
-export function CardHeader({ title, description, search, onSearchChange, searchPlaceholder = "Buscar…", pageSize, pageSizeOptions, onPageSizeChange, headerAction }: DataTableHeaderProps) {
+export function CardHeader({ title, description, icon, search, onSearchChange, searchPlaceholder = "Buscar…", pageSize, pageSizeOptions, onPageSizeChange, headerAction }: DataTableHeaderProps) {
   const id = useId();
   return (
     <div className="flex flex-col gap-4 px-5 py-4 xl:flex-row xl:items-center xl:justify-between sm:px-6">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">{title}</h2>
-        {description && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{description}</p>}
+      <div className={icon != null ? "flex min-w-0 items-start gap-3" : undefined}>
+        {icon != null && <span aria-hidden="true" className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-700 dark:bg-white/5 dark:text-gray-300 [&_svg]:size-5">{icon}</span>}
+        <div className={icon != null ? "min-w-0 break-words" : undefined}>
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">{title}</h2>
+          {description && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{description}</p>}
+        </div>
       </div>
       <div className="flex w-full flex-wrap items-center gap-3 xl:w-auto">
         <div className="relative min-w-40 flex-1 sm:w-64 sm:flex-initial">

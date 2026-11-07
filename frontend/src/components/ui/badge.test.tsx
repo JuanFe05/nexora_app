@@ -7,6 +7,15 @@ import { Badge } from "./badge";
 afterEach(cleanup);
 
 describe("Badge", () => {
+  it("supports a text-only brand badge with TailAdmin tokens and default cell padding", () => {
+    render(<Badge variant="brand">ADMINISTRADOR</Badge>);
+    const badge = screen.getByText("ADMINISTRADOR");
+    expect(badge).toHaveAttribute("data-slot", "badge");
+    expect(badge).toHaveAttribute("data-variant", "brand");
+    expect(badge).toHaveClass("bg-brand-50", "text-brand-500", "dark:bg-brand-500/15", "dark:text-brand-400", "px-2.5", "py-0.5");
+    expect(badge.querySelector("svg")).toBeNull();
+  });
+
   it.each([
     ["success", "green"], ["error", "red"], ["warning", "amber"], ["info", "blue"],
   ] as const)("renders the %s semantic tint in both themes", (variant, color) => {
