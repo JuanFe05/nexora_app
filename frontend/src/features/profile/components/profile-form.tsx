@@ -1,4 +1,5 @@
-import { useState, type SubmitEvent } from "react";
+import { useEffect, useState, type RefObject, type SubmitEvent } from "react";
+import { FormDialog } from "@/components/shared/form-dialog";
 import { useToast } from "@/components/shared/toast/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,7 +20,46 @@ const autocomplete: Record<ProfileField, string> = {
   segundo_apellido: "off", numero_telefono: "tel", correo: "email",
 };
 
-export function ProfileForm({ profile, onUpdated }: { profile: Profile; onUpdated: (profile: Profile) => void }) {
+type Props = { profile: Profile; onUpdated: (profile: Profile) => void };
+
+/** Consultation card; mounting a fresh editor discards any cancelled draft. */
+export function ProfileForm({ profile, onUpdated }: Props) {
+  const [open, setOpen] = useState(false);
+  return <>
+    <Card className="min-w-0" aria-labelledby="personal-title">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h2 id="personal-title" className="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
+          <UserCircleIcon aria-hidden="true" className="size-6" />Información personal
+        </h2>
+        <Button variant="outline" onClick={() => setOpen(true)}>Editar</Button>
+      </div>
+      <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="min-w-0">
+          <dt className="mb-2 text-xs text-gray-500 dark:text-gray-400">Nombre de usuario</dt>
+          <dd className="text-sm font-medium break-words text-gray-800 dark:text-white/90">{profile.nombre_usuario}</dd>
+        </div>
+        {profileFields.map((field) => <div key={field} className="min-w-0">
+          <dt className="mb-2 text-xs text-gray-500 dark:text-gray-400">{labels[field]}</dt>
+          <dd className="text-sm font-medium break-words text-gray-800 dark:text-white/90">{profile[field] || "—"}</dd>
+        </div>)}
+      </dl>
+    </Card>
+    {open && <ProfileEditor profile={profile} onUpdated={onUpdated} onClose={() => setOpen(false)} />}
+  </>;
+}
+
+// FormDialog exposes pending, but not a separate unchanged/submit-disabled prop.
+// Use native form association to disable only its submit button, not cancellation.
+function ProfileSubmitState({ formRef, disabled }: { formRef: RefObject<HTMLFormElement | null>; disabled: boolean }) {
+  useEffect(() => {
+    for (const control of Array.from(formRef.current?.elements ?? [])) {
+      if (control instanceof HTMLButtonElement && control.type === "submit") control.disabled = disabled;
+    }
+  });
+  return null;
+}
+
+function ProfileEditor({ profile, onUpdated, onClose }: Props & { onClose: () => void }) {
   const [values, setValues] = useState(() => toProfileValues(profile));
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<FieldErrors<ProfileField>>({});
@@ -37,8 +77,9 @@ export function ProfileForm({ profile, onUpdated }: { profile: Profile; onUpdate
     setPending(true);
     try {
       const updated = await updateProfile(profile, values);
-      setValues(toProfileValues(updated)); onUpdated(updated);
+      onUpdated(updated);
       toast.success("Datos actualizados");
+      onClose();
     } catch (error) {
       const failure = profileFailure(error);
       setErrors(failure.fields);
@@ -48,11 +89,9 @@ export function ProfileForm({ profile, onUpdated }: { profile: Profile; onUpdate
   }
 
   return (
-    <Card className="min-w-0" aria-labelledby="personal-title">
-      <h2 id="personal-title" className="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
-        <UserCircleIcon aria-hidden="true" className="size-6" />Datos personales
-      </h2>
-      <form ref={formRef} noValidate onSubmit={submit} aria-labelledby="personal-title" aria-busy={pending} className="space-y-5">
+    <FormDialog open onOpenChange={(open) => { if (!open) onClose(); }} title="Editar información personal"
+      description="Modifica tus datos personales. El nombre de usuario no se puede modificar." formId="profile-form" pending={pending}>
+      <form id="profile-form" ref={formRef} noValidate onSubmit={submit} aria-label="Datos personales" aria-busy={pending} className="space-y-5">
         <Field>
           <FieldLabel htmlFor="profile-username">Nombre de usuario</FieldLabel>
           <Input id="profile-username" name="nombre_usuario" readOnly value={profile.nombre_usuario} autoComplete="username" aria-describedby="username-hint" />
@@ -75,8 +114,8 @@ export function ProfileForm({ profile, onUpdated }: { profile: Profile; onUpdate
             </Field>;
           })}
         </div>
-        <Button type="submit" disabled={pending || !changed} className="w-full sm:w-auto">{pending ? "Guardando…" : "Guardar cambios"}</Button>
+        <ProfileSubmitState formRef={formRef} disabled={pending || !changed} />
       </form>
-    </Card>
+    </FormDialog>
   );
 }

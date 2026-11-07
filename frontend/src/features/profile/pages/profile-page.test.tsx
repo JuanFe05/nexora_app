@@ -14,9 +14,12 @@ const profile = { id: "1", nombre_usuario: "ana", correo: "ana@example.test", pr
 const current = () => screen.getByLabelText(/^Contraseña actual/);
 const next = () => screen.getByLabelText(/^Nueva contraseña/);
 const confirmation = () => screen.getByLabelText(/^Confirmar contraseña/);
-const save = () => screen.getByRole("button", { name: "Guardar cambios" });
-const change = () => screen.getByRole("button", { name: "Actualizar contraseña" });
-async function loaded() { render(<ToastProvider><ProfilePage /></ToastProvider>); await screen.findByDisplayValue("ana"); }
+const save = () => screen.getByRole("button", { name: "Guardar" });
+const change = save;
+async function loaded() { render(<ToastProvider><ProfilePage /></ToastProvider>); await screen.findByRole("heading", { name: "Información personal" }); }
+async function editProfile(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("button", { name: "Editar" })); await screen.findByRole("dialog", { name: "Editar información personal" }); }
+async function editPassword(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("button", { name: "Cambiar contraseña" })); await screen.findByRole("dialog", { name: "Cambiar contraseña" }); }
+async function closed() { await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument()); expect(document.querySelectorAll("input")).toHaveLength(0); }
 async function fillPasswords(user: ReturnType<typeof userEvent.setup>, actual = "actual-privada", nueva = "nueva-privada-123", confirm = nueva) {
   await user.type(current(), actual); await user.type(next(), nueva); await user.type(confirmation(), confirm);
 }
@@ -24,18 +27,40 @@ beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.getProfile).mockResolvedVal
 afterEach(cleanup);
 
 describe("perfil propio", () => {
-  it("carga datos y roles de un usuario sin permiso administrador; usuario solo lectura y guardar inactivo", async () => {
-    await loaded();
+  it("carga datos y roles sin inputs; usuario solo lectura y guardar inactivo al editar", async () => {
+    const user = userEvent.setup(); await loaded();
     expect(screen.getByRole("heading", { name: "Perfil de usuario" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Ana Pérez" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Datos personales" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Cambiar contraseña" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Seguridad" })).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Roles asignados" })).toHaveTextContent("ESTADISTICA");
-    expect(screen.getByLabelText("Nombre de usuario")).toHaveAttribute("readonly");
     expect(screen.getByText("ESTADISTICA")).toBeInTheDocument();
     expect(screen.getByText("FACTURACION")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(document.querySelectorAll("input")).toHaveLength(0);
+    const card = screen.getByRole("heading", { name: "Información personal" }).closest('[data-slot="card"]') as HTMLElement;
+    for (const value of ["ana", "Ana", "Pérez", profile.correo]) expect(within(card).getByText(value)).toBeInTheDocument();
+    for (const label of ["Nombre de usuario", "Primer nombre", "Segundo nombre", "Primer apellido", "Segundo apellido", "Correo electrónico", "Teléfono"]) expect(within(card).getByText(label)).toBeInTheDocument();
+    expect(within(card).getAllByText("—")).toHaveLength(3);
+    await editProfile(user);
+    expect(screen.getByLabelText("Nombre de usuario")).toHaveAttribute("readonly");
     expect(screen.getByLabelText(/^Correo electrónico/)).toHaveValue(profile.correo);
     expect(save()).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeEnabled();
+  });
+  it("muestra guion para opcionales vacíos", async () => {
+    vi.mocked(api.getProfile).mockResolvedValue({ ...profile, segundo_nombre: "", segundo_apellido: "", numero_telefono: "" });
+    await loaded(); expect(screen.getAllByText("—")).toHaveLength(3);
+  });
+  it.each(["Cancelar", "Cerrar"])("%s descarta cambios y errores sin PATCH", async (button) => {
+    const user = userEvent.setup(); await loaded(); await editProfile(user);
+    await user.clear(screen.getByLabelText(/^Primer nombre/)); await user.click(save());
+    expect(screen.getByLabelText(/^Primer nombre/)).toHaveAccessibleDescription("Este campo es obligatorio.");
+    await user.click(screen.getByRole("button", { name: button })); await closed();
+    expect(screen.getByRole("heading", { name: "Ana Pérez" })).toBeInTheDocument();
+    await editProfile(user);
+    expect(screen.getByLabelText(/^Primer nombre/)).toHaveValue("Ana");
+    expect(screen.getByLabelText(/^Primer nombre/)).toHaveAttribute("aria-invalid", "false");
+    expect(save()).toBeDisabled(); expect(api.updateProfile).not.toHaveBeenCalled();
   });
   it("muestra carga y error con reintento", async () => {
     vi.mocked(api.getProfile).mockRejectedValueOnce(new ApiError(0, "red", null));
@@ -43,27 +68,33 @@ describe("perfil propio", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Cargando perfil");
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar");
     await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
-    expect(await screen.findByDisplayValue("ana")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Información personal" })).toBeInTheDocument();
     expect(api.getProfile).toHaveBeenCalledTimes(2);
   });
-  it("envía solo diferencias, bloquea durante PATCH y anuncia éxito", async () => {
+  it("envía solo diferencias, bloquea durante PATCH, cierra y sincroniza la tarjeta", async () => {
     let resolve!: (value: typeof profile) => void;
     vi.mocked(api.updateProfile).mockImplementation(() => new Promise((done) => { resolve = done; }));
-    const user = userEvent.setup(); await loaded();
+    const user = userEvent.setup(); await loaded(); await editProfile(user);
     const email = screen.getByLabelText(/^Correo electrónico/);
     await user.clear(email); await user.type(email, "nueva@example.test");
     expect(save()).toBeEnabled(); await user.click(save());
     expect(api.updateProfile).toHaveBeenCalledExactlyOnceWith(profile, expect.objectContaining({ correo: "nueva@example.test" }));
     expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Cerrar" })); await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(email).toBeDisabled();
     await act(async () => { resolve({ ...profile, correo: "nueva@example.test" }); });
     expect(await within(screen.getByRole("region", { name: "Notificaciones" })).findByRole("status")).toHaveTextContent("Datos actualizados");
+    await closed(); expect(screen.getByText("nueva@example.test")).toBeInTheDocument();
+    await editProfile(user);
     expect(screen.getByRole("form", { name: "Datos personales" })).not.toHaveTextContent("Datos actualizados");
-    expect(save()).toBeDisabled();
+    expect(screen.getByLabelText(/^Correo electrónico/)).toHaveValue("nueva@example.test"); expect(save()).toBeDisabled();
   });
   it.each([409, 422])("presenta error %s sin perder datos y permite corregir", async (status) => {
     const detail = status === 409 ? "El correo ya está en uso" : "Correo inválido";
     vi.mocked(api.updateProfile).mockRejectedValue(new ApiError(status, detail, status === 422 ? { detail: [{ loc: ["body", "correo"], msg: detail }] } : null));
-    const user = userEvent.setup(); await loaded();
+    const user = userEvent.setup(); await loaded(); await editProfile(user);
     const email = screen.getByLabelText(/^Correo electrónico/);
     await user.clear(email); await user.type(email, "otra@example.test"); await user.click(save());
     expect((await screen.findAllByText(detail)).length).toBeGreaterThan(0);
@@ -72,7 +103,7 @@ describe("perfil propio", () => {
   });
   it("valida campos requeridos, formato, opcionales vaciados y enfoca el primer inválido sin PATCH", async () => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...profile, segundo_nombre: "María" });
-    const user = userEvent.setup(); await loaded();
+    const user = userEvent.setup(); await loaded(); await editProfile(user);
     const first = screen.getByLabelText(/^Primer nombre/);
     await user.clear(first); await user.clear(screen.getByLabelText(/^Segundo nombre/));
     await user.clear(screen.getByLabelText(/^Correo electrónico/)); await user.type(screen.getByLabelText(/^Correo electrónico/), "invalido");
@@ -83,7 +114,7 @@ describe("perfil propio", () => {
     expect(api.updateProfile).not.toHaveBeenCalled();
   });
   it("una edición revertida no envía cambios", async () => {
-    const user = userEvent.setup(); await loaded();
+    const user = userEvent.setup(); await loaded(); await editProfile(user);
     const first = screen.getByLabelText(/^Primer nombre/);
     await user.type(first, "x"); expect(save()).toBeEnabled(); await user.keyboard("{Backspace}"); expect(save()).toBeDisabled();
     expect(api.updateProfile).not.toHaveBeenCalled();
@@ -92,7 +123,7 @@ describe("perfil propio", () => {
 
 describe("cambio de contraseña", () => {
   it("exige los tres campos con mensajes accesibles y foco", async () => {
-    const user = userEvent.setup(); await loaded(); await user.click(change());
+    const user = userEvent.setup(); await loaded(); await editPassword(user); await user.click(change());
     expect(current()).toHaveFocus();
     for (const field of [current(), next(), confirmation()]) {
       expect(field).toBeRequired(); expect(field).toHaveAttribute("aria-invalid", "true");
@@ -100,18 +131,26 @@ describe("cambio de contraseña", () => {
     }
     expect(api.changePassword).not.toHaveBeenCalled();
   });
+  it.each(["Cancelar", "Cerrar"])("%s descarta secretos y visibilidad", async (button) => {
+    const user = userEvent.setup(); await loaded(); await editPassword(user); await fillPasswords(user);
+    await user.click(screen.getByRole("button", { name: "Mostrar nueva contraseña" }));
+    await user.click(screen.getByRole("button", { name: button })); await closed();
+    await editPassword(user);
+    for (const field of [current(), next(), confirmation()]) { expect(field).toHaveValue(""); expect(field).toHaveAttribute("type", "password"); expect(field).toHaveAttribute("aria-invalid", "false"); }
+    expect(api.changePassword).not.toHaveBeenCalled(); expect(document.body.innerHTML).not.toContain("privada");
+  });
   it.each([
     ["actual-privada", "corta", "corta", "La contraseña nueva debe tener entre 12 y 128 caracteres."],
     ["actual-privada", "nueva-privada-123", "distinta", "Las contraseñas no coinciden."],
     ["misma-privada-123", "misma-privada-123", "misma-privada-123", "La contraseña nueva debe ser diferente de la actual."],
   ])("rechaza longitud, discrepancia o igualdad sin enviar", async (actual, nueva, confirm, message) => {
-    const user = userEvent.setup(); await loaded(); await fillPasswords(user, actual, nueva, confirm); await user.click(change());
+    const user = userEvent.setup(); await loaded(); await editPassword(user); await fillPasswords(user, actual, nueva, confirm); await user.click(change());
     expect(screen.getByText(message)).toHaveAttribute("role", "alert"); expect(api.changePassword).not.toHaveBeenCalled();
     expect(document.body.textContent).not.toContain(actual); expect(document.body.textContent).not.toContain(nueva);
   });
   it("400 marca solo actual, limpia secretos y nunca reproduce el detalle del error", async () => {
     vi.mocked(api.changePassword).mockRejectedValue(new ApiError(400, "actual-privada", null));
-    const user = userEvent.setup(); await loaded(); await fillPasswords(user); await user.click(change());
+    const user = userEvent.setup(); await loaded(); await editPassword(user); await fillPasswords(user); await user.click(change());
     await waitFor(() => expect(current()).toHaveAccessibleDescription("La contraseña actual es incorrecta."));
     expect(current()).toHaveFocus(); expect(current()).toHaveAttribute("aria-invalid", "true");
     expect(next()).toHaveAttribute("aria-invalid", "false"); expect(confirmation()).toHaveAttribute("aria-invalid", "false");
@@ -120,27 +159,32 @@ describe("cambio de contraseña", () => {
   });
   it("429 anuncia Retry-After sin marcar campos ni revelar secretos", async () => {
     vi.mocked(api.changePassword).mockRejectedValue(new ApiError(429, "nueva-privada-123", null, "42"));
-    const user = userEvent.setup(); await loaded(); await fillPasswords(user); await user.click(change());
+    const user = userEvent.setup(); await loaded(); await editPassword(user); await fillPasswords(user); await user.click(change());
     expect(await screen.findByRole("alert")).toHaveTextContent("Demasiados intentos. Intenta de nuevo en 42 segundos.");
-    expect(current()).toHaveAttribute("aria-invalid", "false");
+    for (const field of [current(), next(), confirmation()]) { expect(field).toHaveAttribute("aria-invalid", "false"); expect(field).toHaveValue(""); }
     expect(document.body.innerHTML).not.toContain("nueva-privada-123");
   });
-  it("204 bloquea envío concurrente, limpia las tres claves, oculta visibilidad y conserva sesión", async () => {
+  it("204 bloquea envío concurrente, limpia claves inmediatamente, cierra y conserva sesión", async () => {
     let resolve!: () => void;
     vi.mocked(api.changePassword).mockImplementation(() => new Promise<void>((done) => { resolve = done; }));
-    const user = userEvent.setup(); await loaded(); await fillPasswords(user);
-    await user.click(screen.getByRole("button", { name: "Mostrar nueva contraseña" }));
-    await user.click(change());
+    const user = userEvent.setup(); await loaded(); await editPassword(user); await fillPasswords(user);
+    await user.click(screen.getByRole("button", { name: "Mostrar nueva contraseña" })); await user.click(change());
     expect(screen.getByRole("button", { name: "Actualizando…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    for (const field of [current(), next(), confirmation()]) { expect(field).toHaveValue(""); expect(field).toHaveAttribute("type", "password"); }
+    await user.click(screen.getByRole("button", { name: "Actualizando…" }));
+    await user.click(screen.getByRole("button", { name: "Cerrar" })); await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(api.changePassword).toHaveBeenCalledExactlyOnceWith({ contrasena_actual: "actual-privada", contrasena_nueva: "nueva-privada-123" });
     await act(async () => { resolve(); });
     expect(await screen.findByRole("status")).toHaveTextContent("Contraseña actualizada. Se cerraron tus otras sesiones.");
+    await closed(); await editPassword(user);
     for (const field of [current(), next(), confirmation()]) { expect(field).toHaveValue(""); expect(field).toHaveAttribute("type", "password"); }
     expect(change()).toBeEnabled(); expect(api.getProfile).toHaveBeenCalledTimes(1);
     expect(document.body.innerHTML).not.toContain("privada");
   });
   it("cada clave alterna visibilidad con nombre y estado accesibles sin enviarla", async () => {
-    const user = userEvent.setup(); await loaded();
+    const user = userEvent.setup(); await loaded(); await editPassword(user);
     for (const [field, label] of [[current(), "contraseña actual"], [next(), "nueva contraseña"], [confirmation(), "confirmación de contraseña"]] as const) {
       const button = screen.getByRole("button", { name: `Mostrar ${label}` });
       expect(button).toHaveAttribute("aria-pressed", "false"); await user.click(button);
