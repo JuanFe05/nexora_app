@@ -49,6 +49,16 @@ describe("DataTable", () => {
     expect(screen.getByText("No se encontraron resultados")).toBeVisible();
     expect(screen.getByText("Prueba con otra búsqueda.")).toBeVisible();
   });
+  it("reserves value padding and centers a decorative chevron in both themes", () => {
+    render(<DataTable {...props()} />);
+    const select = screen.getByRole("combobox", { name: "Registros por página" });
+    expect(select).toHaveValue("10");
+    expect(select).toHaveClass("h-10", "appearance-none", "truncate", "pe-10", "ps-3", "dark:bg-gray-900", "dark:text-white/90");
+    expect(select.parentElement).toHaveClass("relative");
+    const icon = select.parentElement?.querySelector("svg");
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+    expect(icon).toHaveClass("pointer-events-none", "absolute", "top-1/2", "end-3", "-translate-y-1/2");
+  });
   it("labels search and page size and forwards changes", () => {
     const input = props();
     render(<DataTable {...input} />);

@@ -28,7 +28,8 @@ export default function PermissionsPage() {
   const toast = useToast();
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      <h1 className="text-title-lg font-semibold text-gray-800 dark:text-white/90">Administración de permisos</h1>
       <DataTable title="Permisos" description="Administración del catálogo de permisos" columns={columns} rows={list.items}
         getRowId={row => row.id} loading={list.loading}
         error={list.error ? { message: permissionErrorMessage(list.error), onRetry: list.reload } : null}

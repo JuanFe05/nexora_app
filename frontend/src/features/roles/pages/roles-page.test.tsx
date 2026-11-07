@@ -170,6 +170,12 @@ describe("granular permissions and FormDialog", () => {
 });
 
 describe("Roles page", () => {
+  it("uses the main Users heading hierarchy without replacing the table heading", async () => {
+    render(<ToastProvider><RolesPage /></ToastProvider>);
+    expect(screen.getByRole("heading", { level: 1, name: "Administración de roles" })).toHaveClass("text-title-lg", "font-semibold", "text-gray-800", "dark:text-white/90");
+    expect(screen.getByRole("heading", { level: 2, name: "Roles" })).toBeVisible();
+    await screen.findByText("VENTAS");
+  });
   it("lists real rows with count/summary, pages and page size from the shared query", async () => {
     render(<ToastProvider><RolesPage /></ToastProvider>);
     expect(await screen.findByText("VENTAS")).toBeVisible();

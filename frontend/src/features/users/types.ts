@@ -21,4 +21,4 @@ export type UserPatch = Partial<Omit<UserCreate, "contrasena"> & { estado: UserS
 export type RoleOption = { id: string; codigo: string; nombre: string };
 export type UserValues = Record<keyof UserCreate, string> & { estado: UserStatus };
 export type UserField = keyof UserValues;
-export type UserFieldErrors = Partial<Record<UserField, string>>;
+export type UserFieldErrors = Partial<Record<UserField | "confirmar_contrasena", string>>;

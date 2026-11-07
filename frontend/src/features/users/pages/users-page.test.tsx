@@ -38,11 +38,85 @@ async function openEdit() {
 }
 async function fillCreate() {
   await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
-  for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "Abc123!x"]]) {
+  for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "Abc123!x"], ["Confirmar contraseña", "Abc123!x"]]) {
     fireEvent.change(screen.getByLabelText(new RegExp(`^${label}`)), { target: { value } });
   }
 }
 describe("Usuarios", () => {
+  it("keeps the Nuevo usuario name with a decorative plus and groups fields", async () => {
+    render(<ToastProvider><UsersPage /></ToastProvider>);
+    const button = screen.getByRole("button", { name: "Nuevo usuario" });
+    expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    await fillCreate();
+    for (const section of ["Cuenta", "Datos personales", "Acceso", "Roles"]) expect(screen.getByRole("group", { name: section })).toBeVisible();
+    const confirmation = screen.getByLabelText(/^Confirmar contraseña/);
+    expect(confirmation).toHaveAttribute("type", "password");
+    expect(confirmation).toHaveAttribute("autocomplete", "new-password");
+    expect(confirmation).toBeRequired();
+    expect(confirmation).not.toHaveAttribute("value");
+    expect(document.body.innerHTML).not.toContain("Abc123!x");
+  });
+  it.each(["", "Abc123!y"])("rejects missing/mismatching confirmation (%s), describes the error and focuses it without mutations", async value => {
+    render(<ToastProvider><UsersPage /></ToastProvider>);
+    await fillCreate();
+    const confirmation = screen.getByLabelText(/^Confirmar contraseña/);
+    fireEvent.change(confirmation, { target: { value } });
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(confirmation).toHaveAccessibleDescription("Las contraseñas no coinciden.");
+    expect(confirmation).toHaveAttribute("aria-invalid", "true");
+    expect(confirmation).toHaveFocus();
+    expect(api.createUser).not.toHaveBeenCalled();
+    expect(api.assignUserRole).not.toHaveBeenCalled();
+    expect(api.listUsers).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText(/^Contraseña/)).toHaveValue("Abc123!x");
+  });
+  it("clears both secrets immediately on submission and assigns selected role ids only", async () => {
+    let resolve!: (value: User) => void;
+    vi.mocked(api.createUser).mockImplementation(() => new Promise<User>(done => { resolve = done; }));
+    render(<ToastProvider><UsersPage /></ToastProvider>);
+    await fillCreate();
+    const billing = await screen.findByRole("checkbox", { name: /Facturación/ });
+    const card = billing.closest("label");
+    expect(card).toHaveClass("has-focus-visible:ring-3");
+    await userEvent.click(billing);
+    expect(billing).toBeChecked();
+    expect(card).toHaveClass("border-brand-500", "bg-brand-50", "dark:bg-brand-500/10");
+    await userEvent.click(billing);
+    expect(billing).not.toBeChecked();
+    await userEvent.click(billing);
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(screen.getByLabelText(/^Contraseña/)).toHaveValue("");
+    expect(screen.getByLabelText(/^Confirmar contraseña/)).toHaveValue("");
+    expect(api.createUser).toHaveBeenCalledExactlyOnceWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "Nueva", primer_apellido: "Sol", contrasena: "Abc123!x" });
+    await act(async () => resolve(ana));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(api.assignUserRole).toHaveBeenCalledExactlyOnceWith("u", "billing");
+  });
+  it("resets both uncontrolled secrets and the live requirements", async () => {
+    render(<ToastProvider><UsersPage /></ToastProvider>);
+    await fillCreate();
+    const password = screen.getByLabelText(/^Contraseña/) as HTMLInputElement;
+    const confirmation = screen.getByLabelText(/^Confirmar contraseña/);
+    act(() => password.form?.reset());
+    expect(password).toHaveValue("");
+    expect(confirmation).toHaveValue("");
+    expect(within(screen.getByRole("list", { name: "Requisitos de contraseña" })).getAllByText("pendiente")).toHaveLength(5);
+    expect(api.createUser).not.toHaveBeenCalled();
+  });
+  it("selects role cards by keyboard and retains roles outside the catalog on edit", async () => {
+    vi.mocked(api.listUsers).mockResolvedValue({ items: [{ ...ana, roles: ["LEGACY"] }], total: 1 });
+    const billing = await openEdit();
+    expect(screen.getByText("Roles fuera del catálogo actual (se conservarán): LEGACY.")).toBeVisible();
+    billing.focus();
+    await userEvent.keyboard("[Space]");
+    expect(billing).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(api.assignUserRole).toHaveBeenCalledExactlyOnceWith("u", "billing");
+    expect(api.revokeUserRole).not.toHaveBeenCalled();
+    expect(api.updateUser).not.toHaveBeenCalled();
+    expect(api.createUser).not.toHaveBeenCalled();
+  });
   it("actualiza requisitos en creación sin serializar secretos y reinicia al cerrar", async () => {
     const user = userEvent.setup(); render(<ToastProvider><UsersPage /></ToastProvider>);
     await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
@@ -59,10 +133,12 @@ describe("Usuarios", () => {
     expect(within(list).getAllByText("pendiente")).toHaveLength(1);
     await user.clear(password);
     expect(within(list).getAllByText("pendiente")).toHaveLength(5);
+    await user.type(screen.getByLabelText(/^Confirmar contraseña/), "Abc123!x");
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     expect(within(screen.getByRole("list", { name: "Requisitos de contraseña" })).getAllByText("pendiente")).toHaveLength(5);
+    expect(screen.getByLabelText(/^Confirmar contraseña/)).toHaveValue("");
     expect(api.createUser).not.toHaveBeenCalled();
   });
   it("renders real rows, role/status badges, full name and named icon actions", async () => {
@@ -118,12 +194,14 @@ describe("Usuarios", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("El nombre de usuario o el correo ya estan registrados");
     expect(screen.getByRole("dialog")).toBeVisible();
     expect(screen.getByLabelText(/^Contraseña/)).toHaveValue("");
+    expect(screen.getByLabelText(/^Confirmar contraseña/)).toHaveValue("");
     expect(within(screen.getByRole("list", { name: "Requisitos de contraseña" })).getAllByText("pendiente")).toHaveLength(5);
   });
   it("sends one minimal PATCH followed by role diff calls", async () => {
     const billing = await openEdit();
     expect(screen.queryByRole("list", { name: "Requisitos de contraseña" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Contraseña/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Confirmar contraseña/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/^Primer nombre/), { target: { value: "Luz" } });
     await userEvent.click(billing);
     await userEvent.click(screen.getByRole("checkbox", { name: /^Administrador/ }));

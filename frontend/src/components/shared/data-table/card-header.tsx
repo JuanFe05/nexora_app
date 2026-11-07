@@ -1,6 +1,7 @@
 // Adaptado de TailAdmin Free (MIT), table-three/card-header.tsx.
 import { useId, type ReactNode } from "react";
 import { SearchIcon } from "@/icons/search";
+import { ChevronDownIcon } from "@/icons";
 
 export type DataTableHeaderProps = {
   title: string;
@@ -30,9 +31,12 @@ export function CardHeader({ title, description, search, onSearchChange, searchP
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
           <label htmlFor={`${id}-size`}>Mostrar <span className="sr-only">registros por página</span></label>
-          <select id={`${id}-size`} aria-label="Registros por página" value={pageSize} onChange={event => onPageSizeChange(Number(event.target.value))} className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
-            {pageSizeOptions.map(size => <option key={size} value={size}>{size}</option>)}
-          </select>
+          <div className="relative">
+            <select id={`${id}-size`} aria-label="Registros por página" value={pageSize} onChange={event => onPageSizeChange(Number(event.target.value))} className="h-10 min-w-20 appearance-none truncate rounded-lg border border-gray-300 bg-white bg-none ps-3 pe-10 text-sm text-gray-800 shadow-theme-xs outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
+              {pageSizeOptions.map(size => <option key={size} value={size}>{size}</option>)}
+            </select>
+            <ChevronDownIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 end-3 size-4 -translate-y-1/2 text-gray-500 dark:text-gray-400" />
+          </div>
         </div>
         {headerAction}
       </div>

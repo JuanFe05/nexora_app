@@ -2,6 +2,7 @@ import { useState } from "react";
 import { DataTable, RowActionButton, usePagedQuery } from "@/components/shared/data-table";
 import { useToast } from "@/components/shared/toast/use-toast";
 import { Button } from "@/components/ui/button";
+import { PlusIcon } from "@/icons";
 import { listUsers } from "../api/users-api";
 import { userError } from "../api/user-error";
 import { DeleteUserDialog } from "../components/delete-user-dialog";
@@ -24,7 +25,7 @@ export default function UsersPage() {
       loading={query.loading} error={query.error ? { message: userError(query.error).message, onRetry: query.reload } : null}
       total={query.total} page={query.page} pageSize={query.pageSize} pageSizeOptions={[10, 25, 50, 100]} onPageChange={query.setPage} onPageSizeChange={query.setPageSize}
       search={query.search} onSearchChange={query.setSearch} searchPlaceholder="Buscar usuarios"
-      headerAction={permissions.create ? <Button type="button" onClick={() => { setEditor({ user: null }); }}>Nuevo usuario</Button> : undefined}
+      headerAction={permissions.create ? <Button type="button" onClick={() => { setEditor({ user: null }); }}><PlusIcon aria-hidden="true" />Nuevo usuario</Button> : undefined}
       emptyState={{ title: "No hay usuarios", description: "Crea el primer usuario para comenzar." }}
       rowActions={canEdit || permissions.delete ? user => <>
         {canEdit && <RowActionButton aria-label={`Editar ${user.nombre_usuario}`} onClick={() => { setEditor({ user }); }} />}

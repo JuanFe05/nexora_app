@@ -20,16 +20,27 @@ Eliminar no concede consultar, crear, editar ni asignar roles.
 | Catálogo y asignación de roles | `identity.users.assign_roles` **y** `identity.roles.view` |
 
 - Buscar consulta el servidor tras 300 ms; paginación y tamaño usan `X-Total-Count`.
+- **Nuevo usuario** incluye el icono de suma decorativo; su nombre accesible no cambia.
 - Crear y editar usan **FormDialog** (TailAdmin Dialog with Form), no el panel lateral.
   El cuerpo del formulario tiene scroll dentro de una altura limitada a la pantalla;
   el encabezado y el pie permanecen fuera del área desplazable. Cancelar, Escape y X
   cierran sin guardar; no cierran mientras hay una mutación pendiente.
-- **Nuevo usuario** solicita usuario, correo, primer nombre, primer apellido y contraseña
+- El formulario agrupa **Cuenta**, **Datos personales**, **Acceso** y, cuando está autorizado,
+  **Roles**, con campos en una columna en móvil y dos desde `sm`. Estado sigue disponible
+  solo en edición; no se cambia el contrato de creación.
+- **Nuevo usuario** solicita usuario, correo, primer nombre, primer apellido, contraseña y
+  **Confirmar contraseña**. La confirmación es obligatoria, usa `autocomplete="new-password"`
+  y debe coincidir exactamente, sin recortar espacios. Si difiere, se muestra
+  «Las contraseñas no coinciden.» asociado al campo y se enfoca el primer error;
+  no se envía ninguna mutación. La confirmación nunca forma parte del payload de API.
+  La contraseña conserva su política
   (6–24 caracteres Unicode, sin recortar espacios, con mayúscula, minúscula, número y
   carácter especial de puntuación o símbolo). Los requisitos se actualizan en vivo con
   estados accesibles; React solo guarda los booleanos de cumplimiento. La contraseña
-  permanece en el control y en la petición de creación; se limpia al iniciar la petición
-  y nunca se muestra en errores. La política única está en `src/lib/password-policy.ts`;
+  permanece en el control y en la petición de creación. Ambos secretos son controles no
+  controlados, se leen con FormData y se limpian al iniciar la petición (también si falla),
+  al resetear y al cerrar/reabrir el diálogo; nunca se muestran en errores.
+  La política única está en `src/lib/password-policy.ts`;
   el backend valida definitivamente y mantiene Argon2id.
   Solo se ofrecen roles con ambos permisos de catálogo y asignación; se asignan después
   de crear. Si ese segundo paso falla, reintentar no crea otro usuario ni solicita otra contraseña.
@@ -40,8 +51,12 @@ Eliminar no concede consultar, crear, editar ni asignar roles.
 - Sin `users.assign_roles` no se muestra la sección de roles. En edición, con ese permiso
   pero sin `roles.view`, aparece una sección deshabilitada con una nota explicativa;
   no se consulta `/roles` ni se bloquea el guardado de otros campos autorizados.
-- El catálogo autorizado se carga completo en páginas de 100 desde un adaptador local;
-  un fallo bloquea el guardado y ofrece **Reintentar roles**. Códigos ausentes se conservan.
+- Los roles se presentan como tarjetas de checkbox en una cuadrícula responsive, con nombre
+  destacado y código secundario (el catálogo no incluye descripciones), borde/tinte de marca
+  al seleccionar y anillo de foco para teclado. Se conserva la selección por códigos y las
+  mutaciones por ids. El catálogo autorizado se carga completo en páginas de 100 desde un
+  adaptador local; un fallo bloquea el guardado y ofrece **Reintentar roles**. Códigos ausentes
+  se conservan; carga, error, vacío y avisos de permisos siguen disponibles.
 - Los campos opcionales existentes no pueden vaciarse: PATCH rechaza null y cadenas vacías.
   Correo sigue el contrato real de texto no vacío, hasta 255 caracteres.
 - El guardado **no es atómico**: ante un fallo el diálogo permanece abierto, indica el paso
@@ -65,7 +80,8 @@ InlineAlert y controles compartidos sin duplicarlos. No existe restablecimiento 
 Desde `frontend/`: `corepack pnpm test src/features/users`.
 Las pruebas de página simulan `useAuth` y los módulos de API, no la red. Cubren la matriz
 independiente de permisos, cuerpos mínimos, diferencias de roles, cierre/bloqueo del diálogo,
-validaciones y guardados parciales. Las de adaptadores comprueban el cliente HTTP compartido
+validaciones, confirmación sin filtración al payload, limpieza de secretos, secciones agrupadas,
+selección de tarjetas y guardados parciales. Las de adaptadores comprueban el cliente HTTP compartido
 y el catálogo paginado. Se verifica estructuralmente el scroll con un catálogo de 100 roles;
 se requiere comprobación visual en navegador para ambos temas y pantallas móviles:
 jsdom no demuestra apariencia, dimensiones reales ni conectividad.

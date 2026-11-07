@@ -31,6 +31,11 @@ async function createForm() {
 }
 
 describe("Permisos", () => {
+  it("uses the main Users heading hierarchy without replacing the table heading", async () => {
+    await loaded();
+    expect(screen.getByRole("heading", { level: 1, name: "Administración de permisos" })).toHaveClass("text-title-lg", "font-semibold", "text-gray-800", "dark:text-white/90");
+    expect(screen.getByRole("heading", { level: 2, name: "Permisos" })).toBeVisible();
+  });
   it.each([
     [false, false, false],
     [true, false, false],

@@ -48,7 +48,8 @@ export default function RolesPage() {
       query.reload();
     }
   }
-  return <div className="space-y-5">
+  return <div className="space-y-6">
+    <h1 className="text-title-lg font-semibold text-gray-800 dark:text-white/90">Administración de roles</h1>
     <DataTable title="Roles" description="Administración de roles y sus permisos" columns={columns} rows={query.items} getRowId={row => row.id} loading={query.loading} error={query.error ? { message: roleErrorMessage(query.error), onRetry: query.reload } : null} total={query.total} page={query.page} pageSize={query.pageSize} onPageChange={query.setPage} onPageSizeChange={query.setPageSize} search={query.search} onSearchChange={query.setSearch} searchPlaceholder="Buscar roles" headerAction={canCreate ? <Button onClick={() => openDrawer(null)}><PlusIcon aria-hidden="true" />Nuevo rol</Button> : undefined} emptyState={{ title: "No hay roles", description: "Crea el primer rol para comenzar." }} rowActions={row => <>
       {canEdit && <RowActionButton aria-label={`Editar ${row.nombre}`} onClick={() => openDrawer(row)} />}
       {canDelete && canDeleteRole(row.codigo) && <RowActionButton variant="danger" aria-label={`Eliminar ${row.nombre}`} onClick={() => { setDeleting(row); }} />}

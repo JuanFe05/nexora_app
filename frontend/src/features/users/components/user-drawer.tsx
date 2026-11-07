@@ -27,7 +27,7 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
   const catalog = useRoleOptions(permissions.editRoles);
 
   function focusError(nextErrors: UserFieldErrors) {
-    const first = Array.from(formRef.current?.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select") ?? []).find(input => nextErrors[input.name as keyof UserValues]);
+    const first = Array.from(formRef.current?.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input, select") ?? []).find(input => nextErrors[input.name as keyof UserFieldErrors]);
     first?.focus();
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -36,10 +36,14 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
     if (!canSave) { onClose(); return; }
     const form = event.currentTarget;
     const password = form.elements.namedItem("contrasena") as HTMLInputElement | null;
+    const confirmation = form.elements.namedItem("confirmar_contrasena") as HTMLInputElement | null;
     const data = new FormData(form);
     const secret = data.get("contrasena");
     const submitted = { ...values, contrasena: typeof secret === "string" ? secret : "" };
     const nextErrors = validateUser(submitted, user ?? createdUser);
+    if (!user && !createdUser && data.get("confirmar_contrasena") !== submitted.contrasena) {
+      nextErrors.confirmar_contrasena = "Las contraseñas no coinciden.";
+    }
     if (user) {
       for (const name of Object.keys(nextErrors) as (keyof UserValues)[]) {
         if (name === "estado" ? !permissions.deactivate : !permissions.update) delete nextErrors[name];
@@ -50,9 +54,11 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
     if (!catalog.ready) { toast.error("Carga el catálogo completo de roles antes de guardar."); return; }
     const request = save(submitted, selected, catalog.items);
     if (password) password.value = "";
+    if (confirmation) confirmation.value = "";
     setEvaluation(evaluatePasswordPolicy(""));
     submitted.contrasena = "";
     data.delete("contrasena");
+    data.delete("confirmar_contrasena");
     const result = await request;
     if (result.ok) onSaved();
     else {
@@ -69,7 +75,7 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
         <UserFields values={values} errors={errors} editing={!!user} personalEditable={personalEditable} statusEditable={permissions.deactivate} evaluation={evaluation} onPasswordChange={next => {
           setEvaluation(next);
           setErrors(current => ({ ...current, contrasena: undefined }));
-        }} onChange={(name, value) => {
+        }} onConfirmationChange={() => setErrors(current => ({ ...current, confirmar_contrasena: undefined }))} onChange={(name, value) => {
           setValues(current => ({ ...current, [name]: value }));
           setErrors(current => ({ ...current, [name]: undefined }));
         }} />
