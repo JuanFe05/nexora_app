@@ -13,10 +13,9 @@ function initials(profile: Profile) {
 /** Tarjeta de cabecera (equivalente a UserMetaCard de TailAdmin) con datos ya existentes del modelo; no agrega campos. */
 export function ProfileHeaderCard({ profile }: { profile: Profile }) {
   return (
-    <Card aria-labelledby="profile-name" className="relative min-w-0 overflow-hidden shadow-theme-sm">
-      <div aria-hidden="true" className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-brand-50 via-brand-50/50 to-transparent dark:from-brand-500/15 dark:via-brand-500/5" />
-      <div className="relative flex flex-col items-center gap-5 text-center sm:flex-row sm:text-start">
-        <div aria-hidden="true" className="flex size-24 shrink-0 items-center justify-center rounded-full border border-gray-200 ring-4 ring-white shadow-theme-xs dark:ring-gray-900 bg-brand-50 text-2xl font-semibold text-brand-700 dark:border-gray-800 dark:bg-brand-500/15 dark:text-brand-300">{initials(profile)}</div>
+    <Card aria-labelledby="profile-name" className="min-w-0 shadow-theme-sm">
+      <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-start">
+        <div aria-hidden="true" className="flex size-24 shrink-0 items-center justify-center rounded-full border border-gray-200 shadow-theme-xs bg-brand-50 text-2xl font-semibold text-brand-700 dark:border-gray-800 dark:bg-brand-500/15 dark:text-brand-300">{initials(profile)}</div>
         <div className="min-w-0 flex-1 space-y-3">
           <div>
             <h2 id="profile-name" className="text-2xl font-semibold break-words text-gray-800 dark:text-white/90">{fullName(profile)}</h2>
