@@ -43,6 +43,83 @@ async function fillCreate() {
   }
 }
 describe("Usuarios", () => {
+  it("uses a moderately wider responsive dialog and concise help", async () => {
+    render(<ToastProvider><UsersPage /></ToastProvider>);
+    await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
+    expect(screen.getByRole("dialog")).toHaveClass("sm:max-w-3xl", "max-w-[calc(100%-2rem)]");
+    expect(screen.getByLabelText(/^Contraseña/)).toHaveAccessibleDescription(/^Entre 6 y 24 caracteres\./);
+    expect(screen.queryByText(/Solo se establece al crear/)).not.toBeInTheDocument();
+    const list = screen.getByRole("list", { name: "Requisitos de contraseña" });
+    for (const text of ["Entre 6 y 24 caracteres.", "Al menos una letra mayúscula.", "Al menos una letra minúscula.", "Al menos un número.", "Al menos un carácter especial (@, #, $, %, &, !)."]) expect(within(list).getByText(text, { exact: true })).toBeVisible();
+  });
+  it("toggles both secrets independently and resets visibility when cleared, reset or submitted", async () => {
+    render(<ToastProvider><UsersPage /></ToastProvider>);
+    await fillCreate();
+    for (const [field, label] of [[screen.getByLabelText(/^Contraseña/), "contraseña"], [screen.getByLabelText(/^Confirmar contraseña/), "confirmación de contraseña"]] as const) {
+      const button = screen.getByRole("button", { name: `Mostrar ${label}` });
+      expect(button).toHaveAttribute("aria-pressed", "false");
+      await userEvent.click(button);
+      expect(field).toHaveAttribute("type", "text");
+      expect(button).toHaveAccessibleName(`Ocultar ${label}`);
+      expect(button).toHaveAttribute("aria-pressed", "true");
+      await userEvent.clear(field);
+      expect(field).toHaveAttribute("type", "password");
+      expect(button).toHaveAttribute("aria-pressed", "false");
+      fireEvent.change(field, { target: { value: "Abc123!x" } });
+      await userEvent.click(button);
+    }
+    const password = screen.getByLabelText(/^Contraseña/) as HTMLInputElement;
+    act(() => password.form!.reset());
+    for (const field of [password, screen.getByLabelText(/^Confirmar contraseña/)]) { expect(field).toHaveValue(""); expect(field).toHaveAttribute("type", "password"); }
+    expect(screen.queryByText("Las contraseñas coinciden.")).not.toBeInTheDocument();
+    for (const field of [password, screen.getByLabelText(/^Confirmar contraseña/)]) fireEvent.change(field, { target: { value: "Abc123!x" } });
+    await userEvent.click(screen.getByRole("button", { name: "Mostrar contraseña" }));
+    await userEvent.click(screen.getByRole("button", { name: "Mostrar confirmación de contraseña" }));
+    vi.mocked(api.createUser).mockRejectedValueOnce(new ApiError(409, "Duplicado", null));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await screen.findByRole("alert");
+    for (const field of [screen.getByLabelText(/^Contraseña/), screen.getByLabelText(/^Confirmar contraseña/)]) { expect(field).toHaveValue(""); expect(field).toHaveAttribute("type", "password"); }
+  });
+  it("shows unmet requirements after blur or submit and computes matching live without serializing secrets", async () => {
+    render(<ToastProvider><UsersPage /></ToastProvider>);
+    await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
+    const password = screen.getByLabelText(/^Contraseña/);
+    const confirmation = screen.getByLabelText(/^Confirmar contraseña/);
+    const list = screen.getByRole("list", { name: "Requisitos de contraseña" });
+    fireEvent.change(password, { target: { value: "abc12!" } });
+    expect(within(list).getByText("pendiente")).toBeInTheDocument();
+    fireEvent.blur(password);
+    expect(within(list).getByText("incumplido").closest("li")).toHaveClass("text-red-600", "dark:text-red-400");
+    fireEvent.change(password, { target: { value: "Abc123!x" } });
+    fireEvent.change(confirmation, { target: { value: "Abc123!y" } });
+    expect(screen.getByText("Las contraseñas no coinciden.")).toHaveClass("text-red-600", "dark:text-red-400");
+    expect(confirmation).toHaveAccessibleDescription("Las contraseñas no coinciden.");
+    fireEvent.change(confirmation, { target: { value: "Abc123!x" } });
+    expect(screen.getByText("Las contraseñas coinciden.")).toHaveClass("text-green-600", "dark:text-green-400");
+    expect(screen.queryByText("Las contraseñas no coinciden.")).not.toBeInTheDocument();
+    fireEvent.change(password, { target: { value: "Abc123!y" } });
+    expect(screen.getByText("Las contraseñas no coinciden.")).toBeVisible();
+    expect(document.body.innerHTML).not.toContain("Abc123!x"); expect(document.body.innerHTML).not.toContain("Abc123!y");
+    expect(password).not.toHaveAttribute("value"); expect(confirmation).not.toHaveAttribute("value");
+    expect(api.createUser).not.toHaveBeenCalled(); expect(api.assignUserRole).not.toHaveBeenCalled();
+    act(() => (password as HTMLInputElement).form!.reset());
+    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(within(list).getAllByText("incumplido")).toHaveLength(5);
+    expect(api.createUser).not.toHaveBeenCalled();
+  });
+  it("shows only role names in up to four columns and falls back to the code", async () => {
+    vi.mocked(loadRoleOptions).mockResolvedValue([{ id: "admin", codigo: "ADMIN", nombre: "ADMINISTRADOR" }, { id: "fallback", codigo: "R99", nombre: "" }]);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
+    await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
+    const role = await screen.findByRole("checkbox", { name: "ADMINISTRADOR" });
+    const fallback = screen.getByRole("checkbox", { name: "R99" });
+    expect(role.closest("label")?.parentElement).toHaveClass("grid-cols-1", "sm:grid-cols-2", "lg:grid-cols-3", "xl:grid-cols-4");
+    expect(role.closest("label")).toHaveClass("items-center", "has-focus-visible:ring-3");
+    expect(screen.queryByText("(ADMIN)")).not.toBeInTheDocument(); expect(screen.queryByText("(R99)")).not.toBeInTheDocument();
+    await userEvent.click(fallback);
+    expect(fallback).toBeChecked(); expect(fallback.closest("label")).toHaveClass("border-brand-500", "bg-brand-50");
+    expect(api.assignUserRole).not.toHaveBeenCalled();
+  });
   it("keeps the Nuevo usuario name with a decorative plus and groups fields", async () => {
     render(<ToastProvider><UsersPage /></ToastProvider>);
     const button = screen.getByRole("button", { name: "Nuevo usuario" });

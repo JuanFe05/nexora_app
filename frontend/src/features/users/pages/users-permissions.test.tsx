@@ -186,7 +186,7 @@ describe("user FormDialog", () => {
     vi.mocked(loadRoleOptions).mockResolvedValue(Array.from({ length: 100 }, (_, i) => ({ id: String(i), codigo: `R${i}`, nombre: `Rol ${i}` })));
     render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(await screen.findByRole("button", { name: "Editar ana" }));
-    const lastRole = await screen.findByRole("checkbox", { name: "Rol 99 (R99)" });
+    const lastRole = await screen.findByRole("checkbox", { name: "Rol 99" });
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveClass("grid-rows-[auto_minmax(0,1fr)_auto]", "max-h-[calc(100dvh-2rem)]");
     expect(dialog.querySelector(".overflow-y-auto")).toContainElement(lastRole);

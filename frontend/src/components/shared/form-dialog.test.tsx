@@ -19,6 +19,16 @@ function setup(props: Partial<React.ComponentProps<typeof FormDialog>> = {}) {
 }
 
 describe("FormDialog", () => {
+  it("preserves the default width and mobile margins", () => {
+    setup();
+    expect(screen.getByRole("dialog")).toHaveClass("sm:max-w-xl", "w-full", "max-w-[calc(100%-2rem)]");
+  });
+
+  it("allows a wider dialog without retaining the default width", () => {
+    setup({ className: "sm:max-w-3xl" });
+    expect(screen.getByRole("dialog")).toHaveClass("sm:max-w-3xl", "max-w-[calc(100%-2rem)]");
+    expect(screen.getByRole("dialog")).not.toHaveClass("sm:max-w-xl");
+  });
   it("es un diálogo modal con título, descripción y contenido; guardar envía el formulario enlazado", async () => {
     const { onSubmit } = setup();
     expect(screen.getByRole("dialog", { name: "Nuevo usuario" })).toBeInTheDocument();

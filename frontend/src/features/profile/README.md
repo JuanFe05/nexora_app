@@ -38,6 +38,10 @@ El cliente HTTP compartido añade `/api/v1` y gestiona la sesión. La UI no reci
 - `types.ts` / `validation.ts`: contrato cerrado, diferencias y validación pura.
 - `hooks/`: carga de perfil y foco después de habilitar los controles.
 - `components/`: formularios pequeños sobre las primitivas compartidas de TailAdmin.
+  `PasswordField` delega el control no controlado y el botón de ojo en
+  `src/components/shared/password-input.tsx`, también usado por Nuevo usuario.
+  Conserva las etiquetas accesibles, autocomplete, errores y comportamiento del modal;
+  el componente solo guarda visibilidad y la reinicia al vaciar el campo o resetear el formulario.
 - `components/security-section.tsx`: tarjeta única estilo Danger Zone: dos filas separadas por divisores (descripción a la izquierda, botón a la derecha desde `sm`; apiladas en móvil), los tres botones comparten el estilo outline,, confirmación y estado pendiente del cierre global.
 - `pages/profile-page.tsx`: composición del perfil, sin cambiar ruta ni exportación por defecto.
 

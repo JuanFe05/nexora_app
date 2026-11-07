@@ -22,6 +22,8 @@ Eliminar no concede consultar, crear, editar ni asignar roles.
 - Buscar consulta el servidor tras 300 ms; paginación y tamaño usan `X-Total-Count`.
 - **Nuevo usuario** incluye el icono de suma decorativo; su nombre accesible no cambia.
 - Crear y editar usan **FormDialog** (TailAdmin Dialog with Form), no el panel lateral.
+  El diálogo de usuarios usa un ancho moderado (`sm:max-w-3xl`), con margen en móvil;
+  los demás consumidores mantienen el ancho predeterminado de FormDialog.
   El cuerpo del formulario tiene scroll dentro de una altura limitada a la pantalla;
   el encabezado y el pie permanecen fuera del área desplazable. Cancelar, Escape y X
   cierran sin guardar; no cierran mientras hay una mutación pendiente.
@@ -36,7 +38,13 @@ Eliminar no concede consultar, crear, editar ni asignar roles.
   La contraseña conserva su política
   (6–24 caracteres Unicode, sin recortar espacios, con mayúscula, minúscula, número y
   carácter especial de puntuación o símbolo). Los requisitos se actualizan en vivo con
-  estados accesibles; React solo guarda los booleanos de cumplimiento. La contraseña
+  estados accesibles: gris y círculo neutral para pendientes, verde y check para cumplidos,
+  rojo y cruz para incumplidos tras desenfocar la contraseña o intentar guardar.
+  La ayuda breve es «Entre 6 y 24 caracteres.». Ambos campos reutilizan `PasswordInput`
+  con botones «Mostrar/Ocultar contraseña» y «Mostrar/Ocultar confirmación de contraseña»;
+  la visibilidad se reinicia al vaciar los controles. La coincidencia se indica en vivo al
+  escribir cualquiera de las claves, sin duplicar el error final de confirmación.
+  React solo guarda booleanos de cumplimiento y coincidencia. La contraseña
   permanece en el control y en la petición de creación. Ambos secretos son controles no
   controlados, se leen con FormData y se limpian al iniciar la petición (también si falla),
   al resetear y al cerrar/reabrir el diálogo; nunca se muestran en errores.
@@ -52,8 +60,9 @@ Eliminar no concede consultar, crear, editar ni asignar roles.
   pero sin `roles.view`, aparece una sección deshabilitada con una nota explicativa;
   no se consulta `/roles` ni se bloquea el guardado de otros campos autorizados.
 - Los roles se presentan como tarjetas de checkbox en una cuadrícula responsive, con nombre
-  destacado y código secundario (el catálogo no incluye descripciones), borde/tinte de marca
-  al seleccionar y anillo de foco para teclado. Se conserva la selección por códigos y las
+  como única etiqueta (si está vacío, se muestra el código), hasta cuatro columnas
+  (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`), checkbox alineado al centro,
+  borde/tinte de marca al seleccionar y anillo de foco para teclado. Se conserva la selección por códigos y las
   mutaciones por ids. El catálogo autorizado se carga completo en páginas de 100 desde un
   adaptador local; un fallo bloquea el guardado y ofrece **Reintentar roles**. Códigos ausentes
   se conservan; carga, error, vacío y avisos de permisos siguen disponibles.
@@ -77,7 +86,7 @@ API, validación, coordinación de mutaciones y presentación viven separadas de
 este módulo. Se consumen DataTable/usePagedQuery/pagedResult, FormDialog, ConfirmDialog,
 InlineAlert y controles compartidos sin duplicarlos. No existe restablecimiento de contraseña.
 
-Desde `frontend/`: `corepack pnpm test src/features/users`.
+Desde `frontend/`: `npx vitest run`, `npx tsc -b` y `npm run lint`.
 Las pruebas de página simulan `useAuth` y los módulos de API, no la red. Cubren la matriz
 independiente de permisos, cuerpos mínimos, diferencias de roles, cierre/bloqueo del diálogo,
 validaciones, confirmación sin filtración al payload, limpieza de secretos, secciones agrupadas,

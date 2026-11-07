@@ -1,3 +1,5 @@
+import { type ChangeEvent } from "react";
+import { PasswordInput } from "@/components/shared/password-input";
 import { PasswordRequirements } from "@/components/shared/password-requirements";
 import { evaluatePasswordPolicy, PASSWORD_RULES, type PasswordPolicyEvaluation } from "@/lib/password-policy";
 import { Field } from "@/components/ui/field";
@@ -6,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { userTextFields } from "../hooks/user-validation";
 import type { UserFieldErrors, UserValues } from "../types";
 
-export function UserFields({ values, errors, onChange, editing, personalEditable, statusEditable, evaluation, onPasswordChange, onConfirmationChange }: {
+export function UserFields({ values, errors, onChange, editing, personalEditable, statusEditable, evaluation, onPasswordChange, onConfirmationChange, showPasswordErrors, onPasswordBlur, passwordsMatch, onPasswordsMatchChange, secretGeneration }: {
   values: UserValues;
   errors: UserFieldErrors;
   onChange: (name: keyof UserValues, value: string) => void;
@@ -16,7 +18,20 @@ export function UserFields({ values, errors, onChange, editing, personalEditable
   evaluation: PasswordPolicyEvaluation;
   onPasswordChange: (evaluation: PasswordPolicyEvaluation) => void;
   onConfirmationChange: () => void;
+  showPasswordErrors: boolean;
+  onPasswordBlur: () => void;
+  passwordsMatch: boolean | null;
+  onPasswordsMatchChange: (matches: boolean | null) => void;
+  secretGeneration: number;
 }) {
+  function updateMatching(event: ChangeEvent<HTMLInputElement>) {
+    const form = event.currentTarget.form;
+    const password = form?.elements.namedItem("contrasena") as HTMLInputElement | null;
+    const confirmation = form?.elements.namedItem("confirmar_contrasena") as HTMLInputElement | null;
+    // Compare only at input time: never retain either secret in React state.
+    onPasswordsMatchChange(confirmation?.value ? password?.value === confirmation.value : null);
+  }
+  const confirmationError = errors.confirmar_contrasena || (passwordsMatch === false ? "Las contraseñas no coinciden." : undefined);
   function textField({ name, label, required, max }: typeof userTextFields[number]) {
     return <Field key={name} controlId={`user-${name}`} data-invalid={!!errors[name]}>
       <Label htmlFor={`user-${name}`}>{label}{required && <span aria-hidden="true" className="text-red-500">*</span>}</Label>
@@ -25,33 +40,41 @@ export function UserFields({ values, errors, onChange, editing, personalEditable
     </Field>;
   }
   return <>
-    <fieldset className="space-y-4 border-t border-gray-200 pt-4 dark:border-gray-800">
+    <fieldset className="space-y-5 border-t border-gray-200 pt-5 dark:border-gray-800">
       <legend className="pe-3 text-sm font-semibold text-gray-800 dark:text-white/90">Cuenta</legend>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {userTextFields.filter(field => field.name === "nombre_usuario" || field.name === "correo").map(textField)}
       </div>
     </fieldset>
-    <fieldset className="space-y-4 border-t border-gray-200 pt-4 dark:border-gray-800">
+    <fieldset className="space-y-5 border-t border-gray-200 pt-5 dark:border-gray-800">
       <legend className="pe-3 text-sm font-semibold text-gray-800 dark:text-white/90">Datos personales</legend>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {userTextFields.filter(field => field.name !== "nombre_usuario" && field.name !== "correo").map(textField)}
       </div>
     </fieldset>
-    <fieldset className="space-y-4 border-t border-gray-200 pt-4 dark:border-gray-800">
+    <fieldset className="space-y-5 border-t border-gray-200 pt-5 dark:border-gray-800">
       <legend className="pe-3 text-sm font-semibold text-gray-800 dark:text-white/90">Acceso</legend>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         {!editing && <>
           <Field controlId="user-contrasena" data-invalid={!!errors.contrasena}>
             <Label htmlFor="user-contrasena">Contraseña<span aria-hidden="true" className="text-red-500">*</span></Label>
-            <Input name="contrasena" disabled={!personalEditable} type="password" autoComplete="new-password" required aria-invalid={!!errors.contrasena} aria-describedby={`user-password-help user-password-requirements${errors.contrasena ? " user-contrasena-error" : ""}`} onChange={event => onPasswordChange(evaluatePasswordPolicy(event.currentTarget.value))} />
-            <p id="user-password-help" className="text-sm text-gray-500 dark:text-gray-400">{PASSWORD_RULES[0].label}. Solo se establece al crear el usuario.</p>
-            <div id="user-password-requirements"><PasswordRequirements evaluation={evaluation} /></div>
+            <PasswordInput key={secretGeneration} name="contrasena" toggleLabel="contraseña" disabled={!personalEditable} autoComplete="new-password" required aria-invalid={!!errors.contrasena} aria-describedby={`user-password-help user-password-requirements${errors.contrasena ? " user-contrasena-error" : ""}`} onBlur={onPasswordBlur} onChange={event => {
+              onPasswordChange(evaluatePasswordPolicy(event.currentTarget.value));
+              updateMatching(event);
+            }} />
+            <p id="user-password-help" className="text-sm text-gray-500 dark:text-gray-400">{PASSWORD_RULES[0].label}.</p>
+            <div id="user-password-requirements"><PasswordRequirements evaluation={evaluation} showErrors={showPasswordErrors} sentenceLabels /></div>
             {errors.contrasena && <p id="user-contrasena-error" className="text-sm text-red-500 dark:text-red-400">{errors.contrasena}</p>}
           </Field>
-          <Field controlId="user-confirmar-contrasena" data-invalid={!!errors.confirmar_contrasena}>
+          <Field controlId="user-confirmar-contrasena" data-invalid={!!confirmationError}>
             <Label htmlFor="user-confirmar-contrasena">Confirmar contraseña<span aria-hidden="true" className="text-red-500">*</span></Label>
-            <Input name="confirmar_contrasena" disabled={!personalEditable} type="password" autoComplete="new-password" required aria-invalid={!!errors.confirmar_contrasena} aria-describedby={errors.confirmar_contrasena ? "user-confirmar-contrasena-error" : undefined} onChange={onConfirmationChange} />
-            {errors.confirmar_contrasena && <p id="user-confirmar-contrasena-error" className="text-sm text-red-500 dark:text-red-400">{errors.confirmar_contrasena}</p>}
+            <PasswordInput key={secretGeneration} name="confirmar_contrasena" toggleLabel="confirmación de contraseña" disabled={!personalEditable} autoComplete="new-password" required aria-invalid={!!confirmationError} aria-describedby={confirmationError ? "user-confirmar-contrasena-error" : passwordsMatch === true ? "user-password-match" : undefined} onChange={event => {
+              onConfirmationChange();
+              updateMatching(event);
+            }} />
+            <div aria-live="polite" aria-atomic="true">
+              {confirmationError ? <p id="user-confirmar-contrasena-error" className="text-sm text-red-600 dark:text-red-400">{confirmationError}</p> : passwordsMatch === true && <p id="user-password-match" className="text-sm text-green-600 dark:text-green-400">Las contraseñas coinciden.</p>}
+            </div>
           </Field>
         </>}
         {editing && <Field controlId="user-estado" data-invalid={!!errors.estado}>

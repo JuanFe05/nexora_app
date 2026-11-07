@@ -19,6 +19,14 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
   const [selected, setSelected] = useState(user?.roles ?? []);
   const [errors, setErrors] = useState<UserFieldErrors>({});
   const [evaluation, setEvaluation] = useState(() => evaluatePasswordPolicy(""));
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [passwordsMatch, setPasswordsMatch] = useState<boolean | null>(null);
+  const [secretGeneration, setSecretGeneration] = useState(0);
+  function resetPasswordPresentation() {
+    setEvaluation(evaluatePasswordPolicy(""));
+    setPasswordTouched(false);
+    setPasswordsMatch(null);
+  }
   const toast = useToast();
   const permissions = useUserPermissions();
   const { save, pending, createdUser } = useUserSave(user, permissions);
@@ -55,7 +63,8 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
     const request = save(submitted, selected, catalog.items);
     if (password) password.value = "";
     if (confirmation) confirmation.value = "";
-    setEvaluation(evaluatePasswordPolicy(""));
+    resetPasswordPresentation();
+    setSecretGeneration(previous => previous + 1);
     submitted.contrasena = "";
     data.delete("contrasena");
     data.delete("confirmar_contrasena");
@@ -69,12 +78,12 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
     }
   }
 
-  return <FormDialog open onOpenChange={open => { if (!open) onClose(); }} title={user ? `Editar usuario: ${user.nombre_usuario}` : "Nuevo usuario"} description={user ? "Edita los datos personales, el estado y los roles. Los cambios se guardan por pasos; no se cambia la contraseña." : "Los campos con * son obligatorios."} formId={formId} pending={pending} submitLabel={canSave ? "Guardar" : "Cerrar"}>
-    <form id={formId} ref={formRef} onSubmit={event => { void submit(event); }} noValidate onReset={() => setEvaluation(evaluatePasswordPolicy(""))} className="space-y-5 py-4">
-      <fieldset disabled={pending} className="space-y-5">
-        <UserFields values={values} errors={errors} editing={!!user} personalEditable={personalEditable} statusEditable={permissions.deactivate} evaluation={evaluation} onPasswordChange={next => {
+  return <FormDialog className="sm:max-w-3xl" open onOpenChange={open => { if (!open) onClose(); }} title={user ? `Editar usuario: ${user.nombre_usuario}` : "Nuevo usuario"} description={user ? "Edita los datos personales, el estado y los roles. Los cambios se guardan por pasos; no se cambia la contraseña." : "Los campos con * son obligatorios."} formId={formId} pending={pending} submitLabel={canSave ? "Guardar" : "Cerrar"}>
+    <form id={formId} ref={formRef} onSubmit={event => { void submit(event); }} noValidate onReset={resetPasswordPresentation} className="space-y-6 py-4">
+      <fieldset disabled={pending} className="space-y-6">
+        <UserFields values={values} errors={errors} editing={!!user} personalEditable={personalEditable} statusEditable={permissions.deactivate} evaluation={evaluation} showPasswordErrors={passwordTouched || !!errors.contrasena} onPasswordBlur={() => setPasswordTouched(true)} passwordsMatch={passwordsMatch} onPasswordsMatchChange={setPasswordsMatch} secretGeneration={secretGeneration} onPasswordChange={next => {
           setEvaluation(next);
-          setErrors(current => ({ ...current, contrasena: undefined }));
+          setErrors(current => ({ ...current, contrasena: undefined, confirmar_contrasena: undefined }));
         }} onConfirmationChange={() => setErrors(current => ({ ...current, confirmar_contrasena: undefined }))} onChange={(name, value) => {
           setValues(current => ({ ...current, [name]: value }));
           setErrors(current => ({ ...current, [name]: undefined }));
