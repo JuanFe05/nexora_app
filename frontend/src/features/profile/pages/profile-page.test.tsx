@@ -47,7 +47,7 @@ describe("seguridad y sesiones", () => {
     const section = screen.getByRole("region", { name: "Seguridad" });
     expect(within(section).getByRole("heading", { name: "Cambiar contraseña" })).toBeInTheDocument();
     expect(within(section).getByRole("heading", { name: "Cerrar todas las sesiones" })).toBeInTheDocument();
-    expect(section.querySelector(".grid")).toHaveClass("grid-cols-1", "md:grid-cols-2");
+    expect(section.querySelector(".divide-y")).toHaveClass("divide-gray-200", "dark:divide-gray-800");
     expect(section.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
     const card = section.querySelector('[data-slot="card"]') as HTMLElement;
     expect(within(card).getByRole("heading", { name: "Seguridad", level: 2 })).toBeInTheDocument();
@@ -55,7 +55,7 @@ describe("seguridad y sesiones", () => {
     for (const name of ["Cambiar contraseña", "Cerrar todas las sesiones"]) {
       expect(within(card).getByRole("button", { name })).toBeInTheDocument();
     }
-    expect(within(card).getByRole("heading", { name: "Cerrar todas las sesiones" }).parentElement).toHaveClass("border-t", "md:border-t-0", "md:border-l", "dark:border-gray-800");
+    expect(within(card).getByRole("heading", { name: "Cerrar todas las sesiones" }).parentElement?.parentElement).toHaveClass("flex-col", "sm:flex-row", "sm:items-center", "sm:justify-between");
     expect(section).toHaveTextContent("Gestiona el acceso a tu cuenta.");
     expect(section).not.toHaveTextContent("6 y 24");
     await user.click(screen.getByRole("button", { name: "Cerrar todas las sesiones" }));
@@ -99,9 +99,12 @@ describe("seguridad y sesiones", () => {
 });
 
 describe("presentación TailAdmin", () => {
-  it("mantiene nombres accesibles e iconos decorativos con un único estilo de botón", async () => {
+  it("mantiene nombres accesibles e iconos decorativos; neutral para editar/cambiar y rojo para cerrar sesiones", async () => {
     await loaded();
-    const buttons = ["Editar", "Cambiar contraseña", "Cerrar todas las sesiones"].map((name) => screen.getByRole("button", { name }));
+    const logoutAll = screen.getByRole("button", { name: "Cerrar todas las sesiones" });
+    expect(logoutAll.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(logoutAll).toHaveClass("h-9", "bg-red-500", "text-white", "hover:bg-red-600", "focus-visible:ring-3");
+    const buttons = ["Editar", "Cambiar contraseña"].map((name) => screen.getByRole("button", { name }));
     for (const button of buttons) {
       expect(button).toHaveAccessibleName(button.textContent);
       expect(button.querySelectorAll("svg")).toHaveLength(1);
@@ -111,8 +114,15 @@ describe("presentación TailAdmin", () => {
       expect(button.className.split(" ").filter((name) => !name.includes("aria-invalid:")).join(" ")).not.toMatch(/(?:text|bg|border)-error|(?:text|bg|border)-red/);
     }
     // Ignore layout-only sizing: all interactive styling comes from the same variant.
-    const styles = buttons.map((button) => button.className.split(" ").filter((name) => !["w-full", "sm:w-auto", "sm:self-start"].includes(name)).join(" "));
+    const styles = buttons.map((button) => button.className.split(" ").filter((name) => !["w-full", "sm:w-auto", "sm:self-start", "shrink-0"].includes(name)).join(" "));
     expect(new Set(styles).size).toBe(1);
+    const card = screen.getByRole("region", { name: "Seguridad" });
+    const rows = card.querySelectorAll(".divide-y > div");
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0] as HTMLElement).getByRole("button", { name: "Cambiar contraseña" })).toBeInTheDocument();
+    expect(within(rows[1] as HTMLElement).getByRole("button", { name: "Cerrar todas las sesiones" })).toBeInTheDocument();
+    expect(rows[0]).toHaveClass("sm:flex-row", "sm:justify-between");
+    expect(screen.queryByText(/eliminar cuenta/i)).not.toBeInTheDocument();
     expect(api.updateProfile).not.toHaveBeenCalled();
     expect(api.changePassword).not.toHaveBeenCalled();
     expect(authApi.logoutAll).not.toHaveBeenCalled();

@@ -22,10 +22,12 @@ const description = `${PASSWORD_VALIDATION_MESSAGE} Usa una contraseña diferent
 export function PasswordForm() {
   const [open, setOpen] = useState(false);
   return <>
-    <div className="flex min-w-0 flex-col gap-4" aria-labelledby="password-title">
-      <h3 id="password-title" className="text-lg font-semibold text-gray-800 dark:text-white/90">Cambiar contraseña</h3>
-      <p className="text-sm text-gray-500 dark:text-gray-400">Actualiza la contraseña de tu cuenta.</p>
-      <Button variant="outline" size="sm" className="w-full sm:w-auto sm:self-start" onClick={() => setOpen(true)}><LockIcon aria-hidden="true" className="size-5" />Cambiar contraseña</Button>
+    <div className="flex min-w-0 flex-col gap-4 py-5 first:pt-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6" aria-labelledby="password-title">
+      <div className="min-w-0 space-y-1">
+        <h3 id="password-title" className="text-base font-medium text-gray-800 dark:text-white/90">Cambiar contraseña</h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Actualiza la contraseña de tu cuenta.</p>
+      </div>
+      <Button variant="outline" size="sm" className="w-full shrink-0 sm:w-auto" onClick={() => setOpen(true)}><LockIcon aria-hidden="true" className="size-5" />Cambiar contraseña</Button>
     </div>
     {open && <PasswordEditor onClose={() => setOpen(false)} />}
   </>;

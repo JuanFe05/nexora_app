@@ -34,12 +34,14 @@ export function SecuritySection() {
         </h2>
       </div>
       <p className="text-sm text-gray-500 dark:text-gray-400">Gestiona el acceso a tu cuenta.</p>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div className="divide-y divide-gray-200 dark:divide-gray-800">
         <PasswordForm />
-        <div className="flex min-w-0 flex-col gap-4 border-t border-gray-200 pt-6 md:border-t-0 md:border-l md:pt-0 md:pl-6 dark:border-gray-800" aria-labelledby="logout-all-title">
-          <h3 id="logout-all-title" className="text-lg font-semibold text-gray-800 dark:text-white/90">Cerrar todas las sesiones</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Cierra el acceso en todos tus dispositivos, incluido este.</p>
-          <Button variant="outline" size="sm" className="w-full sm:w-auto sm:self-start"
+        <div className="flex min-w-0 flex-col gap-4 py-5 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6" aria-labelledby="logout-all-title">
+          <div className="min-w-0 space-y-1">
+            <h3 id="logout-all-title" className="text-base font-medium text-gray-800 dark:text-white/90">Cerrar todas las sesiones</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Cierra el acceso en todos tus dispositivos, incluido este.</p>
+          </div>
+          <Button variant="destructive" size="sm" className="w-full shrink-0 sm:w-auto"
             onClick={() => setOpen(true)}><LogOutIcon aria-hidden="true" className="size-5" />Cerrar todas las sesiones</Button>
         </div>
       </div>
