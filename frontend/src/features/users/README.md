@@ -5,6 +5,16 @@ las acciones tienen permisos independientes. Ocultar controles es presentación:
 aplica la autorización y las protecciones del último administrador.
 No se cambia el guard, la sesión ni el cliente HTTP compartido desde este módulo.
 
+## Estructura compartida
+
+La página usa `space-y-6`, `PageHeader` y una tarjeta `DataTable`, ambos con
+`UsersIcon`, título y descripción, igual que Roles y Permisos. Columnas:
+**Usuario**, **Nombre completo**, **Correo electrónico**, **Roles**, **Estado** y
+**Acciones** (cuando hay permisos de mutación). El nombre completo reúne las partes
+no vacías y usa «—» si faltan todas. Los roles usan `Badge variant="brand"` de texto,
+sin iconos, o «Sin roles»; el estado usa `StatusBadge` semántico.
+Buscador, tamaños **10/25/50/100**, paginación y `RowActionButton` son compartidos.
+
 ## Permisos y uso
 
 Se consulta `useAuth().hasPermission` con las constantes compartidas `PERMISSIONS`.

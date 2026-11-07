@@ -11,6 +11,7 @@ import * as api from "../api/users-api";
 import { loadRoleOptions } from "../api/role-options";
 import type { User } from "../types";
 import UsersPage from "./users-page";
+import { expectAdminPage } from "./admin-page-test-helpers";
 
 vi.mock("../api/users-api", () => ({ listUsers: vi.fn(), createUser: vi.fn(), updateUser: vi.fn(), deleteUser: vi.fn(), assignUserRole: vi.fn(), revokeUserRole: vi.fn() }));
 vi.mock("../api/role-options", () => ({ loadRoleOptions: vi.fn() }));
@@ -218,16 +219,40 @@ describe("Usuarios", () => {
     expect(screen.getByLabelText(/^Confirmar contraseña/)).toHaveValue("");
     expect(api.createUser).not.toHaveBeenCalled();
   });
-  it("renders real rows, role/status badges, full name and named icon actions", async () => {
+  it("shares the administration structure and renders separate names, text-only role badges and semantic status", async () => {
     render(<ToastProvider><UsersPage /></ToastProvider>);
     expect(await screen.findByRole("button", { name: "Editar ana" })).toBeVisible();
     expect(screen.getAllByRole("heading", { name: "Usuarios" })).toHaveLength(1);
     const table = screen.getByRole("table", { name: "Usuarios" });
-    expect(within(table).getByText("Ana Sol")).toBeVisible();
-    expect(within(table).getByText("ADMINISTRADOR")).toBeVisible();
-    expect(within(table).getByText("Activo")).toBeVisible();
+    expectAdminPage("Administración de usuarios", "Usuarios", "Gestiona las cuentas, los estados y los roles de acceso.", ["Usuario", "Nombre completo", "Correo electrónico", "Roles", "Estado", "Acciones"], "Nuevo usuario");
+    const row = within(table).getByText("ana").closest("tr")!;
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[0]).toHaveTextContent(/^ana$/);
+    expect(within(cells[0]).getByText("ana")).toHaveClass("font-medium");
+    expect(cells[1]).toHaveTextContent(/^Ana Sol$/);
+    expect(cells[2]).toHaveTextContent(/^ana@example.org$/);
+    const badge = within(cells[3]).getByText("ADMINISTRADOR");
+    expect(badge).toHaveAttribute("data-variant", "brand");
+    expect(badge.querySelector("svg")).toBeNull();
+    expect(badge.parentElement).toHaveClass("flex", "flex-wrap", "gap-1.5");
+    expect(within(cells[4]).getByText("Activo")).toHaveAttribute("data-variant", "success");
     expect(screen.getByRole("button", { name: "Eliminar ana" })).toBeVisible();
     expect(screen.getByText("Mostrando 1 a 10 de 101 registros")).toBeVisible();
+  });
+  it("renders every nonempty name part, empty-name fallback, multiple text badges and inactive status", async () => {
+    vi.mocked(api.listUsers).mockResolvedValue({ items: [
+      { ...ana, segundo_nombre: "Luz", segundo_apellido: "Mar", roles: ["ADMINISTRADOR", "ESTADISTICA"] },
+      { ...ana, id: "empty", nombre_usuario: "sin-nombre", primer_nombre: "", primer_apellido: "", roles: [], estado: "inactivo" },
+    ], total: 2 });
+    render(<ToastProvider><UsersPage /></ToastProvider>);
+    const full = (await screen.findByText("Ana Luz Sol Mar")).closest("tr")!;
+    const badges = full.querySelectorAll('[data-variant="brand"]');
+    expect(Array.from(badges).map(badge => badge.textContent)).toEqual(["ADMINISTRADOR", "ESTADISTICA"]);
+    for (const badge of badges) expect(badge.querySelector("svg")).toBeNull();
+    const empty = screen.getByText("sin-nombre").closest("tr")!;
+    expect(within(empty).getAllByRole("cell")[1]).toHaveTextContent(/^—$/);
+    expect(within(empty).getByText("Sin roles")).toHaveClass("text-gray-500", "dark:text-gray-400");
+    expect(within(empty).getByText("Inactivo")).toHaveAttribute("data-variant", "error");
   });
   it("debounces search and forwards server pagination and page size", async () => {
     vi.useFakeTimers();
@@ -241,9 +266,11 @@ describe("Usuarios", () => {
     fireEvent.click(screen.getByRole("button", { name: "Página siguiente" }));
     await act(async () => {});
     expect(api.listUsers).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 10 }));
-    fireEvent.change(screen.getByRole("combobox", { name: "Registros por página" }), { target: { value: "25" } });
-    await act(async () => {});
-    expect(api.listUsers).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 25, offset: 0, q: "ana" }));
+    for (const size of [25, 50, 100, 10]) {
+      fireEvent.change(screen.getByRole("combobox", { name: "Registros por página" }), { target: { value: String(size) } });
+      await act(async () => {});
+      expect(api.listUsers).toHaveBeenLastCalledWith(expect.objectContaining({ limit: size, offset: 0, q: "ana" }));
+    }
   });
   it("validates fields accessibly and focuses the first invalid field without a request", async () => {
     render(<ToastProvider><UsersPage /></ToastProvider>);

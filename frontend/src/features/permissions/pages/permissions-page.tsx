@@ -2,7 +2,9 @@ import { useState } from "react";
 import { DataTable, RowActionButton, usePagedQuery, type DataTableColumn } from "@/components/shared/data-table";
 import { useToast } from "@/components/shared/toast/use-toast";
 import { Button } from "@/components/ui/button";
-import { PlusIcon } from "@/icons";
+import { KeyIcon, PlusIcon } from "@/icons";
+import { PageHeader } from "@/components/shared/page-header";
+import { Badge } from "@/components/ui/badge";
 import { PERMISSIONS } from "@/features/auth/permissions";
 import { useAuth } from "@/features/auth/use-auth";
 import { listPermissions, permissionErrorMessage } from "../api/permissions-api";
@@ -13,7 +15,7 @@ import type { Permission } from "../types";
 const columns: DataTableColumn<Permission>[] = [
   { id: "codigo", header: "Código", cell: row => <span className="font-mono text-xs break-all">{row.codigo}</span> },
   { id: "nombre", header: "Nombre", cell: row => row.nombre },
-  { id: "modulo", header: "Módulo", cell: row => <span className="inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium break-all text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">{row.modulo}</span> },
+  { id: "modulo", header: "Módulo", cell: row => <Badge variant="brand" className="break-all">{row.modulo}</Badge> },
   { id: "descripcion", header: "Descripción", cell: row => <span className="block min-w-40 max-w-md break-words">{row.descripcion ?? "—"}</span> },
 ];
 
@@ -29,8 +31,8 @@ export default function PermissionsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-title-lg font-semibold text-gray-800 dark:text-white/90">Administración de permisos</h1>
-      <DataTable title="Permisos" description="Administración del catálogo de permisos" columns={columns} rows={list.items}
+      <PageHeader icon={<KeyIcon />} title="Administración de permisos" description="Consulta y mantén el catálogo de permisos del sistema." />
+      <DataTable icon={<KeyIcon />} title="Permisos" description="Administración del catálogo de permisos" columns={columns} rows={list.items}
         getRowId={row => row.id} loading={list.loading}
         error={list.error ? { message: permissionErrorMessage(list.error), onRetry: list.reload } : null}
         total={list.total} page={list.page} pageSize={list.pageSize} pageSizeOptions={[10, 25, 50, 100]}

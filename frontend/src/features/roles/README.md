@@ -4,6 +4,17 @@ Administración de roles y permisos en `/configuracion/roles`. La ruta requiere
 `identity.roles.view`; los endpoints reales vuelven a comprobar la autorización.
 Los permisos son independientes: eliminar no concede consultar, crear ni editar.
 
+## Estructura compartida
+
+La página comparte `space-y-6`, `PageHeader` y la tarjeta `DataTable` con Usuarios y
+Permisos, con `LockIcon`, títulos y descripciones. Columnas: **Código**, **Nombre**,
+**Descripción**, **Estado**, **Permisos asignados**, **Usuarios asignados** y
+**Acciones**. `StatusBadge` presenta el estado semántico. Los contadores reutilizan
+`CountIndicator`: `KeyIcon` para permisos, `UsersIcon` para usuarios, incluyendo `0`
+y etiquetas accesibles singulares/plurales. Los códigos de permisos completos quedan
+en `title`; el contador de usuarios mantiene alineación derecha y cifras tabulares.
+Buscador, tamaños **10/25/50/100**, paginación y `RowActionButton` son compartidos.
+
 ## Acciones y permisos
 
 | Acción | Permiso efectivo requerido |
@@ -24,8 +35,9 @@ ninguna parte editable ofrece **Cerrar** en lugar de **Guardar cambios**.
 ## Uso
 
 - La tabla busca en el servidor después de 300 ms, permite cambiar el tamaño de página y usa
-  `X-Total-Count` para paginar. El resumen de permisos muestra códigos, no identificadores.
-  **Usuarios asignados**, después de **Permisos**, muestra `usuarios_asignados` como entero
+  `X-Total-Count` para paginar. El indicador de permisos conserva los códigos, no
+  identificadores, en su tooltip (`title`).
+  **Usuarios asignados**, después de **Permisos asignados**, muestra `usuarios_asignados` como entero
   alineado a la derecha con cifras tabulares y los estilos claro/oscuro de DataTable.
   Sin usuarios muestra `0`; un campo ausente o inválido también se normaliza a `0` en el
   adaptador API. Es de solo lectura y nunca se envía en los cuerpos de creación o edición.

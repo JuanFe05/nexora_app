@@ -2,7 +2,8 @@ import { useState } from "react";
 import { DataTable, RowActionButton, usePagedQuery } from "@/components/shared/data-table";
 import { useToast } from "@/components/shared/toast/use-toast";
 import { Button } from "@/components/ui/button";
-import { PlusIcon } from "@/icons";
+import { PlusIcon, UsersIcon } from "@/icons";
+import { PageHeader } from "@/components/shared/page-header";
 import { listUsers } from "../api/users-api";
 import { userError } from "../api/user-error";
 import { DeleteUserDialog } from "../components/delete-user-dialog";
@@ -20,8 +21,8 @@ export default function UsersPage() {
   const [deleting, setDeleting] = useState<User | null>(null);
   const toast = useToast();
   return <div className="space-y-6">
-    <h1 className="text-title-lg font-semibold text-gray-800 dark:text-white/90">Administración de usuarios</h1>
-    <DataTable title="Usuarios" description="Administra los datos, el estado y los roles de los usuarios." columns={userColumns} rows={query.items} getRowId={user => user.id}
+    <PageHeader icon={<UsersIcon />} title="Administración de usuarios" description="Gestiona las cuentas, los estados y los roles de acceso." />
+    <DataTable icon={<UsersIcon />} title="Usuarios" description="Administra los datos, el estado y los roles de los usuarios." columns={userColumns} rows={query.items} getRowId={user => user.id}
       loading={query.loading} error={query.error ? { message: userError(query.error).message, onRetry: query.reload } : null}
       total={query.total} page={query.page} pageSize={query.pageSize} pageSizeOptions={[10, 25, 50, 100]} onPageChange={query.setPage} onPageSizeChange={query.setPageSize}
       search={query.search} onSearchChange={query.setSearch} searchPlaceholder="Buscar usuarios"

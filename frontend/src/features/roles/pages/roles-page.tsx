@@ -3,7 +3,10 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DataTable, RowActionButton, usePagedQuery, type DataTableColumn } from "@/components/shared/data-table";
 import { useToast } from "@/components/shared/toast/use-toast";
 import { Button } from "@/components/ui/button";
-import { PlusIcon } from "@/icons";
+import { KeyIcon, LockIcon, PlusIcon, UsersIcon } from "@/icons";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { CountIndicator } from "@/components/shared/count-indicator";
 import { useAuth } from "@/features/auth/use-auth";
 import { PERMISSIONS } from "@/features/auth/permissions";
 import { deleteRole, listRoles, roleErrorMessage } from "../api/roles-api";
@@ -15,9 +18,9 @@ const columns: DataTableColumn<Role>[] = [
   { id: "codigo", header: "Código", cell: row => <span className="font-medium break-all">{row.codigo}</span> },
   { id: "nombre", header: "Nombre", cell: row => row.nombre },
   { id: "descripcion", header: "Descripción", cell: row => row.descripcion || "—", className: "min-w-40 max-w-xs whitespace-normal" },
-  { id: "estado", header: "Estado", cell: row => <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${row.estado === "activo" ? "bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-400" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"}`}>{row.estado === "activo" ? "Activo" : "Inactivo"}</span> },
-  { id: "permisos", header: "Permisos", cell: row => <div className="max-w-xs"><span className="font-medium">{row.permisos.length} {row.permisos.length === 1 ? "permiso" : "permisos"}</span><p className="mt-1 break-all text-xs text-gray-500 dark:text-gray-400" title={row.permisos.join(", ")}>{row.permisos.slice(0, 2).join(", ") || "Sin permisos"}{row.permisos.length > 2 ? ` y ${row.permisos.length - 2} más` : ""}</p></div> },
-  { id: "usuarios_asignados", header: "Usuarios asignados", cell: row => row.usuarios_asignados, className: "text-end tabular-nums" },
+  { id: "estado", header: "Estado", cell: row => <StatusBadge estado={row.estado} /> },
+  { id: "permisos", header: "Permisos asignados", cell: row => <CountIndicator icon={<KeyIcon />} count={row.permisos.length} label={`${row.permisos.length} ${row.permisos.length === 1 ? "permiso" : "permisos"}`} title={row.permisos.join(", ")} /> },
+  { id: "usuarios_asignados", header: "Usuarios asignados", cell: row => <CountIndicator icon={<UsersIcon />} count={row.usuarios_asignados} label={`${row.usuarios_asignados} ${row.usuarios_asignados === 1 ? "usuario" : "usuarios"}`} />, className: "text-end tabular-nums" },
 ];
 
 export default function RolesPage() {
@@ -57,8 +60,8 @@ export default function RolesPage() {
     }
   }
   return <div className="space-y-6">
-    <h1 className="text-title-lg font-semibold text-gray-800 dark:text-white/90">Administración de roles</h1>
-    <DataTable title="Roles" description="Administración de roles y sus permisos" columns={columns} rows={query.items} getRowId={row => row.id} loading={query.loading} error={query.error ? { message: roleErrorMessage(query.error), onRetry: query.reload } : null} total={query.total} page={query.page} pageSize={query.pageSize} onPageChange={query.setPage} onPageSizeChange={query.setPageSize} search={query.search} onSearchChange={query.setSearch} searchPlaceholder="Buscar roles" headerAction={canCreate ? <Button onClick={() => openDrawer(null)}><PlusIcon aria-hidden="true" />Nuevo rol</Button> : undefined} emptyState={{ title: "No hay roles", description: "Crea el primer rol para comenzar." }} rowActions={row => <>
+    <PageHeader icon={<LockIcon />} title="Administración de roles" description="Define los roles y los permisos que otorgan." />
+    <DataTable icon={<LockIcon />} title="Roles" description="Administración de roles y sus permisos" columns={columns} rows={query.items} getRowId={row => row.id} loading={query.loading} error={query.error ? { message: roleErrorMessage(query.error), onRetry: query.reload } : null} total={query.total} page={query.page} pageSize={query.pageSize} onPageChange={query.setPage} onPageSizeChange={query.setPageSize} search={query.search} onSearchChange={query.setSearch} searchPlaceholder="Buscar roles" headerAction={canCreate ? <Button onClick={() => openDrawer(null)}><PlusIcon aria-hidden="true" />Nuevo rol</Button> : undefined} emptyState={{ title: "No hay roles", description: "Crea el primer rol para comenzar." }} rowActions={row => <>
       {canEdit && <RowActionButton aria-label={`Editar ${row.nombre}`} onClick={() => openDrawer(row)} />}
       {canDelete && canDeleteRole(row.codigo) && <RowActionButton variant="danger" aria-label={`Eliminar ${row.nombre}`} onClick={() => { setDeleting(row); }} />}
     </>} />

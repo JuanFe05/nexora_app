@@ -13,6 +13,7 @@ import * as api from "../api/roles-api";
 import * as options from "../api/permission-options";
 import type { Role } from "../types";
 import RolesPage from "./roles-page";
+import { expectAdminPage } from "../../users/pages/admin-page-test-helpers";
 
 vi.mock("../api/roles-api", async importOriginal => {
   const original = await importOriginal<typeof api>();
@@ -335,7 +336,7 @@ describe("Roles page", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     const row = screen.getByText("VENTAS").closest("tr")!;
-    expect(within(row).getByRole("cell", { name: String(count) })).toBeVisible();
+    expect(within(row).getByLabelText(`${count} ${count === 1 ? "usuario" : "usuarios"}`)).toHaveTextContent(String(count));
     expect(api.createRole).not.toHaveBeenCalled();
     expect(api.updateRole).not.toHaveBeenCalled();
     expect(api.assignPermission).not.toHaveBeenCalled();
@@ -376,7 +377,7 @@ describe("Roles page", () => {
     const table = screen.getByRole("table", { name: "Roles" });
     const headers = within(table).getAllByRole("columnheader");
     const countIndex = headers.findIndex(header => header.textContent === "Usuarios asignados");
-    expect(countIndex).toBe(headers.findIndex(header => header.textContent === "Permisos") + 1);
+    expect(countIndex).toBe(headers.findIndex(header => header.textContent === "Permisos asignados") + 1);
     expect(headers[countIndex]).toHaveClass("text-end", "tabular-nums");
     for (const [index, count] of [0, 1, 42].entries()) {
       const row = within(table).getByText(`ROL${index}`).closest("tr")!;
@@ -390,31 +391,60 @@ describe("Roles page", () => {
     for (const count of [0, 7, 0]) {
       const view = render(<ToastProvider><RolesPage /></ToastProvider>);
       const row = (await screen.findByText("VENTAS")).closest("tr")!;
-      expect(within(row).getByRole("cell", { name: String(count) })).toBeVisible();
+      expect(within(row).getByLabelText(`${count} usuarios`)).toHaveTextContent(String(count));
       view.unmount();
     }
     expect(api.listRoles).toHaveBeenCalledTimes(3);
     expect(api.assignPermission).not.toHaveBeenCalled();
     expect(api.revokePermission).not.toHaveBeenCalled();
   });
-  it("uses the main Users heading hierarchy without replacing the table heading", async () => {
+  it("shares the administration structure with compact permission/user indicators", async () => {
+    vi.mocked(api.listRoles).mockResolvedValue({ items: [
+      role,
+      { ...role, id: "r2", codigo: "VACIO", nombre: "Vacío", descripcion: null, estado: "inactivo", permisos: [], usuarios_asignados: 1 },
+      { ...role, id: "r3", codigo: "MUCHOS", permisos: ["ventas.ver", "ventas.editar", "caja.ver"], usuarios_asignados: 42 },
+    ], total: 3 });
     render(<ToastProvider><RolesPage /></ToastProvider>);
-    expect(screen.getByRole("heading", { level: 1, name: "Administración de roles" })).toHaveClass("text-title-lg", "font-semibold", "text-gray-800", "dark:text-white/90");
-    expect(screen.getByRole("heading", { level: 2, name: "Roles" })).toBeVisible();
     await screen.findByText("VENTAS");
+    expectAdminPage("Administración de roles", "Roles", "Define los roles y los permisos que otorgan.", ["Código", "Nombre", "Descripción", "Estado", "Permisos asignados", "Usuarios asignados", "Acciones"], "Nuevo rol");
+    for (const [code, count, users, title, status, variant] of [
+      ["VENTAS", 1, 0, "ventas.ver", "Activo", "success"],
+      ["VACIO", 0, 1, "", "Inactivo", "error"],
+      ["MUCHOS", 3, 42, "ventas.ver, ventas.editar, caja.ver", "Activo", "success"],
+    ] as const) {
+      const cells = within(screen.getByText(code).closest("tr")!).getAllByRole("cell");
+      expect(within(cells[3]).getByText(status)).toHaveAttribute("data-variant", variant);
+      const permissions = within(cells[4]).getByLabelText(`${count} ${count === 1 ? "permiso" : "permisos"}`);
+      expect(permissions).toHaveTextContent(String(count));
+      expect(permissions).toHaveAttribute("title", title);
+      const assigned = within(cells[5]).getByLabelText(`${users} ${users === 1 ? "usuario" : "usuarios"}`);
+      expect(assigned).toHaveTextContent(String(users));
+      expect(cells[5]).toHaveClass("text-end", "tabular-nums");
+      for (const indicator of [permissions, assigned]) {
+        expect(indicator).toHaveClass("tabular-nums", "rounded-full");
+        expect(indicator.querySelector('[aria-hidden="true"] svg')).toBeInTheDocument();
+      }
+      expect(permissions.querySelector("svg")?.innerHTML).not.toBe(assigned.querySelector("svg")?.innerHTML);
+    }
+    expect(within(screen.getByText("VACIO").closest("tr")!).getAllByRole("cell")[2]).toHaveTextContent(/^—$/);
+    const cells = within(screen.getByText("VENTAS").closest("tr")!).getAllByRole("cell");
+    expect(cells[1]).toHaveTextContent(/^Ventas$/);
+    expect(cells[2]).toHaveTextContent(/^Equipo comercial$/);
   });
   it("lists real rows with count/summary, pages and page size from the shared query", async () => {
     render(<ToastProvider><RolesPage /></ToastProvider>);
     expect(await screen.findByText("VENTAS")).toBeVisible();
     expect(screen.getByRole("table", { name: "Roles" })).toBeVisible();
-    for (const header of ["Código", "Nombre", "Descripción", "Estado", "Permisos", "Usuarios asignados", "Acciones"]) expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
-    expect(screen.getByText("ventas.ver")).toBeVisible();
+    for (const header of ["Código", "Nombre", "Descripción", "Estado", "Permisos asignados", "Usuarios asignados", "Acciones"]) expect(screen.getByRole("columnheader", { name: header })).toBeInTheDocument();
+    expect(screen.getByLabelText("1 permiso")).toHaveAttribute("title", "ventas.ver");
     expect(screen.getByText("Activo")).toBeVisible();
     expect(screen.getByText("Mostrando 1 a 10 de 21 registros")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Página siguiente" }));
     await waitFor(() => expect(api.listRoles).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 10, offset: 10 })));
-    fireEvent.change(screen.getByRole("combobox", { name: "Registros por página" }), { target: { value: "25" } });
-    await waitFor(() => expect(api.listRoles).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 25, offset: 0 })));
+    for (const size of [25, 50, 100, 10]) {
+      fireEvent.change(screen.getByRole("combobox", { name: "Registros por página" }), { target: { value: String(size) } });
+      await waitFor(() => expect(api.listRoles).toHaveBeenLastCalledWith(expect.objectContaining({ limit: size, offset: 0 })));
+    }
   });
   it("debounces server search by 300 ms", async () => {
     vi.useFakeTimers();

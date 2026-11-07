@@ -11,6 +11,7 @@ const { hasPermission } = vi.hoisted(() => ({ hasPermission: vi.fn<(code: string
 vi.mock("@/features/auth/use-auth", () => ({ useAuth: () => ({ hasPermission }) }));
 import * as api from "../api/permissions-api";
 import PermissionsPage from "./permissions-page";
+import { expectAdminPage } from "../../users/pages/admin-page-test-helpers";
 
 vi.mock("../api/permissions-api", async importOriginal => ({ ...await importOriginal<typeof api>(), listPermissions: vi.fn(), createPermission: vi.fn(), updatePermission: vi.fn(), deletePermission: vi.fn() }));
 const permission = { id: "p1", codigo: "identity.users.view", nombre: "Ver usuarios", modulo: "identity", descripcion: "Consultar usuarios" };
@@ -31,10 +32,18 @@ async function createForm() {
 }
 
 describe("Permisos", () => {
-  it("uses the main Users heading hierarchy without replacing the table heading", async () => {
+  it("shares the administration structure, technical codes and text-only brand module badges", async () => {
+    vi.mocked(api.listPermissions).mockResolvedValue({ items: [permission, { ...permission, id: "p2", codigo: "identity.users.edit", descripcion: null }], total: 2 });
     await loaded();
-    expect(screen.getByRole("heading", { level: 1, name: "Administración de permisos" })).toHaveClass("text-title-lg", "font-semibold", "text-gray-800", "dark:text-white/90");
-    expect(screen.getByRole("heading", { level: 2, name: "Permisos" })).toBeVisible();
+    expectAdminPage("Administración de permisos", "Permisos", "Consulta y mantén el catálogo de permisos del sistema.", ["Código", "Nombre", "Módulo", "Descripción", "Acciones"], "Nuevo permiso");
+    const cells = within(screen.getByText(permission.codigo).closest("tr")!).getAllByRole("cell");
+    expect(within(cells[0]).getByText(permission.codigo)).toHaveClass("font-mono");
+    expect(cells[1]).toHaveTextContent(/^Ver usuarios$/);
+    const badge = within(cells[2]).getByText("identity");
+    expect(badge).toHaveAttribute("data-variant", "brand");
+    expect(badge.querySelector("svg")).toBeNull();
+    expect(cells[3]).toHaveTextContent(/^Consultar usuarios$/);
+    expect(within(screen.getByText("identity.users.edit").closest("tr")!).getAllByRole("cell")[3]).toHaveTextContent(/^—$/);
   });
   it.each([
     [false, false, false],
@@ -155,8 +164,10 @@ describe("Permisos", () => {
     await userEvent.click(screen.getByRole("button", { name: "Página siguiente" }));
     await waitFor(() => expect(api.listPermissions).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 10, offset: 10 })));
     await screen.findByRole("cell", { name: permission.codigo });
-    fireEvent.change(screen.getByRole("combobox", { name: "Registros por página" }), { target: { value: "25" } });
-    await waitFor(() => expect(api.listPermissions).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 25, offset: 0 })));
+    for (const size of [25, 50, 100, 10]) {
+      fireEvent.change(screen.getByRole("combobox", { name: "Registros por página" }), { target: { value: String(size) } });
+      await waitFor(() => expect(api.listPermissions).toHaveBeenLastCalledWith(expect.objectContaining({ limit: size, offset: 0 })));
+    }
   });
   it("debounces search for 300ms", async () => {
     vi.useFakeTimers();
@@ -167,6 +178,18 @@ describe("Permisos", () => {
     expect(api.listPermissions).toHaveBeenCalledTimes(1);
     await act(async () => { vi.advanceTimersByTime(1); });
     expect(api.listPermissions).toHaveBeenLastCalledWith(expect.objectContaining({ q: "identity", offset: 0 }));
+  });
+  it("keeps permission search truncated to 100 characters before the server request", async () => {
+    vi.useFakeTimers();
+    render(<ToastProvider><PermissionsPage /></ToastProvider>);
+    await act(async () => {});
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "x".repeat(101) } });
+    expect(screen.getByRole("searchbox")).toHaveValue("x".repeat(100));
+    await act(async () => { vi.advanceTimersByTime(300); });
+    expect(api.listPermissions).toHaveBeenLastCalledWith(expect.objectContaining({ q: "x".repeat(100), offset: 0 }));
+    expect(api.createPermission).not.toHaveBeenCalled();
+    expect(api.updatePermission).not.toHaveBeenCalled();
+    expect(api.deletePermission).not.toHaveBeenCalled();
   });
   it("validates fields accessibly and focuses the first invalid input without calling the API", async () => {
     await loaded();
