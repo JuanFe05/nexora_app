@@ -10,8 +10,9 @@ from uuid import UUID
 from sqlalchemy import ColumnElement, CursorResult, Select, delete, func, or_, select, true
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import InstrumentedAttribute
+from sqlalchemy.orm import InstrumentedAttribute, aliased
 
+from nexora.identity_access.application.dto.role import RoleRead
 from nexora.identity_access.domain.entities.role import Permission, Role
 from nexora.identity_access.domain.entities.user import User
 from nexora.identity_access.domain.value_objects.access_catalog import SystemRole
@@ -175,9 +176,33 @@ class SqlAlchemyAdministrationRepository:
     def _roles(self, query: str | None) -> Select[RoleModel]:
         return select(RoleModel).where(_search(query, RoleModel.code, RoleModel.name))
 
-    async def list_roles(self, *, limit: int, offset: int, query: str | None = None) -> list[Role]:
-        stmt = self._roles(query).order_by(RoleModel.code, RoleModel.id).limit(limit).offset(offset)
-        return [role_to_domain(model) for model in (await self._session.execute(stmt)).scalars()]
+    def _roles_with_counts(self, roles: Select[RoleModel]) -> Select[RoleModel, int]:
+        # Select the page first; the scalar count is correlated only to its returned roles.
+        role = aliased(RoleModel, roles.subquery())
+        assigned_users = (
+            select(func.count(RoleAssignmentModel.user_id.distinct()))
+            .where(RoleAssignmentModel.role_id == role.id)
+            .correlate(role)
+            .scalar_subquery()
+        )
+        # The FK with ON DELETE CASCADE guarantees that each assignment has an existing user.
+        # Inactive users keep their assignments and count, just as in role-deletion checks.
+        return select(role, assigned_users.label("usuarios_asignados")).order_by(role.code, role.id)
+
+    async def get_role_read(self, role_id: UUID) -> RoleRead | None:
+        stmt = self._roles_with_counts(select(RoleModel).where(RoleModel.id == role_id))
+        row = (await self._session.execute(stmt)).one_or_none()
+        return RoleRead(role_to_domain(row[0]), int(row[1])) if row is not None else None
+
+    async def list_roles(
+        self, *, limit: int, offset: int, query: str | None = None
+    ) -> list[RoleRead]:
+        page = self._roles(query).order_by(RoleModel.code, RoleModel.id).limit(limit).offset(offset)
+        stmt = self._roles_with_counts(page)
+        return [
+            RoleRead(role_to_domain(model), int(count))
+            for model, count in (await self._session.execute(stmt)).all()
+        ]
 
     async def count_roles(self, *, query: str | None = None) -> int:
         stmt = select(func.count()).select_from(self._roles(query).subquery())

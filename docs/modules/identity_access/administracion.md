@@ -149,6 +149,20 @@ Login y contrasena actual mantienen 1-128 caracteres sin requisitos de composici
 No existe endpoint de restablecimiento administrativo; al implementarlo debe usar ese mismo
 modulo. [Politica y compatibilidad legacy](seguridad.md#politica-de-contrasenas).
 
+### Contador de usuarios por rol
+
+Las respuestas de rol incluyen `usuarios_asignados` (entero >= 0). Cuenta usuarios distintos
+asignados, incluidos inactivos, aunque el rol este inactivo; no cuenta solo accesos efectivos.
+Sin asignaciones devuelve `0`. Se calcula en cada lectura: asignaciones y revocaciones se ven
+en la siguiente consulta, y eliminar un usuario reduce el total por el borrado en cascada.
+
+La pagina de roles se selecciona primero y un `COUNT(DISTINCT usuario_id)` correlacionado
+por `rol_id` agrega el contador en **una sola consulta SQL**. Usa el indice existente
+`ix_asignacion_rol_rol_id`; no requiere migraciones ni consultas por cada rol. Las consultas
+separadas ya existentes de permisos y total de roles siguen siendo constantes. Detalle,
+creacion y edicion usan el mismo helper de lectura. El DTO de aplicacion transporta el conteo,
+sin agregar estado derivado al agregado `Role`. No cambia la paginacion, busqueda ni orden.
+
 ## Reglas de consistencia (409)
 
 - No se puede eliminar, desactivar ni quitarle el rol `ADMINISTRADOR` al ultimo administrador
@@ -177,3 +191,6 @@ busqueda, paginacion, asignaciones y reglas 409. `tests/integration/test_granula
 cubre la matriz endpoint x permiso individual, todos los permisos, administrador, usuario sin rol
 y peticion sin token; comprueba ausencia de cambios en cada denegacion, IDs inexistentes, PATCH
 mixto, cambios de acceso con el mismo token, roles inactivos y limites anti-escalada.
+`tests/integration/test_role_assigned_users.py` cubre conteos 0/1/varios, asignacion repetida,
+revocacion, usuarios inactivos y eliminacion, detalle/creacion/edicion, busqueda y paginacion;
+compara el numero de sentencias SQL de listados con 3 y 10 roles para impedir N+1.

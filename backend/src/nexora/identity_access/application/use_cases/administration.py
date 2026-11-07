@@ -81,6 +81,7 @@ class UserDetail:
 class RoleDetail:
     role: Role
     permissions: tuple[str, ...]
+    assigned_users: int
 
 
 class _Base:
@@ -239,21 +240,26 @@ class RoleAdministration(_Base):
         )
         await self._repo.add_role(role)
         await self._tx.commit()
-        return RoleDetail(role, ())
+        return await self.get(role.id)
 
     async def list(self, *, limit: int, offset: int, query: str | None = None) -> Page[RoleDetail]:
         query = query.strip() or None if query is not None else None
         roles = await self._repo.list_roles(limit=limit, offset=offset, query=query)
-        permissions = await self._repo.permission_codes_by_role([role.id for role in roles])
+        permissions = await self._repo.permission_codes_by_role([item.role.id for item in roles])
         return Page(
-            items=tuple(RoleDetail(role, permissions.get(role.id, ())) for role in roles),
+            items=tuple(
+                RoleDetail(item.role, permissions.get(item.role.id, ()), item.assigned_users)
+                for item in roles
+            ),
             total=await self._repo.count_roles(query=query),
         )
 
     async def get(self, role_id: UUID) -> RoleDetail:
-        role = await self._role(role_id)
-        permissions = await self._repo.permission_codes_by_role([role.id])
-        return RoleDetail(role, permissions.get(role.id, ()))
+        item = await self._repo.get_role_read(role_id)
+        if item is None:
+            raise ResourceNotFound("Rol")
+        permissions = await self._repo.permission_codes_by_role([item.role.id])
+        return RoleDetail(item.role, permissions.get(item.role.id, ()), item.assigned_users)
 
     async def update(
         self,

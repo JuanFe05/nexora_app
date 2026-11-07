@@ -107,6 +107,28 @@ Roles y permisos se recargan desde la base en cada peticion con el mismo token. 
 revocacion rige desde la **peticion siguiente**; una peticion ya autorizada y en curso puede
 terminar tras la revocacion (ver `administracion.md`). Los roles inactivos no conceden acceso.
 
+### Roles: usuarios asignados
+
+Cada objeto de rol en `GET /roles`, `GET /roles/{id}`, `POST /roles`, `PATCH /roles/{id}`
+y `PUT /roles/{id}/permissions/{permission_id}` incluye `usuarios_asignados`, un entero
+no negativo (`0` sin asignaciones). Los demas campos no cambian:
+
+```json
+{
+  "id": "uuid", "codigo": "CUSTOM", "nombre": "Custom", "descripcion": null,
+  "estado": "activo", "permisos": [], "usuarios_asignados": 0
+}
+```
+
+Cuenta usuarios distintos con una asignacion en `iam.asignacion_rol`, incluidos usuarios
+inactivos y asignaciones a roles inactivos; no mide permisos efectivos. Eliminar un usuario
+borra sus asignaciones en cascada y reduce el contador. Asignar o revocar mediante
+`PUT` / `DELETE /users/{id}/roles/{role_id}` se refleja en la siguiente consulta, sin cache.
+El campo es de solo lectura: no se acepta en cuerpos de creacion o edicion.
+
+`GET /roles` conserva el arreglo JSON, `X-Total-Count` (total de roles, no de usuarios),
+`limit`, `offset`, `q`, busqueda literal y orden por `codigo`, `id`.
+
 ### Contrasena al crear usuarios
 
 `POST /api/v1/users` exige en `contrasena` 6-24 code points Unicode, una mayuscula (`Lu`),

@@ -6,6 +6,7 @@ from collections.abc import Collection
 from typing import Protocol
 from uuid import UUID
 
+from nexora.identity_access.application.dto.role import RoleRead
 from nexora.identity_access.domain.entities.role import Permission, Role
 from nexora.identity_access.domain.entities.user import User
 
@@ -47,9 +48,11 @@ class AdministrationRepository(Protocol):
 
     async def get_role_by_code(self, code: str) -> Role | None: ...
 
+    async def get_role_read(self, role_id: UUID) -> RoleRead | None: ...
+
     async def list_roles(
         self, *, limit: int, offset: int, query: str | None = None
-    ) -> list[Role]: ...
+    ) -> list[RoleRead]: ...
 
     async def count_roles(self, *, query: str | None = None) -> int: ...
 

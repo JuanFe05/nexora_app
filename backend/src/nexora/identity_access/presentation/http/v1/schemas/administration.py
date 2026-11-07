@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, SecretStr, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, StringConstraints, field_validator
 
 from nexora.identity_access.application.use_cases.administration import RoleDetail, UserDetail
 from nexora.identity_access.domain.entities.role import Permission
@@ -120,6 +120,7 @@ class RoleResponse(Contract):
     descripcion: str | None
     estado: RoleStatus
     permisos: tuple[str, ...]
+    usuarios_asignados: int = Field(ge=0, description="Usuarios con el rol, incluidos inactivos")
 
     @classmethod
     def from_detail(cls, detail: RoleDetail) -> RoleResponse:
@@ -131,6 +132,7 @@ class RoleResponse(Contract):
             descripcion=role.description,
             estado=role.status,
             permisos=detail.permissions,
+            usuarios_asignados=detail.assigned_users,
         )
 
 
