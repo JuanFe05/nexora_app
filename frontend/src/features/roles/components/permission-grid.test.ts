@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { permissionGridLayout } from "./permission-grid";
+import { groupPermissionOptions } from "./permission-grid";
 
-describe("balanced permission columns (at most six items each)", () => {
-  it.each([
-    [0, 0, 0, []],
-    [3, 1, 3, [3]],
-    [6, 1, 6, [6]],
-    [7, 2, 4, [4, 3]],
-    [13, 3, 5, [5, 4, 4]],
-    [25, 5, 5, [5, 5, 5, 5, 5]],
-  ] as const)("lays out %i permissions", (count, columns, rows, columnSizes) => {
-    expect(permissionGridLayout(count)).toEqual({ columns, rows, columnSizes });
-    expect(columnSizes.reduce<number>((sum, size) => sum + size, 0)).toBe(count);
-    expect(columnSizes.every(size => size <= 6)).toBe(true);
+describe("catalog module grouping", () => {
+  it("sorts modules and preserves permission order, identity and original data", () => {
+    const options = [
+      { id: "1", codigo: "ventas.crear", nombre: "Crear ventas", modulo: "Ventas", descripcion: null },
+      { id: "2", codigo: "caja.ver", nombre: "Ver caja", modulo: "Caja", descripcion: "Consulta" },
+      { id: "3", codigo: "ventas.ver", nombre: "Ver ventas", modulo: "Ventas", descripcion: null },
+    ];
+    expect(groupPermissionOptions(options)).toEqual([["Caja", [options[1]]], ["Ventas", [options[0], options[2]]]]);
+    expect(groupPermissionOptions(options)[1][1][0]).toBe(options[0]);
+    expect(options.map(option => option.id)).toEqual(["1", "2", "3"]);
+  });
+  it("does not invent modules for an empty catalog", () => {
+    expect(groupPermissionOptions([])).toEqual([]);
   });
 });

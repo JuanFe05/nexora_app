@@ -19,7 +19,7 @@ En edición, los datos sin permiso de actualización son de solo lectura y el ca
 sin permiso de asignación queda deshabilitado. Sin `identity.permissions.view` no se
 consulta `/permissions`; si se permite asignar, una nota explica por qué no se puede
 seleccionar. La creación solo ofrece selección con ambos permisos. Un diálogo sin
-ninguna parte editable ofrece **Cerrar** en lugar de Guardar.
+ninguna parte editable ofrece **Cerrar** en lugar de **Guardar cambios**.
 
 ## Uso
 
@@ -27,8 +27,11 @@ ninguna parte editable ofrece **Cerrar** en lugar de Guardar.
   `X-Total-Count` para paginar. El resumen de permisos muestra códigos, no identificadores.
 - **Nuevo rol** abre el Dialog with Form de TailAdmin. El código usa de 2 a 50 caracteres
   (`A-Z`, `0-9`, `_`) y empieza con una letra. Nombre: 1–100 caracteres; descripción opcional:
-  1–255. Se recortan espacios. Creación y edición comparten el ancho `sm:max-w-3xl`
-  del formulario de usuarios: Código y Nombre van en una fila desde `sm`, apilados en móvil.
+  1–255. Se recortan espacios. Creación y edición usan `sm:max-w-6xl` y dos paneles
+  independientes: **Información del rol** a la izquierda y **Permisos** a la derecha desde
+  `lg`; debajo se apilan con información primero. Código y Nombre van en una fila desde
+  `sm` y vuelven a apilarse en el panel lateral desde `lg`. Estado se mantiene en edición,
+  con las mismas restricciones existentes.
   Descripción usa un textarea redimensionable con `maxLength=255` y un contador accesible
   `n/255`: advertencia desde 230, rojo desde 255. El contador y la validación cuentan puntos
   de código Unicode después de recortar espacios, sin modificar el texto ni el payload.
@@ -36,14 +39,28 @@ ninguna parte editable ofrece **Cerrar** en lugar de Guardar.
   `backend/src/nexora/identity_access/presentation/http/v1/schemas/administration.py`.
   El atributo HTML `maxLength` cuenta unidades UTF-16; la entrada nativa de caracteres
   suplementarios (por ejemplo, emoji) puede alcanzar ese tope antes del contador Unicode.
-- **Editar** conserva el código como solo lectura. El catálogo se agrupa por módulo;
-  cada grupo permite seleccionar todos sus permisos y muestra el número seleccionado.
-  Las columnas mantienen el orden de arriba abajo y un máximo de seis permisos, repartidos
-  equilibradamente (`columnas = ceil(n/6)`, `filas = ceil(n/columnas)`). Se muestra una columna
-  en móvil, hasta dos desde `sm`, tres desde `lg` y cuatro desde `xl`; las columnas adicionales
-  pasan a otra fila dentro del mismo módulo. Las tarjetas conservan nombre y código, con
-  estados de selección, hover, foco y deshabilitado en temas claro y oscuro.
-- **Guardar** envía solamente los campos modificados autorizados y después las
+- **Editar** conserva el código como solo lectura y precarga `role.permisos`. El catálogo
+  real se agrupa por `modulo` en tarjetas Accordion de Base UI; no se crean permisos locales.
+  Cada cabecera muestra icono, nombre, descripción visual, contador y selección del módulo
+  con estado parcial. Seleccionar el módulo no lo expande ni afecta otros módulos.
+- **Seleccionar todos / Deseleccionar todos** afecta únicamente al catálogo visible y
+  conserva las selecciones cuyos códigos no aparecen en él. Los contadores muestran las
+  selecciones del catálogo, no esos códigos externos. Cada checkbox individual cambia
+  **solo ese permiso**: crear, consultar, editar, eliminar y otras acciones no se vinculan.
+- **Expandir todos / Contraer todos** controla múltiples módulos sin modificar permisos.
+  Todos empiezan contraídos tanto al crear como al editar; después manda la navegación del
+  usuario, no los cambios de selección. El catálogo deshabilitado permite inspeccionar
+  módulos, pero no cambiar asignaciones. Durante el guardado el formulario bloquea controles.
+- El contenido muestra nombres descriptivos, `descripcion` si existe y código técnico
+  secundario. La cuadrícula conserva el orden del catálogo: una columna en móvil y dos
+  desde `sm`, con selección, hover, foco y deshabilitado en temas claro y oscuro.
+  `permission-grid.ts` ahora agrupa el catálogo; se retiró el algoritmo de columnas equilibradas.
+- El backend no ofrece descripciones de módulos. El mapa visual local para `identity`
+  (único módulo del catálogo sembrado en `access_catalog.py`) usa «Usuarios, roles y permisos
+  de acceso.» e icono `UsersIcon`; otros módulos usan «Permisos del módulo <nombre>» y
+  `LayoutGridIcon`. Esto no modifica los datos del catálogo. Se siguen las convenciones
+  TailAdmin: no se adjuntó una propuesta visual a la solicitud.
+- **Guardar cambios** envía solamente los campos modificados autorizados y después las
   asignaciones/revocaciones necesarias, si están autorizadas. Sin cambios no hay mutaciones.
   Una descripción existente no puede vaciarse: el backend rechaza tanto `null` como una
   cadena vacía; puede reemplazarse por otro texto.
@@ -75,6 +92,10 @@ las primitivas visuales y la instancia HTTP compartida (incluido su refresh de s
 Pruebas deterministas desde `frontend/`: `npx vitest run`.
 La página se simula en el límite de sus módulos API y de useAuth; la matriz cubre permisos
 independientes, campos, catálogo, creación, edición, eliminación y mutaciones autorizadas.
+Las pruebas del Accordion y checklist cubren teclado, apertura múltiple, controles globales,
+selección parcial y por módulo, independencia de acciones, descripciones, columnas y estados
+vacío/deshabilitado. La página verifica paneles responsive, permisos precargados y persistencia
+solo de diferencias, incluidos reintentos parciales y códigos fuera del catálogo.
 Las pruebas del adaptador comprueban los cuerpos PATCH mínimos y las llamadas HTTP.
 Las pruebas no necesitan un backend ni credenciales. La estructura de scroll se comprueba
 con jsdom; la comprobación visual responsive en navegador y la integración contra un backend

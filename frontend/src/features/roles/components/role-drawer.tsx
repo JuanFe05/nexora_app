@@ -70,10 +70,12 @@ export function RoleDrawer({ role, onClose, onReload, onSuccess }: Props) {
     setErrors(current => ({ ...current, [field]: undefined }));
   }
   const descriptionLength = Array.from(values.descripcion.trim()).length;
-  return <FormDialog className="sm:max-w-3xl" open onOpenChange={open => { if (!open && !mutation.pending) onClose(); }} title={role ? "Editar rol" : "Nuevo rol"} description="Administra los datos del rol y sus permisos." formId="role-form" submitLabel={readOnly ? "Cerrar" : "Guardar"} pending={mutation.pending}>
+  return <FormDialog className="sm:max-w-6xl" open onOpenChange={open => { if (!open && !mutation.pending) onClose(); }} title={role ? "Editar rol" : "Nuevo rol"} description="Administra los datos del rol y sus permisos." formId="role-form" submitLabel={readOnly ? "Cerrar" : "Guardar cambios"} pending={mutation.pending}>
     <form id="role-form" ref={form} onSubmit={submit} noValidate className="space-y-6 py-4">
-      <fieldset disabled={mutation.pending} className="space-y-6">
-        <div className="grid grid-cols-1 items-start gap-5 sm:grid-cols-2">
+      <fieldset disabled={mutation.pending} className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <section aria-label="Información del rol" className="min-w-0 space-y-5 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/3">
+        <h3 className="font-semibold text-gray-800 dark:text-white/90">Información del rol</h3>
+        <div className="grid grid-cols-1 items-start gap-5 sm:grid-cols-2 lg:grid-cols-1">
         {([['codigo', 'Código'], ['nombre', 'Nombre']] as const).map(([field, label]) => <Field key={field} controlId={`role-${field}`} data-invalid={!!errors[field]}>
           <FieldLabel>{label}</FieldLabel>
           <Input name={field} value={values[field]} readOnly={!canEditFields || (field === "codigo" && !!mutation.savedRole)} onChange={event => update(field, event.target.value)} aria-invalid={!!errors[field]} aria-describedby={errors[field] ? `role-${field}-error` : field === "codigo" ? "role-code-hint" : undefined} />
@@ -94,12 +96,16 @@ export function RoleDrawer({ role, onClose, onReload, onSuccess }: Props) {
           </select>
           {administrator && <p id="role-status-hint" className="text-xs text-gray-500 dark:text-gray-400">ADMINISTRADOR no se puede desactivar.</p>}
         </Field>}
+        </section>
+        <div data-slot="role-permissions-panel" className="min-w-0 space-y-4 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/3">
         {administrator && <InlineAlert>Los permisos de ADMINISTRADOR están protegidos por el sistema.</InlineAlert>}
         {canAssign && !canViewCatalog && <section aria-label="Permisos del rol" aria-disabled="true" className="space-y-2">
           <h3 className="font-medium text-gray-800 dark:text-white/90">Permisos</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">Se requiere identity.permissions.view para consultar el catálogo y seleccionar permisos.</p>
         </section>}
         {needsCatalog && (catalog.loading ? <p role="status" className="text-sm text-gray-500 dark:text-gray-400">Cargando permisos…</p> : catalog.error ? <div className="space-y-3"><InlineAlert variant="error">{catalog.error}</InlineAlert><Button type="button" variant="outline" onClick={() => { setCatalog({ items: [], loading: true, error: null }); setRevision(value => value + 1); }}>Reintentar catálogo</Button></div> : <PermissionChecklist options={catalog.items} selected={selected} onChange={next => { if (canEditPermissions && !mutation.pending) setSelected(next); }} disabled={!canEditPermissions || mutation.pending} />)}
+        {!needsCatalog && !canAssign && <h3 className="font-semibold text-gray-800 dark:text-white/90">Permisos</h3>}
+        </div>
       </fieldset>
     </form>
   </FormDialog>;

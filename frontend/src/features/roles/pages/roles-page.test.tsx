@@ -39,7 +39,12 @@ afterEach(() => { cleanup(); vi.resetAllMocks(); vi.useRealTimers(); });
 async function openEdit() {
   render(<ToastProvider><RolesPage /></ToastProvider>);
   await userEvent.click(await screen.findByRole("button", { name: "Editar Ventas" }));
-  return screen.findByRole("dialog", { name: "Editar rol" });
+  const dialog = await screen.findByRole("dialog", { name: "Editar rol" });
+  if (auth.codes.has(P.permissionsView)) await expandPermissions();
+  return dialog;
+}
+async function expandPermissions() {
+  await userEvent.click(await screen.findByRole("button", { name: "Expandir todos" }));
 }
 function change(label: string, value: string) { fireEvent.change(screen.getByLabelText(label, { exact: true }), { target: { value } }); }
 
@@ -89,9 +94,9 @@ describe("granular permissions and FormDialog", () => {
       change("Descripción", "Nueva descripción");
       fireEvent.change(screen.getByLabelText("Estado", { exact: true }), { target: { value: "inactivo" } });
     }
-    if (fields || permissions) await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    if (fields || permissions) await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     else {
-      expect(screen.queryByRole("button", { name: "Guardar" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Guardar cambios" })).not.toBeInTheDocument();
       const footer = dialog.querySelector('[data-slot="dialog-footer"]') as HTMLElement;
       expect(within(footer).getByRole("button", { name: "Cerrar" })).toBeVisible();
       await userEvent.click(within(footer).getByRole("button", { name: "Cerrar" }));
@@ -116,12 +121,15 @@ describe("granular permissions and FormDialog", () => {
     render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
     change("Código", "VENTAS"); change("Nombre", "Ventas");
-    if (selectable) await userEvent.click(await screen.findByRole("checkbox", { name: "Ver caja" }));
+    if (selectable) {
+      await expandPermissions();
+      await userEvent.click(screen.getByRole("checkbox", { name: "Ver caja" }));
+    }
     else {
       expect(options.loadPermissionOptions).not.toHaveBeenCalled();
       expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     }
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.createRole).toHaveBeenCalledExactlyOnceWith({ codigo: "VENTAS", nombre: "Ventas", descripcion: "" });
     expect(api.updateRole).not.toHaveBeenCalled();
@@ -161,7 +169,7 @@ describe("granular permissions and FormDialog", () => {
   it("shows the backend 403 detail and preserves the edit for retry", async () => {
     vi.mocked(api.updateRole).mockRejectedValue(new ApiError(403, "No puedes cambiar este rol", {}));
     await openEdit(); change("Nombre", "Comercial");
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No puedes cambiar este rol");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByLabelText("Nombre", { exact: true })).toHaveValue("Comercial");
@@ -170,6 +178,45 @@ describe("granular permissions and FormDialog", () => {
 });
 
 describe("role form presentation", () => {
+  it("creates with only crear selected, without implicitly granting ver or other actions", async () => {
+    vi.mocked(options.loadPermissionOptions).mockResolvedValue([
+      { id: "create", codigo: "identity.users.create", nombre: "Crear usuarios", modulo: "identity", descripcion: null },
+      { id: "view", codigo: "identity.users.view", nombre: "Consultar usuarios", modulo: "identity", descripcion: null },
+    ]);
+    render(<ToastProvider><RolesPage /></ToastProvider>);
+    await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
+    change("Código", "EQUIPO"); change("Nombre", "Equipo");
+    const trigger = await screen.findByRole("button", { name: "identity" });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(trigger);
+    await userEvent.click(screen.getByRole("checkbox", { name: "Crear usuarios" }));
+    expect(screen.getByRole("checkbox", { name: "Consultar usuarios" })).not.toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(api.createRole).toHaveBeenCalledExactlyOnceWith({ codigo: "EQUIPO", nombre: "Equipo", descripcion: "" });
+    expect(api.assignPermission).toHaveBeenCalledExactlyOnceWith("r1", "create");
+    expect(api.revokePermission).not.toHaveBeenCalled();
+    expect(api.updateRole).not.toHaveBeenCalled();
+  });
+
+  it("starts edit collapsed with current permissions loaded, preserving permissions outside the catalog", async () => {
+    vi.mocked(api.listRoles).mockResolvedValue({ items: [{ ...role, permisos: [...role.permisos, "legacy.permission"] }], total: 1 });
+    render(<ToastProvider><RolesPage /></ToastProvider>);
+    await userEvent.click(await screen.findByRole("button", { name: "Editar Ventas" }));
+    const trigger = await screen.findByRole("button", { name: "Ventas" });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(trigger);
+    expect(screen.getByRole("checkbox", { name: "Ver ventas" })).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Seleccionar todos" }));
+    await userEvent.click(screen.getByRole("button", { name: "Deseleccionar todos" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(api.revokePermission).toHaveBeenCalledExactlyOnceWith("r1", "p1");
+    expect(api.assignPermission).not.toHaveBeenCalled();
+    expect(api.updateRole).not.toHaveBeenCalled();
+    expect(api.createRole).not.toHaveBeenCalled();
+  });
+
   it.each(["create", "edit"])("uses the same wider, responsive form and live description counter in %s", async mode => {
     let dialog: HTMLElement;
     if (mode === "edit") dialog = await openEdit();
@@ -178,7 +225,14 @@ describe("role form presentation", () => {
       await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
       dialog = await screen.findByRole("dialog", { name: "Nuevo rol" });
     }
-    expect(dialog).toHaveClass("sm:max-w-3xl");
+    expect(dialog).toHaveClass("sm:max-w-6xl");
+    const info = within(dialog).getByRole("region", { name: "Información del rol" });
+    const panel = dialog.querySelector('[data-slot="role-permissions-panel"]')!;
+    expect(info.parentElement).toBe(panel.parentElement);
+    expect(info.parentElement).toHaveClass("grid-cols-1", "lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]");
+    expect(info).toHaveClass("border", "rounded-xl", "dark:border-gray-800");
+    expect(panel).toHaveClass("border", "rounded-xl", "dark:border-gray-800");
+    expect(info.parentElement?.firstElementChild).toBe(info);
     const codeField = screen.getByLabelText("Código", { exact: true }).closest('[data-slot="field"]')!;
     const nameField = screen.getByLabelText("Nombre", { exact: true }).closest('[data-slot="field"]')!;
     expect(codeField.parentElement).toBe(nameField.parentElement);
@@ -210,9 +264,10 @@ describe("role form presentation", () => {
       await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
       change("Código", "VENTAS"); change("Nombre", "Ventas");
     }
+    if (mode === "create") await expandPermissions();
     await screen.findByRole("checkbox", { name: "Ver caja" });
     change("Descripción", "😀".repeat(256));
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     const description = screen.getByLabelText("Descripción", { exact: true });
     expect(screen.getByText("La descripción debe tener entre 1 y 255 caracteres.")).toBeVisible();
     expect(description).toHaveAttribute("aria-invalid", "true");
@@ -233,7 +288,7 @@ describe("role form presentation", () => {
     change("Descripción", "  Primera línea\n😀 Segunda línea  ");
     await userEvent.click(await screen.findByRole("checkbox", { name: "Seleccionar todos de Ventas" }));
     expect(screen.getByText("2 de 2 seleccionados")).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.createRole).toHaveBeenCalledExactlyOnceWith({ codigo: " VENTAS ", nombre: " Ventas ", descripcion: "  Primera línea\n😀 Segunda línea  " });
     expect(vi.mocked(api.assignPermission).mock.calls).toEqual([["r1", "p1"], ["r1", "p2"]]);
@@ -241,28 +296,20 @@ describe("role form presentation", () => {
     expect(api.revokePermission).not.toHaveBeenCalled();
   });
 
-  it.each([3, 6, 7, 13, 25])("renders %i permissions in balanced columns and keeps select-all/counter/payload", async count => {
+  it.each([3, 6, 7, 13, 25])("renders %i real permissions in two responsive columns and keeps select-all/counter/payload", async count => {
     const permissions = Array.from({ length: count }, (_, index) => ({ id: `p${index}`, codigo: `modulo.p${index}`, nombre: `Permiso ${index}`, modulo: "Módulo", descripcion: null }));
     vi.mocked(options.loadPermissionOptions).mockResolvedValue(permissions);
     vi.mocked(api.listRoles).mockResolvedValue({ items: [{ ...role, permisos: [] }], total: 1 });
     await openEdit();
     const group = await screen.findByRole("group", { name: "Módulo" });
     const grid = group.querySelector('[data-slot="permission-grid"]')!;
-    expect(grid).toHaveClass("grid", "grid-cols-1", "sm:grid-cols-[var(--permission-sm-columns)]", "lg:grid-cols-[var(--permission-lg-columns)]", "xl:grid-cols-[var(--permission-xl-columns)]");
-    const expectedColumns = Math.ceil(count / 6);
-    for (const [breakpoint, cap] of [["sm", 2], ["lg", 3], ["xl", 4]] as const) {
-      expect((grid as HTMLElement).style.getPropertyValue(`--permission-${breakpoint}-columns`)).toBe(`repeat(${Math.min(cap, expectedColumns)}, minmax(0, 1fr))`);
-    }
-    const columns = Array.from(grid.children);
-    expect(columns).toHaveLength(expectedColumns);
-    const sizes = columns.map(column => within(column as HTMLElement).getAllByRole("checkbox").length);
-    expect(Math.max(...sizes)).toBe(Math.ceil(count / expectedColumns));
-    expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
-    expect(columns.flatMap(column => within(column as HTMLElement).getAllByRole("checkbox").map(checkbox => checkbox.getAttribute("aria-label")))).toEqual(permissions.map(permission => permission.nombre));
+    expect(grid).toHaveClass("grid", "grid-cols-1", "sm:grid-cols-2");
+    expect(grid.children).toHaveLength(count);
+    expect(within(grid as HTMLElement).getAllByRole("checkbox").map(checkbox => checkbox.getAttribute("aria-label"))).toEqual(permissions.map(permission => permission.nombre));
     expect(within(group).getByText(`0 de ${count} seleccionados`)).toBeVisible();
     await userEvent.click(within(group).getByRole("checkbox", { name: "Seleccionar todos de Módulo" }));
     expect(within(group).getByText(`${count} de ${count} seleccionados`)).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(vi.mocked(api.assignPermission).mock.calls).toEqual(permissions.map(permission => ["r1", permission.id]));
     expect(api.updateRole).not.toHaveBeenCalled();
@@ -303,7 +350,7 @@ describe("Roles page", () => {
   it("validates fields in Spanish, marks invalid and focuses first; no API writes", async () => {
     render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(screen.getByLabelText("Código", { exact: true })).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByLabelText("Nombre", { exact: true })).toHaveAttribute("aria-invalid", "true");
     await waitFor(() => expect(screen.getByLabelText("Código", { exact: true })).toHaveFocus());
@@ -314,8 +361,9 @@ describe("Roles page", () => {
     render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
     change("Código", "VENTAS"); change("Nombre", "Ventas");
-    await userEvent.click(await screen.findByRole("checkbox", { name: "Ver caja" }));
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await expandPermissions();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Ver caja" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.createRole).toHaveBeenCalledExactlyOnceWith({ codigo: "VENTAS", nombre: "Ventas", descripcion: "" });
     expect(api.assignPermission).toHaveBeenCalledExactlyOnceWith("r1", "p3");
@@ -327,7 +375,7 @@ describe("Roles page", () => {
     render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
     change("Código", "VENTAS"); change("Nombre", "Ventas");
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Ya existe un rol con ese código");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByLabelText("Código", { exact: true })).toHaveValue("VENTAS");
@@ -338,8 +386,9 @@ describe("Roles page", () => {
     expect(screen.getByLabelText("Código", { exact: true })).toHaveAttribute("readonly");
     change("Nombre", "Comercial");
     await userEvent.click(await screen.findByRole("checkbox", { name: "Ver ventas" }));
+    expect(screen.getByRole("checkbox", { name: "Ver ventas" })).not.toBeChecked();
     await userEvent.click(screen.getByRole("checkbox", { name: "Editar ventas" }));
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.updateRole).toHaveBeenCalledExactlyOnceWith(role, { nombre: "Comercial", descripcion: "Equipo comercial", estado: "activo" });
     expect(api.assignPermission).toHaveBeenCalledExactlyOnceWith("r1", "p2");
@@ -364,11 +413,11 @@ describe("Roles page", () => {
     await openEdit(); change("Nombre", "Comercial");
     await userEvent.click(await screen.findByRole("checkbox", { name: "Editar ventas" }));
     await userEvent.click(screen.getByRole("checkbox", { name: "Ver caja" }));
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo asignar el permiso Ver caja. Conflicto de permiso");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     await waitFor(() => expect(api.listRoles).toHaveBeenCalledTimes(2));
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.updateRole).toHaveBeenCalledTimes(1);
     expect(vi.mocked(api.assignPermission).mock.calls).toEqual([["r1", "p2"], ["r1", "p3"], ["r1", "p3"]]);
@@ -378,12 +427,13 @@ describe("Roles page", () => {
     render(<ToastProvider><RolesPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
     change("Código", "VENTAS"); change("Nombre", "Ventas");
-    await userEvent.click(await screen.findByRole("checkbox", { name: "Ver caja" }));
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await expandPermissions();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Ver caja" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("El rol se creó y se conserva.");
     expect(screen.getByRole("alert")).toHaveTextContent("No se pudo asignar el permiso Ver caja.");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.createRole).toHaveBeenCalledTimes(1);
     expect(api.updateRole).not.toHaveBeenCalled();
@@ -395,6 +445,7 @@ describe("Roles page", () => {
     for (const code of ["ADMINISTRADOR", "ESTADISTICA", "FACTURACION"]) expect(screen.queryByRole("button", { name: `Eliminar ${code}` })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Editar ADMINISTRADOR" }));
     expect(screen.getByLabelText("Estado", { exact: true })).toBeDisabled();
+    await expandPermissions();
     await screen.findByRole("checkbox", { name: "Ver ventas" });
     for (const checkbox of screen.getAllByRole("checkbox")) expect(checkbox).toHaveAttribute("aria-disabled", "true");
     const protectedPermission = screen.getByRole("checkbox", { name: "Ver ventas" });
@@ -431,7 +482,7 @@ describe("Roles page", () => {
     await openEdit();
     change("Nombre", "Comercial");
     await userEvent.click(await screen.findByRole("checkbox", { name: "Ver caja" }));
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo actualizar el rol. Revisa los datos del formulario.");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(api.assignPermission).not.toHaveBeenCalled();
@@ -442,11 +493,11 @@ describe("Roles page", () => {
     vi.mocked(api.revokePermission).mockRejectedValueOnce(new ApiError(404, "gone", {})).mockResolvedValue(undefined);
     await openEdit();
     await userEvent.click(await screen.findByRole("checkbox", { name: "Ver ventas" }));
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo revocar el permiso Ver ventas. El rol o permiso ya no existe.");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(api.updateRole).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.revokePermission).toHaveBeenCalledTimes(2);
   });
@@ -456,12 +507,13 @@ describe("Roles page", () => {
     await userEvent.click(screen.getByRole("button", { name: "Nuevo rol" }));
     change("Código", "VENTAS"); change("Nombre", "Ventas");
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo cargar el catálogo de permisos. Sesión expirada.");
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(api.createRole).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Reintentar catálogo" }));
-    expect(await screen.findByRole("checkbox", { name: "Ver caja" })).not.toBeChecked();
+    await expandPermissions();
+    expect(screen.getByRole("checkbox", { name: "Ver caja" })).not.toBeChecked();
     expect(screen.getByLabelText("Nombre", { exact: true })).toHaveValue("Ventas");
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.createRole).toHaveBeenCalledTimes(1);
   });
@@ -471,7 +523,7 @@ describe("Roles page", () => {
     await openEdit();
     await screen.findByRole("checkbox", { name: "Ver caja" });
     change("Nombre", "Comercial");
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
     expect(screen.getByLabelText("Nombre", { exact: true })).toBeDisabled();
@@ -485,7 +537,8 @@ describe("Roles page", () => {
   it("does not write anything on unchanged save or cancel", async () => {
     await openEdit();
     await screen.findByRole("checkbox", { name: "Ver ventas" });
-    await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(screen.getByRole("checkbox", { name: "Ver ventas" })).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.updateRole).not.toHaveBeenCalled();
     expect(api.assignPermission).not.toHaveBeenCalled();
