@@ -19,6 +19,7 @@ from nexora.identity_access.domain.value_objects.access_catalog import (
     SYSTEM_ROLES,
 )
 from tests.integration.conftest import ORIGIN, Seeder
+from tests.integration.test_iam_administration import FORBIDDEN, login, request, snapshot
 
 ADMIN_PASSWORD = "Clave-Admin-Inicial-9"
 
@@ -95,6 +96,70 @@ async def test_la_siembra_es_idempotente(
 
     assert second.admin_created is False
     assert {table: await count(db_session, table) for table in tables} == before
+
+
+@pytest.mark.parametrize("missing", ["grant", "permission"])
+async def test_existing_admin_recovers_role_delete_permission_at_startup(
+    admin_settings: Settings,
+    db_session: AsyncSession,
+    client: AsyncClient,
+    missing: str,
+) -> None:
+    await run_initialization(admin_settings)
+    admin = await login(client, "admin", ADMIN_PASSWORD)
+    role = (
+        await request(
+            client, admin, "POST", "/roles", 201, {"codigo": "REMOVABLE", "nombre": "Removable"}
+        )
+    ).json()
+    before = await snapshot(client, admin)
+    # Simulate an existing database missing either the catalog row or only its admin grant.
+    await db_session.execute(
+        text(
+            "DELETE FROM iam.rol_permiso WHERE rol_id IN "
+            "(SELECT id FROM iam.rol WHERE codigo = 'ADMINISTRADOR') "
+            "AND permiso_id IN "
+            "(SELECT id FROM iam.permiso WHERE codigo = 'identity.roles.delete')"
+        )
+    )
+    if missing == "permission":
+        await db_session.execute(
+            text("DELETE FROM iam.permiso WHERE codigo = 'identity.roles.delete'")
+        )
+    await db_session.commit()
+    me = await request(client, admin, "GET", "/auth/me")
+    assert me.json()["roles"] == ["ADMINISTRADOR"]
+    assert "identity.roles.delete" not in me.json()["permisos"]
+    unchanged = await snapshot(client, admin)
+    denied = await request(client, admin, "DELETE", f"/roles/{role['id']}", 403)
+    assert denied.json() == FORBIDDEN
+    assert await snapshot(client, admin) == unchanged
+
+    result = await run_initialization(admin_settings)
+
+    assert (result.admin_created, result.admin_present) == (False, True)
+    restored = await snapshot(client, admin)
+    assert restored[:2] == before[:2]
+    permissions = await request(client, admin, "GET", "/permissions?q=identity.roles.delete")
+    assert [item["codigo"] for item in permissions.json()] == ["identity.roles.delete"]
+    roles = (await request(client, admin, "GET", "/roles")).json()
+    administrator = next(item for item in roles if item["codigo"] == "ADMINISTRADOR")
+    assert "identity.roles.delete" in administrator["permisos"]
+    me = await request(client, admin, "GET", "/auth/me")
+    user = await request(client, admin, "GET", f"/users/{me.json()['usuario']['id']}")
+    assert user.json()["estado"] == "activo"
+    assert "identity.roles.delete" in me.json()["permisos"]
+    # The same active administrator and token pass the real endpoint authorization after repair.
+    repaired = await snapshot(client, admin)
+    await request(client, admin, "DELETE", f"/roles/{role['id']}", 204)
+    assert await snapshot(client, admin) == [
+        repaired[0],
+        [item for item in roles if item["id"] != role["id"]],
+        repaired[2],
+    ]
+    assert (await request(client, admin, "GET", f"/roles/{role['id']}", 404)).json() == {
+        "detail": "Rol no encontrado"
+    }
 
 
 async def test_el_administrador_inicial_puede_iniciar_sesion(

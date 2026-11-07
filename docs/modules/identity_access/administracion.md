@@ -20,7 +20,8 @@ simultaneo de varios workers.
 
 Los registros existentes no se sobrescriben: un nombre o descripcion editado por un administrador
 sobrevive a los reinicios. Lo unico que se reafirma en cada arranque es que `ADMINISTRADOR` tenga
-todos los permisos del catalogo.
+todos los permisos del catalogo, incluido `identity.roles.delete`. Si falta ese permiso o su
+enlace en `rol_permiso`, se restaura antes de comprobar si ya existe un administrador activo.
 
 ### Credenciales del administrador inicial
 
@@ -163,6 +164,19 @@ separadas ya existentes de permisos y total de roles siguen siendo constantes. D
 creacion y edicion usan el mismo helper de lectura. El DTO de aplicacion transporta el conteo,
 sin agregar estado derivado al agregado `Role`. No cambia la paginacion, busqueda ni orden.
 
+### Eliminacion de roles
+
+`DELETE /api/v1/roles/{id}` exige `identity.roles.delete` en backend; tener solo
+`identity.roles.view` no permite eliminar. Una eliminacion autorizada de un rol personalizado
+sin usuarios asignados responde **204 sin cuerpo**, incluso si tiene permisos asignados:
+PostgreSQL borra en cascada sus enlaces `rol_permiso`, no los registros de permisos ni usuarios.
+
+- `ADMINISTRADOR`, `ESTADISTICA` y `FACTURACION` son roles protegidos: responde
+  `409 {"detail": "Los roles de sistema no pueden eliminarse"}`.
+- Cualquier usuario asignado bloquea el borrado, incluidos los inactivos:
+  `409 {"detail": "El rol tiene usuarios asignados: revoque las asignaciones primero"}`.
+- Una denegacion 403 o 409 conserva roles, permisos, usuarios y asignaciones.
+
 ## Reglas de consistencia (409)
 
 - No se puede eliminar, desactivar ni quitarle el rol `ADMINISTRADOR` al ultimo administrador
@@ -186,7 +200,12 @@ sin agregar estado derivado al agregado `Role`. No cambia la paginacion, busqued
 ## Pruebas
 
 `tests/integration/test_access_initialization.py` cubre la siembra, su idempotencia y las
-credenciales. `tests/integration/test_iam_administration.py` conserva CRUD, perfil de respuestas,
+credenciales, y la reparacion de `identity.roles.delete` en una base con administrador existente
+(incluida autorizacion HTTP con el mismo token). `tests/integration/test_role_deletion.py` cubre
+borrado de roles con permisos pero sin usuarios, conservacion de permisos y usuarios, 403 para
+consulta sin permiso de borrado, y 409 para roles protegidos o con usuarios activos/inactivos,
+incluso cuando el actor tiene `identity.roles.delete` sin ser administrador.
+`tests/integration/test_iam_administration.py` conserva CRUD, perfil de respuestas,
 busqueda, paginacion, asignaciones y reglas 409. `tests/integration/test_granular_permissions.py`
 cubre la matriz endpoint x permiso individual, todos los permisos, administrador, usuario sin rol
 y peticion sin token; comprueba ausencia de cambios en cada denegacion, IDs inexistentes, PATCH
