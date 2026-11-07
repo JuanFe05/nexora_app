@@ -20,6 +20,9 @@ Salida `200`:
   "access_token": "<jwt>",
   "token_type": "bearer",
   "expires_in": 600,
+  "idle_timeout_seconds": 1800,
+  "warning_seconds": 120,
+  "session_expires_at": "2026-11-07T23:00:00Z",
   "usuario": {
     "id": "uuid",
     "nombre_usuario": "jperez",
@@ -42,7 +45,7 @@ Errores: `401` credenciales invalidas (usuario inexistente, inactivo o contrasen
 
 Sin cuerpo. Requiere la cookie de refresh y la cabecera `X-CSRF-Token` igual a la cookie CSRF.
 
-Salida `200`: `{"access_token": "<jwt>", "token_type": "bearer", "expires_in": 600}` y cookies
+Salida `200`: `{"access_token": "<jwt>", "token_type": "bearer", "expires_in": 600, "idle_timeout_seconds": 1800, "warning_seconds": 120, "session_expires_at": "<ISO-8601 UTC>"}` y cookies
 rotadas. Acepta JTI vigente o anterior dentro de 30 s de la ultima rotacion (configurable).
 Un duplicado concurrente o reintento por respuesta perdida puede tener exito en esa ventana;
 un JTI mas antiguo o anterior fuera de gracia revoca la sesion.

@@ -6,6 +6,7 @@ Nunca se serializan modelos ORM ni campos internos como `hash_contrasena` o
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
@@ -38,6 +39,9 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"  # noqa: S105  (esquema OAuth, no una credencial)
     expires_in: int
+    idle_timeout_seconds: int
+    warning_seconds: int
+    session_expires_at: datetime = Field(description="Tope absoluto de sesion en ISO-8601 UTC")
 
 
 class LoginResponse(TokenResponse):

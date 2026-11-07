@@ -88,6 +88,7 @@ Todas usan el prefijo `NEXORA_`.
 | `NEXORA_REFRESH_TOKEN_TTL_DAYS` | `7` | Techo del refresh JWT, limitado por el absoluto de sesion |
 | `NEXORA_SESSION_IDLE_TIMEOUT_MINUTES` | `30` | Inactividad deslizante, 1-1440 min; no puede superar el absoluto, debe ser mayor que el access TTL y al menos el doble del umbral de actividad |
 | `NEXORA_SESSION_ABSOLUTE_TIMEOUT_HOURS` | `12` | Tope desde login que no se extiende, 1-168 h |
+| `NEXORA_SESSION_WARNING_SECONDS` | `120` | Aviso previo, 10-600 s inclusivos y estrictamente menor que la inactividad en segundos; se recomienda como maximo la mitad de esa ventana |
 | `NEXORA_REFRESH_ROTATION_GRACE_SECONDS` | `30` | Gracia para JTI anterior, 1-300 s |
 | `NEXORA_SESSION_ACTIVITY_TOUCH_SECONDS` | `60` | Umbral entre escrituras de actividad por request, 1-300 s |
 | `NEXORA_COOKIE_SAMESITE` | `lax` | `lax`, `strict` o `none` |
@@ -108,6 +109,18 @@ nunca lo extiende y emite `exp = min(ahora + TTL refresh, absoluto)`. Un request
 registra actividad cada >= umbral; un refresh valido siempre la registra. Expiracion idle o
 absoluta revoca y confirma antes del 401. El access conserva 10 min y puede renovarse si la
 sesion sigue activa; el cliente solo debe refrescar ante actividad real.
+
+`POST /api/v1/auth/login` y `POST /api/v1/auth/refresh` conservan `access_token`,
+`token_type` y `expires_in` y agregan:
+
+- `idle_timeout_seconds`: entero, inactividad configurada en segundos (default `1800`).
+- `warning_seconds`: entero, ventana de aviso configurada (default `120`).
+- `session_expires_at`: cadena ISO-8601 UTC, `fecha_vencimiento` absoluta de la sesion;
+  no es el vencimiento del access ni del refresh JWT y nunca se extiende al renovar.
+
+El cliente usa estos valores para avisar antes del cierre por inactividad, sin duplicar
+configuracion ni aumentar los TTL. El aviso no cambia las reglas de validez del servidor.
+`GET /api/v1/auth/me` conserva su contrato de usuario, roles y permisos.
 
 El UPDATE atomico de refresh acepta el JTI vigente o anterior en gracia (30 s inclusivos),
 y guarda vigente como anterior, nuevo JTI, fecha de rotacion y actividad. Esto tolera dos

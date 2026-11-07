@@ -30,6 +30,9 @@ class IssuedTokens:
     refresh_token: str
     refresh_expires_at: datetime
     session_id: UUID
+    idle_timeout_seconds: int
+    warning_seconds: int
+    session_expires_at: datetime
     token_type: str = "bearer"  # noqa: S105  (nombre del esquema, no un secreto)
 
 

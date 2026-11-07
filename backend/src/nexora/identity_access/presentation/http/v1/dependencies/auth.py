@@ -65,6 +65,8 @@ def get_login_use_case(container: ContainerDep, session: SessionDep) -> LoginUse
         clock=container.clock,
         transaction=SqlAlchemyTransaction(session),
         absolute_timeout=timedelta(hours=container.settings.session_absolute_timeout_hours),
+        idle_timeout=timedelta(minutes=container.settings.session_idle_timeout_minutes),
+        warning_seconds=container.settings.session_warning_seconds,
     )
 
 
@@ -76,6 +78,7 @@ def get_refresh_use_case(container: ContainerDep, session: SessionDep) -> Refres
         transaction=SqlAlchemyTransaction(session),
         idle_timeout=timedelta(minutes=container.settings.session_idle_timeout_minutes),
         rotation_grace=timedelta(seconds=container.settings.refresh_rotation_grace_seconds),
+        warning_seconds=container.settings.session_warning_seconds,
     )
 
 
@@ -106,7 +109,9 @@ def get_authenticate_use_case(
         clock=container.clock,
         transaction=SqlAlchemyTransaction(session),
         idle_timeout=timedelta(minutes=container.settings.session_idle_timeout_minutes),
-        activity_touch_interval=timedelta(seconds=container.settings.session_activity_touch_seconds),
+        activity_touch_interval=timedelta(
+            seconds=container.settings.session_activity_touch_seconds
+        ),
     )
 
 

@@ -30,4 +30,49 @@ def test_boundary_policy_is_accepted() -> None:
         session_idle_timeout_minutes=2,
         session_activity_touch_seconds=60,
         access_token_ttl_minutes=1,
+        session_warning_seconds=60,
     )
+
+
+def test_warning_defaults_and_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert Settings(_env_file=None).session_warning_seconds == 120
+    monkeypatch.setenv("NEXORA_SESSION_WARNING_SECONDS", "90")
+    assert Settings(_env_file=None).session_warning_seconds == 90
+
+
+@pytest.mark.parametrize("seconds", [10, 600])
+def test_warning_bounds_are_inclusive(seconds: int) -> None:
+    assert (
+        Settings(_env_file=None, session_warning_seconds=seconds).session_warning_seconds == seconds
+    )
+
+
+@pytest.mark.parametrize("seconds", [0, 9, 601])
+def test_warning_outside_bounds_is_rejected(seconds: int) -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, session_warning_seconds=seconds)
+
+
+@pytest.mark.parametrize("seconds", [120, 121])
+def test_warning_must_be_strictly_less_than_idle(seconds: int) -> None:
+    with pytest.raises(
+        ValidationError, match="El aviso debe ser menor que el tiempo de inactividad"
+    ):
+        Settings(
+            _env_file=None,
+            session_idle_timeout_minutes=2,
+            session_activity_touch_seconds=60,
+            access_token_ttl_minutes=1,
+            session_warning_seconds=seconds,
+        )
+
+
+def test_warning_just_below_idle_is_accepted() -> None:
+    settings = Settings(
+        _env_file=None,
+        session_idle_timeout_minutes=2,
+        session_activity_touch_seconds=60,
+        access_token_ttl_minutes=1,
+        session_warning_seconds=119,
+    )
+    assert settings.session_warning_seconds == 119

@@ -60,13 +60,28 @@ async def test_duplicate_refresh_and_lost_response_keep_session_alive(
         retry = await refresh_with_snapshot(app, snapshot)
     assert [first.status_code, retry.status_code] == [200, 200]
     for response in (first, retry):
-        assert set(response.json()) == {"access_token", "token_type", "expires_in"}
+        assert set(response.json()) == {
+            "access_token",
+            "token_type",
+            "expires_in",
+            "idle_timeout_seconds",
+            "warning_seconds",
+            "session_expires_at",
+        }
+        assert response.json()["idle_timeout_seconds"] == 1800
+        assert response.json()["warning_seconds"] == 120
+        assert (
+            datetime.fromisoformat(response.json()["session_expires_at"])
+            == before["fecha_vencimiento"]
+        )
         assert response.json()["expires_in"] == 600
         assert response.json()["token_type"] == "bearer"
         assert len(response.headers.get_list("set-cookie")) == 2
-        assert (await client.get(
-            ME_URL, headers={"Authorization": f"Bearer {response.json()['access_token']}"}
-        )).status_code == 200
+        assert (
+            await client.get(
+                ME_URL, headers={"Authorization": f"Bearer {response.json()['access_token']}"}
+            )
+        ).status_code == 200
     after = await seeder.fetch_session(sid)
     assert after["fecha_revocacion"] is None
     assert after["fecha_vencimiento"] == before["fecha_vencimiento"]

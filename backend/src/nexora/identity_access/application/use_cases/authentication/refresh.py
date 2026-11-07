@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import NoReturn
 from uuid import UUID
 
@@ -33,6 +33,7 @@ class RefreshSessionUseCase:
         transaction: Transaction,
         idle_timeout: timedelta = timedelta(minutes=30),
         rotation_grace: timedelta = timedelta(seconds=30),
+        warning_seconds: int = 120,
     ) -> None:
         self._sessions = sessions
         self._tokens = tokens
@@ -40,6 +41,7 @@ class RefreshSessionUseCase:
         self._transaction = transaction
         self._idle_timeout = idle_timeout
         self._rotation_grace = rotation_grace
+        self._warning_seconds = warning_seconds
 
     async def execute(self, command: RefreshCommand) -> IssuedTokens:
         # Firma, tipo y claims siempre se verifican. exp se comprueba abajo con el reloj
@@ -55,7 +57,9 @@ class RefreshSessionUseCase:
             raise InvalidToken
 
         refresh = self._tokens.issue_refresh_token(
-            user_id=claims.user_id, session_id=claims.session_id, now=now,
+            user_id=claims.user_id,
+            session_id=claims.session_id,
+            now=now,
             absolute_expires_at=session.expires_at,
         )
         rotated = await self._sessions.rotate_refresh_token(
@@ -79,6 +83,9 @@ class RefreshSessionUseCase:
             refresh_token=refresh.value,
             refresh_expires_at=refresh.expires_at,
             session_id=claims.session_id,
+            idle_timeout_seconds=int(self._idle_timeout.total_seconds()),
+            warning_seconds=self._warning_seconds,
+            session_expires_at=session.expires_at.astimezone(UTC),
         )
 
     async def _fail_rotation(self, session_id: UUID, now: datetime) -> NoReturn:

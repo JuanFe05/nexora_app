@@ -8,7 +8,7 @@ Reglas no negociables:
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, timedelta
 from uuid import uuid4
 
 from nexora.identity_access.application.dto.auth import (
@@ -46,6 +46,8 @@ class LoginUseCase:
         clock: Clock,
         transaction: Transaction,
         absolute_timeout: timedelta = timedelta(hours=12),
+        idle_timeout: timedelta = timedelta(minutes=30),
+        warning_seconds: int = 120,
     ) -> None:
         self._users = users
         self._sessions = sessions
@@ -55,6 +57,8 @@ class LoginUseCase:
         self._clock = clock
         self._transaction = transaction
         self._absolute_timeout = absolute_timeout
+        self._idle_timeout = idle_timeout
+        self._warning_seconds = warning_seconds
 
     async def execute(self, command: LoginCommand) -> LoginResult:
         identifier = LoginIdentifier(command.identifier)
@@ -71,7 +75,9 @@ class LoginUseCase:
         session_id = uuid4()
         absolute_expires_at = now + self._absolute_timeout
         refresh = self._tokens.issue_refresh_token(
-            user_id=user.id, session_id=session_id, now=now,
+            user_id=user.id,
+            session_id=session_id,
+            now=now,
             absolute_expires_at=absolute_expires_at,
         )
         access = self._tokens.issue_access_token(user_id=user.id, session_id=session_id, now=now)
@@ -98,6 +104,9 @@ class LoginUseCase:
                 refresh_token=refresh.value,
                 refresh_expires_at=refresh.expires_at,
                 session_id=session_id,
+                idle_timeout_seconds=int(self._idle_timeout.total_seconds()),
+                warning_seconds=self._warning_seconds,
+                session_expires_at=absolute_expires_at.astimezone(UTC),
             ),
             user=UserView(
                 id=user.id,

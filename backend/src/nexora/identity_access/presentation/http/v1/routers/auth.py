@@ -79,6 +79,9 @@ async def login(
         access_token=result.tokens.access_token,
         token_type=result.tokens.token_type,
         expires_in=result.tokens.expires_in,
+        idle_timeout_seconds=result.tokens.idle_timeout_seconds,
+        warning_seconds=result.tokens.warning_seconds,
+        session_expires_at=result.tokens.session_expires_at,
         usuario=_usuario(result.user),
     )
 
@@ -109,7 +112,13 @@ async def refresh(
         refresh_expires_at=tokens.refresh_expires_at,
         csrf_token=issue_csrf_token(),
     )
-    return TokenResponse(access_token=tokens.access_token, expires_in=tokens.expires_in)
+    return TokenResponse(
+        access_token=tokens.access_token,
+        expires_in=tokens.expires_in,
+        idle_timeout_seconds=tokens.idle_timeout_seconds,
+        warning_seconds=tokens.warning_seconds,
+        session_expires_at=tokens.session_expires_at,
+    )
 
 
 @router.post(

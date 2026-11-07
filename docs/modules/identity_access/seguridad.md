@@ -35,6 +35,7 @@ independencia de acciones y excepciones de delegacion en [administracion.md](adm
 | `SESSION_ABSOLUTE_TIMEOUT_HOURS` | 12 | 1-168 horas |
 | `REFRESH_ROTATION_GRACE_SECONDS` | 30 | 1-300 segundos |
 | `SESSION_ACTIVITY_TOUCH_SECONDS` | 60 | 1-300 segundos |
+| `SESSION_WARNING_SECONDS` | 120 | 10-600 segundos, estrictamente menor que la inactividad |
 
 Restricciones de consistencia validadas al arrancar: la inactividad debe ser mayor que la vigencia
 del access token (el front renueva y registra actividad cerca de su vencimiento) y al menos el doble
@@ -106,3 +107,14 @@ las operaciones concurrentes sobre la clave se serializan por usuario.
   mas antiguas ni elimina la necesidad de coordinar refresh entre pestanas.
 - El cliente debe renovar solo ante actividad real. El backend no distingue un request real de
   un temporizador: aun con actividad continua, el tope absoluto impide sesiones ilimitadas.
+
+## Origenes permitidos, CORS y cookies
+
+`/auth/refresh` y `/auth/logout` validan CSRF (cookie y cabecera iguales) y que el `Origin`, si viene, este en
+`NEXORA_ALLOWED_ORIGINS` (coincidencia exacta de esquema + host + puerto; `localhost` y `127.0.0.1` son
+origenes distintos). Si falta el origen real, `/auth/refresh` responde 401 al vencer el access token y el
+frontend lo interpreta como sesion expirada: es un error de configuracion, no de TTL. El backend registra el
+motivo (categoria fija, sin valores) con el logger `nexora.auth`. CORS permite credenciales solo para esos
+origenes. Las cookies: refresh `HttpOnly`, ruta `/api/v1/auth`; CSRF legible, ruta `/`; `SameSite` segun
+`NEXORA_COOKIE_SAMESITE`; `Secure` solo si `NEXORA_ENVIRONMENT=production` (HTTPS); `Domain` solo si
+`NEXORA_COOKIE_DOMAIN` esta definido.

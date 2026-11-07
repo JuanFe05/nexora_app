@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     refresh_token_ttl_days: int = 7
     session_idle_timeout_minutes: int = Field(default=30, gt=0, le=1440)
     session_absolute_timeout_hours: int = Field(default=12, gt=0, le=168)
+    session_warning_seconds: int = Field(default=120, gt=0, ge=10, le=600)
     refresh_rotation_grace_seconds: int = Field(default=30, gt=0, le=300)
     session_activity_touch_seconds: int = Field(default=60, gt=0, le=300)
 
@@ -66,6 +67,8 @@ class Settings(BaseSettings):
         # El front renueva el access token (y con ello la actividad) cerca de su vencimiento.
         if self.session_idle_timeout_minutes <= self.access_token_ttl_minutes:
             raise ValueError("La inactividad debe ser mayor que la vigencia del access token")
+        if self.session_warning_seconds >= self.session_idle_timeout_minutes * 60:
+            raise ValueError("El aviso debe ser menor que el tiempo de inactividad")
         return self
 
     refresh_cookie_name: str = "nexora_refresh_token"

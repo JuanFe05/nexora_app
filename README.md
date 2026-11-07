@@ -32,6 +32,16 @@ docker compose --profile dev up -d frontend-dev
 
 Si cambias `FRONTEND_HOST_PORT`, agrega ese origen a `NEXORA_ALLOWED_ORIGINS` en `.env`: el backend
 valida el `Origin` de las peticiones con cookie.
+
+**La sesión se cierra a los ~10 minutos aunque trabajes.** Casi siempre es `NEXORA_ALLOWED_ORIGINS`:
+`/auth/refresh` valida CSRF y el `Origin` exacto (esquema + host + puerto; `localhost` y `127.0.0.1` son
+distintos). Si el origen desde el que abres el frontend no está en la lista, la renovación responde 401 al
+vencer el access token y la app lo toma como sesión expirada. Comprueba, en este orden: (1) el origen real
+en la barra del navegador está en `NEXORA_ALLOWED_ORIGINS` (desarrollo `http://localhost:5173`, Docker
+`http://localhost:45334`); (2) reiniciaste/reconstruiste la API tras cambiar `.env`
+(`docker compose up -d --build`); (3) la migración está aplicada (`alembic upgrade head`, la hace el servicio
+`migrate`); (4) en DevTools > Network, la petición `POST /api/v1/auth/refresh` (estado y detalle) y las
+cookies `nexora_refresh_token` / `nexora_csrf_token`. No se soluciona subiendo los TTL de los tokens.
 El servicio `migrate` aplica las migraciones de Alembic y la API no arranca hasta que termina
 correctamente.
 
