@@ -12,7 +12,7 @@ Monolito modular en Python 3.14 con FastAPI, SQLAlchemy 2.x asincrono, PostgreSQ
 Todo el stack en contenedores (desde la raiz del repositorio):
 
 ```bash
-cp .env.template .env
+cp .env.development.template .env
 docker compose up -d --build   # postgres -> migrate -> api
 ```
 
@@ -52,7 +52,7 @@ Aplican las migraciones desde una base vacia en cada ejecucion. La conexion sale
 
 ## Variables de entorno
 
-La plantilla completa es `.env.template` en la raiz; se copia a `.env` (no versionado), que leen
+Las plantillas completas son `.env.development.template` y `.env.production.template` en la raiz; se copia a `.env` (no versionado), que leen
 tanto Docker Compose como Pydantic Settings. Las variables de la aplicacion usan el prefijo
 `NEXORA_`; las de infraestructura configuran el compose.
 

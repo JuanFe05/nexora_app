@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 .env
 .env.*
-!.env.template
+!.env.*.template
 *.pem
 *.key
 *.p12
@@ -40,6 +40,7 @@ htmlcov/
 # Agentes de IA: configuracion local, sesiones, historiales y cachés
 # ---------------------------------------------------------------------------
 .pi/
+.codegraph/
 .atl/
 .gentle/
 .gentle-ai/
@@ -90,3 +91,8 @@ temp/
 *.log
 *.bak
 *.orig
+
+# ---------------------------------------------------------------------------
+# Seguimiento interno de trabajo (Organic Driven Development): no se versiona
+# ---------------------------------------------------------------------------
+odd/

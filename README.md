@@ -15,7 +15,7 @@ nexora_app/
 ## Puesta en marcha con Docker
 
 ```bash
-cp .env.template .env          # completar POSTGRES_PASSWORD y NEXORA_JWT_SECRET
+cp .env.development.template .env   # completar POSTGRES_PASSWORD y NEXORA_JWT_SECRET
 docker compose up -d --build   # postgres -> migrate (alembic) -> api -> frontend
 curl http://localhost:45335/health
 ```
@@ -73,7 +73,10 @@ Docker y la API local con `uv run python main.py`.
 
 ## Configuracion
 
-Todas las variables estan en `.env.template`, se cargan con Pydantic Settings y se documentan en
+Dos plantillas versionadas, sin secretos: `.env.development.template` (desarrollo local, se copia a
+`.env`) y `.env.production.template` (produccion, se copia a `.env.production` en el servidor y se usa con
+`docker compose --env-file .env.production up -d --build`). `.env` y `.env.production` nunca se versionan.
+Las variables se cargan con Pydantic Settings y se documentan en
 [`backend/README.md`](backend/README.md). `.env` nunca se versiona.
 
 ## Documentacion

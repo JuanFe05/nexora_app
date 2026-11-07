@@ -17,7 +17,7 @@ htmlcov/
 # Nada de secretos dentro de la imagen.
 .env
 .env.*
-!.env.template
+!.env.*.template
 *.pem
 *.key
 
