@@ -12,6 +12,8 @@ aportado en el cuerpo o la URL.
 | `GET /api/v1/profile` | Sin cuerpo | `200` con el perfil propio |
 | `PATCH /api/v1/profile` | Campos personales que se desean cambiar | `200` con el perfil actualizado |
 | `POST /api/v1/profile/password` | `contrasena_actual` y `contrasena_nueva` | `204` sin cuerpo |
+| `GET /api/v1/profile/sessions` | Sin cuerpo | `200` con `items` de sesiones propias usables |
+| `DELETE /api/v1/profile/sessions/{id}` | ID de otra sesion propia usable | `204` sin cuerpo |
 
 El perfil contiene `id`, `nombre_usuario`, `correo`, `primer_nombre`, `segundo_nombre`,
 `primer_apellido`, `segundo_apellido`, `numero_telefono`, `estado` y `roles` (codigos activos).
@@ -82,6 +84,39 @@ toda la transaccion. Los cambios concurrentes de clave se serializan sobre el us
 Tras el cambio, login acepta la clave nueva y rechaza la anterior. No se implementa aqui
 recuperacion de contrasena olvidada ni restablecimiento administrativo. Un futuro reset
 administrativo debe usar el mismo modulo unico de politica.
+
+## Sesiones propias
+
+`GET /api/v1/profile/sessions` devuelve `{"items": [...]}` sin paginacion. Cada item contiene
+solo `id`, `direccion_ip` (cadena o `null`), `agente_usuario` (cadena o `null`),
+`fecha_creacion`, `fecha_ultima_actividad`, `fecha_vencimiento` (ISO-8601 UTC) y `actual`
+(booleano). Son datos reales de la sesion; `actual` compara su ID con `session_id` del
+principal autenticado (claim `sid` validado), nunca con un valor aportado por el cliente.
+No contiene JTI vigente/anterior, hashes, tokens ni identificadores de otros usuarios.
+
+Solo lista sesiones del usuario autenticado no revocadas con `ahora < fecha_vencimiento`
+y `ahora - fecha_ultima_actividad < timeout idle` configurado. Reutiliza los limites del
+modelo `Session` y el mismo reloj inyectado que autentica la peticion. Los limites exactos
+se excluyen; el listado no revive ni modifica sesiones. La sesion actual va primero y las
+restantes por ultima actividad descendente. La autenticacion conserva su actualizacion
+habitual de actividad con umbral, sin extender el vencimiento absoluto.
+
+`DELETE /api/v1/profile/sessions/{id}` revoca solo otra sesion propia usable. Reutiliza la
+revocacion existente en una transaccion, el lock de cambios de acceso, el bloqueo del
+usuario y el bloqueo de la sesion para serializar con refresh/revocaciones concurrentes.
+No borra cookies ni cierra la sesion del solicitante. El access y refresh de la sesion
+revocada reciben `401` desde la siguiente peticion.
+
+| Situacion | Resultado |
+| --- | --- |
+| Sin principal Bearer valido (ambas rutas) | `401` |
+| ID inexistente, ajeno, revocado o vencido (absoluto/inactividad) | `404 {"detail": "Recurso no encontrado"}`; mismo mensaje, sin revelar existencia |
+| ID de la sesion actual usable | `409 {"detail": "Para cerrar la sesion actual, use «Cerrar sesión»"}` |
+| Otra sesion propia usable | `204`, cuerpo vacio |
+
+Los rechazos no modifican la sesion objetivo. Para salir de la sesion actual se usa
+`POST /api/v1/auth/logout`; para cerrar todas, `POST /api/v1/auth/logout-all`.
+No exige permisos administrativos ni introduce columnas o migraciones.
 
 ## Referencias
 

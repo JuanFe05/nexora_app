@@ -61,7 +61,8 @@ class AuthenticateRequestUseCase:
         roles, permissions = await self._access.effective_access(user.id)
         if now - session.last_activity_at >= self._activity_touch_interval:
             await self._sessions.touch(
-                session.id, now,
+                session.id,
+                now,
                 idle_timeout=self._idle_timeout,
                 activity_touch_interval=self._activity_touch_interval,
             )

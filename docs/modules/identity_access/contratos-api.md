@@ -143,7 +143,7 @@ No hay endpoint de reset administrativo; uno futuro debe reutilizar ese modulo.
 
 ## Perfil propio (cualquier usuario autenticado)
 
-Los tres endpoints requieren `Authorization: Bearer <access_token>`; sin token valido responden
+Todos los endpoints de perfil requieren `Authorization: Bearer <access_token>`; sin token valido responden
 `401`. No requieren rol ni permiten indicar otro usuario. Detalles y decisiones en
 [perfil.md](perfil.md).
 
@@ -185,6 +185,41 @@ la sesion del solicitante permanece activa.
 Errores: `400 {"detail": "La contrasena actual es incorrecta"}` (no dispara refresh),
 `429` con `Retry-After` por intentos fallidos acumulados por usuario, `422` por entrada invalida.
 Ningun error devuelve las contrasenas enviadas.
+
+### GET /api/v1/profile/sessions
+
+Bearer, sin permiso extra ni cuerpo. Salida `200`:
+
+```json
+{
+  "items": [{
+    "id": "uuid", "direccion_ip": "127.0.0.1", "agente_usuario": null,
+    "fecha_creacion": "2026-11-07T12:00:00Z",
+    "fecha_ultima_actividad": "2026-11-07T12:05:00Z",
+    "fecha_vencimiento": "2026-11-08T00:00:00Z", "actual": true
+  }]
+}
+```
+
+Solo sesiones propias usables: no revocadas, `ahora < fecha_vencimiento` y
+`ahora - fecha_ultima_actividad < timeout idle` configurado, con la politica/reloj de
+`Session`. Orden: actual primero, luego ultima actividad descendente. `actual` se deriva
+exclusivamente del `session_id` del principal autenticado. IP y agente pueden ser `null`;
+fechas ISO-8601 UTC reales, no inventadas. Nunca expone JTI vigente/anterior, hashes o tokens.
+Error `401` sin autenticacion valida; no requiere roles ni permisos de administracion.
+
+### DELETE /api/v1/profile/sessions/{id}
+
+Bearer, sin permiso extra ni cuerpo. Revoca otra sesion propia usable mediante la
+transaccion y locks existentes. Salida `204`, cuerpo vacio, sin borrar cookies. Sus access
+y refresh tokens dejan de ser validos desde la siguiente peticion (`401`). No modifica
+sesiones ajenas ni la sesion actual.
+
+- `404 {"detail": "Recurso no encontrado"}` para ID inexistente, ajeno o no usable
+  (revocado, vencido absoluto o idle); mismo mensaje sin revelar existencia.
+- `409 {"detail": "Para cerrar la sesion actual, use «Cerrar sesión»"}` para la sesion
+  actual usable; permanece activa. Usar `/auth/logout` para cerrar la actual.
+- `401` sin principal Bearer valido. Los rechazos no revocan la sesion objetivo.
 
 ## Claims del JWT
 

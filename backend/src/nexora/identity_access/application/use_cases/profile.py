@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
+from uuid import UUID
 
 from nexora.identity_access.application.dto.auth import AuthenticatedPrincipal
+from nexora.identity_access.application.dto.session import SessionRead
 from nexora.identity_access.application.ports.administration import AdministrationRepository
 from nexora.identity_access.application.ports.repositories import (
     AccessRepository,
@@ -19,6 +21,7 @@ from nexora.identity_access.domain.entities.user import User
 from nexora.identity_access.domain.exceptions.identity import (
     ConflictError,
     IncorrectCurrentPassword,
+    ResourceNotFound,
     SessionNotActive,
 )
 
@@ -72,6 +75,46 @@ class ProfileService:
         roles, _ = await self._access.effective_access(user.id)
         return UserDetail(user, roles)
 
+    async def list_sessions(self, principal: AuthenticatedPrincipal) -> list[SessionRead]:
+        items = await self._sessions.list_usable(
+            principal.user.id, self._clock.now(), self._idle_timeout
+        )
+        # Orden estable: preserva actividad descendente y adelanta solo la sesion del principal.
+        return sorted(
+            (replace(item, current=item.id == principal.session_id) for item in items),
+            key=lambda item: not item.current,
+        )
+
+    async def revoke_session(self, principal: AuthenticatedPrincipal, session_id: UUID) -> None:
+        try:
+            await self._administration.lock_access_changes()
+            user = await self._locked_user(principal)
+            # Como en cambio de clave, revalida al actor despues de esperar el lock del usuario.
+            current = await self._sessions.get(principal.session_id)
+            now = self._clock.now()
+            if (
+                current is None
+                or current.user_id != user.id
+                or not current.is_usable(now, self._idle_timeout)
+            ):
+                raise SessionNotActive
+            target = await self._sessions.get_owned_for_update(session_id, user.id)
+            # La espera del lock de refresh/revocacion no debe prolongar la ventana usable.
+            now = self._clock.now()
+            if (
+                target is None
+                or target.user_id != user.id
+                or not target.is_usable(now, self._idle_timeout)
+            ):
+                raise ResourceNotFound("Recurso")
+            if target.id == principal.session_id:
+                raise ConflictError("Para cerrar la sesion actual, use «Cerrar sesión»")
+            await self._sessions.revoke(target.id, now)
+            await self._tx.commit()
+        except Exception:
+            await self._tx.rollback()
+            raise
+
     async def _locked_user(self, principal: AuthenticatedPrincipal) -> User:
         # Serializa cambios de credenciales para que dos solicitudes no verifiquen el hash viejo.
         user = await self._users.get_for_update(principal.user.id)
@@ -124,7 +167,8 @@ class ProfileService:
             # Una sesion revocada mientras esperaba el bloqueo no puede cambiar la clave.
             session = await self._sessions.get(principal.session_id)
             if (
-                session is None or session.user_id != user.id
+                session is None
+                or session.user_id != user.id
                 or not session.is_usable(now, self._idle_timeout)
             ):
                 raise SessionNotActive

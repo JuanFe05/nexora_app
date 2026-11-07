@@ -10,7 +10,8 @@ from sqlalchemy import CursorResult, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nexora.identity_access.domain.entities.session import Session
+from nexora.identity_access.application.dto.session import SessionRead
+from nexora.identity_access.domain.entities.session import Session, SessionUsabilityWindow
 from nexora.identity_access.domain.entities.user import User
 from nexora.identity_access.domain.value_objects.access_catalog import PermissionSpec, RoleSpec
 from nexora.identity_access.domain.value_objects.enums import RoleStatus, UserStatus
@@ -81,6 +82,50 @@ class SqlAlchemySessionRepository:
         model = await self._session.get(SessionModel, session_id, populate_existing=True)
         return session_to_domain(model) if model is not None else None
 
+    async def get_owned_for_update(self, session_id: UUID, user_id: UUID) -> Session | None:
+        stmt = (
+            select(SessionModel)
+            .where(SessionModel.id == session_id, SessionModel.user_id == user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return session_to_domain(model) if model is not None else None
+
+    async def list_usable(
+        self, user_id: UUID, now: datetime, idle_timeout: timedelta
+    ) -> list[SessionRead]:
+        window = SessionUsabilityWindow(now, idle_timeout)
+        stmt = (
+            select(
+                SessionModel.id,
+                SessionModel.ip_address,
+                SessionModel.user_agent,
+                SessionModel.created_at,
+                SessionModel.last_activity_at,
+                SessionModel.expires_at,
+            )
+            .where(
+                SessionModel.user_id == user_id,
+                SessionModel.revoked_at.is_(None),
+                SessionModel.expires_at > window.now,
+                SessionModel.last_activity_at > window.activity_cutoff,
+            )
+            .order_by(SessionModel.last_activity_at.desc(), SessionModel.id)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return [
+            SessionRead(
+                id=row.id,
+                ip_address=str(row.ip_address) if row.ip_address is not None else None,
+                user_agent=row.user_agent,
+                created_at=row.created_at,
+                last_activity_at=row.last_activity_at,
+                expires_at=row.expires_at,
+            )
+            for row in rows
+        ]
+
     async def rotate_refresh_token(
         self,
         *,
@@ -126,7 +171,11 @@ class SqlAlchemySessionRepository:
         )
 
     async def touch(
-        self, session_id: UUID, now: datetime, *, idle_timeout: timedelta,
+        self,
+        session_id: UUID,
+        now: datetime,
+        *,
+        idle_timeout: timedelta,
         activity_touch_interval: timedelta,
     ) -> None:
         await self._session.execute(

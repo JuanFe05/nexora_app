@@ -18,6 +18,7 @@ from nexora.identity_access.domain.exceptions.identity import (
     AuthenticationThrottled,
     ConflictError,
     IncorrectCurrentPassword,
+    ResourceNotFound,
     SessionNotActive,
 )
 from tests.support.fakes import (
@@ -167,6 +168,96 @@ async def test_persistence_failure_rolls_back_and_does_not_reset_throttle(parts)
     assert tx.commits == 0
     assert tx.rollbacks == 1
     assert throttle.resets == []
+
+
+async def test_list_usable_sessions_is_own_current_first_and_secret_free(parts):
+    service, _, sessions, _, _, tx, principal = parts
+    current = sessions.sessions[principal.session_id]
+    second = next(
+        s for s in sessions.sessions.values() if s.id != current.id and s.user_id == current.user_id
+    )
+    sessions.sessions[current.id] = replace(current, last_activity_at=NOW - timedelta(seconds=10))
+    for changes in (
+        {"revoked_at": NOW},
+        {"expires_at": NOW},
+        {"last_activity_at": NOW - timedelta(minutes=30)},
+    ):
+        expired = replace(current, id=uuid4(), **changes)
+        await sessions.add(expired)
+    before = sessions.sessions.copy()
+    result = await service.list_sessions(principal)
+    assert [item.id for item in result] == [current.id, second.id]
+    assert [item.current for item in result] == [True, False]
+    assert result[0].created_at == current.created_at
+    assert result[0].last_activity_at == NOW - timedelta(seconds=10)
+    assert result[0].expires_at == current.expires_at
+    assert result[0].ip_address is None
+    assert result[0].user_agent is None
+    assert not hasattr(result[0], "refresh_token_jti")
+    assert sessions.sessions == before
+    assert tx.commits == tx.rollbacks == 0
+
+
+async def test_revoke_own_other_session_only(parts):
+    service, _, sessions, admin, _, tx, principal = parts
+    target = next(
+        s
+        for s in sessions.sessions.values()
+        if s.id != principal.session_id and s.user_id == principal.user.id
+    )
+    before = sessions.sessions.copy()
+    await service.revoke_session(principal, target.id)
+    assert sessions.sessions[target.id] == replace(target, revoked_at=NOW, last_activity_at=NOW)
+    assert all(sessions.sessions[key] == value for key, value in before.items() if key != target.id)
+    admin.lock_access_changes.assert_awaited_once()
+    assert tx.commits == 1
+
+
+@pytest.mark.parametrize("kind", ["missing", "foreign", "revoked", "absolute", "idle", "current"])
+async def test_revoke_rejected_session_never_mutates(parts, kind):
+    service, _, sessions, _, throttle, tx, principal = parts
+    target = sessions.sessions[principal.session_id]
+    target = replace(target, id=uuid4())
+    if kind == "foreign":
+        target = replace(target, user_id=uuid4())
+    elif kind == "revoked":
+        target = replace(target, revoked_at=NOW)
+    elif kind == "absolute":
+        target = replace(target, expires_at=NOW)
+    elif kind == "idle":
+        target = replace(target, last_activity_at=NOW - timedelta(minutes=30))
+    elif kind == "current":
+        target = sessions.sessions[principal.session_id]
+    if kind != "missing":
+        await sessions.add(target)
+    before = sessions.sessions.copy()
+    error = ConflictError if kind == "current" else ResourceNotFound
+    message = (
+        "Para cerrar la sesion actual, use «Cerrar sesión»"
+        if kind == "current"
+        else "Recurso no encontrado"
+    )
+    with pytest.raises(error) as caught:
+        await service.revoke_session(principal, target.id)
+    assert str(caught.value) == message
+    assert sessions.sessions == before
+    assert tx.commits == 0
+    assert tx.rollbacks == 1
+    assert throttle.failures == throttle.resets == []
+
+
+async def test_revoke_persistence_failure_rolls_back(parts):
+    service, _, sessions, _, _, tx, principal = parts
+    target = next(
+        s
+        for s in sessions.sessions.values()
+        if s.id != principal.session_id and s.user_id == principal.user.id
+    )
+    sessions.revoke = AsyncMock(side_effect=RuntimeError("failure"))
+    with pytest.raises(RuntimeError, match="failure"):
+        await service.revoke_session(principal, target.id)
+    assert tx.commits == 0
+    assert tx.rollbacks == 1
 
 
 def test_password_and_hash_never_appear_in_repr():

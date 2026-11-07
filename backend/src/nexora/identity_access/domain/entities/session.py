@@ -8,6 +8,21 @@ from uuid import UUID
 
 
 @dataclass(frozen=True, slots=True)
+class SessionUsabilityWindow:
+    """Limites estrictos compartidos por la entidad y las consultas de sesiones."""
+
+    now: datetime
+    idle_timeout: timedelta
+
+    @property
+    def activity_cutoff(self) -> datetime:
+        return self.now - self.idle_timeout
+
+    def is_expired(self, expires_at: datetime, last_activity_at: datetime) -> bool:
+        return expires_at <= self.now or last_activity_at <= self.activity_cutoff
+
+
+@dataclass(frozen=True, slots=True)
 class Session:
     id: UUID
     user_id: UUID
@@ -27,7 +42,9 @@ class Session:
 
     def is_expired(self, now: datetime, idle_timeout: timedelta = timedelta(minutes=30)) -> bool:
         """El instante viene del reloj inyectado; ninguno de los limites es inclusivo."""
-        return now >= self.expires_at or now - self.last_activity_at >= idle_timeout
+        return SessionUsabilityWindow(now, idle_timeout).is_expired(
+            self.expires_at, self.last_activity_at
+        )
 
     def is_usable(self, now: datetime, idle_timeout: timedelta = timedelta(minutes=30)) -> bool:
         """La actividad desliza la inactividad, nunca el vencimiento absoluto."""

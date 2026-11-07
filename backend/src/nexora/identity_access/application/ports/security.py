@@ -50,7 +50,11 @@ class TokenService(Protocol):
     ) -> IssuedToken: ...
 
     def issue_refresh_token(
-        self, *, user_id: UUID, session_id: UUID, now: datetime,
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        now: datetime,
         absolute_expires_at: datetime | None = None,
     ) -> IssuedToken: ...
 

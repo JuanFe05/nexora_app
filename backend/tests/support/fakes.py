@@ -6,6 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+from nexora.identity_access.application.dto.session import SessionRead
 from nexora.identity_access.application.ports.security import (
     AccessTokenClaims,
     IssuedToken,
@@ -108,6 +109,28 @@ class FakeSessionRepository:
     async def get(self, session_id: UUID) -> Session | None:
         return self.sessions.get(session_id)
 
+    async def get_owned_for_update(self, session_id: UUID, user_id: UUID) -> Session | None:
+        session = await self.get(session_id)
+        return session if session is not None and session.user_id == user_id else None
+
+    async def list_usable(
+        self, user_id: UUID, now: datetime, idle_timeout: timedelta
+    ) -> list[SessionRead]:
+        sessions = sorted(
+            (
+                s
+                for s in self.sessions.values()
+                if s.user_id == user_id and s.is_usable(now, idle_timeout)
+            ),
+            key=lambda s: (-s.last_activity_at.timestamp(), s.id),
+        )
+        return [
+            SessionRead(
+                s.id, s.ip_address, s.user_agent, s.created_at, s.last_activity_at, s.expires_at
+            )
+            for s in sessions
+        ]
+
     async def rotate_refresh_token(
         self,
         *,
@@ -139,7 +162,11 @@ class FakeSessionRepository:
         self.sessions[session_id] = replace(session, revoked_at=now, last_activity_at=now)
 
     async def touch(
-        self, session_id: UUID, now: datetime, *, idle_timeout: timedelta,
+        self,
+        session_id: UUID,
+        now: datetime,
+        *,
+        idle_timeout: timedelta,
         activity_touch_interval: timedelta,
     ) -> None:
         session = await self.get(session_id)
@@ -196,7 +223,11 @@ class FakeTokenService:
         return issued
 
     def issue_refresh_token(
-        self, *, user_id: UUID, session_id: UUID, now: datetime,
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        now: datetime,
         absolute_expires_at: datetime | None = None,
     ) -> IssuedToken:
         token_id = uuid4()
@@ -204,7 +235,8 @@ class FakeTokenService:
             value=f"refresh:{user_id}:{session_id}:{token_id}",
             token_id=token_id,
             expires_at=min(now + timedelta(days=self.refresh_ttl_days), absolute_expires_at)
-            if absolute_expires_at is not None else now + timedelta(days=self.refresh_ttl_days),
+            if absolute_expires_at is not None
+            else now + timedelta(days=self.refresh_ttl_days),
         )
         self.issued.append(issued)
         return issued

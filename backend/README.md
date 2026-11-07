@@ -132,6 +132,24 @@ sesiones propias, incluida la actual, en una transaccion y reutiliza el borrado 
 (refresh `/api/v1/auth`, CSRF `/`). Otros usuarios no cambian. Sin autenticacion valida: 401.
 Ver [contrato API](../docs/modules/identity_access/contratos-api.md).
 
+### Gestion de sesiones propias desde el perfil
+
+- `GET /api/v1/profile/sessions`: Bearer, sin permiso extra; `200 {"items": [...]}`.
+  Solo sesiones propias usables segun `Session` (no revocadas, dentro del absoluto e idle).
+  Campos: `id`, `direccion_ip`, `agente_usuario`, `fecha_creacion`,
+  `fecha_ultima_actividad`, `fecha_vencimiento`, `actual`. IP/agente admiten `null`, fechas
+  ISO-UTC; actual primero, luego ultima actividad descendente. `actual` compara con el ID
+  de sesion del principal; nunca expone JTI, hashes ni tokens.
+- `DELETE /api/v1/profile/sessions/{id}`: revoca otra sesion propia usable en una
+  transaccion con los locks existentes; `204` vacio sin borrar cookies. Sus access/refresh
+  dejan de funcionar. ID inexistente, ajeno o no usable: `404` con el mismo mensaje
+  `Recurso no encontrado`. Sesion actual: `409` con
+  `Para cerrar la sesion actual, use «Cerrar sesión»`; permanece viva.
+- Ambas rutas: `401` sin autenticacion valida; sin permisos administrativos ni migraciones.
+
+Detalles en [perfil](../docs/modules/identity_access/perfil.md) y
+[contratos API](../docs/modules/identity_access/contratos-api.md).
+
 ### Politica de contrasenas nuevas
 
 Crear usuarios, cambiar la contrasena y configurar el administrador inicial exige **6-24

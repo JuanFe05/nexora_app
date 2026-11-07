@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID
 
+from nexora.identity_access.application.dto.session import SessionRead
 from nexora.identity_access.domain.entities.session import Session
 from nexora.identity_access.domain.entities.user import User
 from nexora.identity_access.domain.value_objects.login_identifier import LoginIdentifier
@@ -30,6 +31,20 @@ class SessionRepository(Protocol):
 
     async def get(self, session_id: UUID) -> Session | None: ...
 
+    async def get_owned_for_update(self, session_id: UUID, user_id: UUID) -> Session | None:
+        """Relee y bloquea la sesion SOLO si pertenece al usuario, hasta finalizar la transaccion.
+
+        El filtro por propietario va en la misma consulta: una fila ajena nunca se bloquea ni se
+        espera, de modo que su existencia no es observable por tiempo de respuesta.
+        """
+        ...
+
+    async def list_usable(
+        self, user_id: UUID, now: datetime, idle_timeout: timedelta
+    ) -> list[SessionRead]:
+        """Una consulta sin secretos, filtrada por propietario/politica, actividad descendente."""
+        ...
+
     async def rotate_refresh_token(
         self,
         *,
@@ -49,7 +64,11 @@ class SessionRepository(Protocol):
     async def revoke(self, session_id: UUID, now: datetime) -> None: ...
 
     async def touch(
-        self, session_id: UUID, now: datetime, *, idle_timeout: timedelta,
+        self,
+        session_id: UUID,
+        now: datetime,
+        *,
+        idle_timeout: timedelta,
         activity_touch_interval: timedelta,
     ) -> None: ...
 

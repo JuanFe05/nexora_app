@@ -32,7 +32,11 @@ class JwtTokenService:
         return self._issue(ACCESS_TOKEN_TYPE, user_id, session_id, now, ttl)
 
     def issue_refresh_token(
-        self, *, user_id: UUID, session_id: UUID, now: datetime,
+        self,
+        *,
+        user_id: UUID,
+        session_id: UUID,
+        now: datetime,
         absolute_expires_at: datetime | None = None,
     ) -> IssuedToken:
         ttl = timedelta(days=self._settings.refresh_token_ttl_days)

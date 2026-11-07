@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response, status
 
@@ -20,6 +21,8 @@ from nexora.identity_access.presentation.http.v1.schemas.profile import (
     PasswordUpdate,
     ProfileResponse,
     ProfileUpdate,
+    SessionListResponse,
+    SessionResponse,
 )
 
 router = APIRouter(prefix="/profile", tags=["perfil"])
@@ -29,6 +32,29 @@ ServiceDep = Annotated[ProfileService, Depends(get_profile_service)]
 @router.get("", response_model=ProfileResponse, summary="Consultar mi perfil")
 async def get_profile(principal: PrincipalDep, service: ServiceDep) -> UserResponse:
     return ProfileResponse.from_detail(await service.get(principal))
+
+
+@router.get(
+    "/sessions", response_model=SessionListResponse, summary="Consultar mis sesiones activas"
+)
+async def list_sessions(principal: PrincipalDep, service: ServiceDep) -> SessionListResponse:
+    return SessionListResponse(
+        items=[SessionResponse.from_read(item) for item in await service.list_sessions(principal)]
+    )
+
+
+@router.delete(
+    "/sessions/{id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Revocar otra sesion propia activa",
+    responses={
+        404: {"description": "Sesion inexistente, ajena o no usable"},
+        409: {"description": "Para la sesion actual, usar Cerrar sesión"},
+    },
+)
+async def revoke_session(id: UUID, principal: PrincipalDep, service: ServiceDep) -> Response:
+    await service.revoke_session(principal, id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("", response_model=ProfileResponse, summary="Editar mis datos personales")
