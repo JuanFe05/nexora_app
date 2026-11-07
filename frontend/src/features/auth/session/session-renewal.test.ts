@@ -8,7 +8,7 @@ const principal = { usuario: { id: "1", nombre_usuario: "ana", correo: "ana@exam
 const tokens = { access_token: "token", token_type: "bearer", expires_in: 60 };
 const cleanups: (() => void)[] = [];
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => { cleanups.splice(0).forEach((cleanup) => cleanup()); vi.useRealTimers(); });
+afterEach(() => { cleanups.splice(0).forEach((cleanup) => cleanup()); vi.unstubAllEnvs(); vi.restoreAllMocks(); vi.useRealTimers(); });
 async function setup(options?: Parameters<typeof createAuthSession>[2], watch = false) {
   const api = { login: vi.fn().mockResolvedValue(tokens), refresh: vi.fn().mockResolvedValue(tokens), me: vi.fn().mockResolvedValue(principal), logout: vi.fn().mockResolvedValue(undefined), logoutAll: vi.fn().mockResolvedValue(undefined) };
   const store = createTokenStore();
@@ -18,6 +18,122 @@ async function setup(options?: Parameters<typeof createAuthSession>[2], watch = 
   if (watch) cleanups.push(session.watchPrincipal(window, document));
   return { api, store, session };
 }
+
+it.each<[string, () => string, number]>([
+  ["JWT exp", () => `header.${btoa(JSON.stringify({ exp: (Date.now() + 60_000) / 1000 })).replace(/=/g, "")}.signature`, 30_000],
+  ["JWT base64url", () => `header.${btoa(JSON.stringify({ exp: (Date.now() + 60_000) / 1000, extra: "ÿÿ" })).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "")}.signature`, 30_000],
+  ["JWT inválido", () => "malformed", 480_000],
+  ["exp no numérico", () => `header.${btoa(JSON.stringify({ exp: "later" }))}.signature`, 480_000],
+])("sin expires_in usa %s para renovar sin cambiar el principal", async (_name, token, delay) => {
+  const { api, session } = await setup({ createChannel: () => undefined });
+  api.login.mockResolvedValue({ access_token: token(), token_type: "bearer" });
+  await session.login({ identificador: "ana", contrasena: "test" });
+  const snapshot = session.getSnapshot(); const listener = vi.fn(); session.subscribe(listener);
+  cleanups.push(session.watchPrincipal(window, document)); session.onActivity();
+  await vi.advanceTimersByTimeAsync(delay - 1); expect(api.refresh).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1); expect(api.refresh).toHaveBeenCalledTimes(1);
+  expect(session.getSnapshot()).toBe(snapshot); expect(listener).not.toHaveBeenCalled();
+});
+it.each([NaN, Infinity, -1, "60"])("expires_in inválido (%s) usa exp sin aceptar coerción", async (expires_in) => {
+  const { api, session } = await setup({ createChannel: () => undefined });
+  api.login.mockResolvedValue({ ...tokens, expires_in, access_token: `header.${btoa(JSON.stringify({ exp: (Date.now() + 60_000) / 1000 }))}.signature` });
+  await session.login({ identificador: "ana", contrasena: "test" });
+  cleanups.push(session.watchPrincipal(window, document)); session.onActivity();
+  await vi.advanceTimersByTimeAsync(29_999); expect(api.refresh).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1); expect(api.refresh).toHaveBeenCalledTimes(1);
+  expect(session.getSnapshot().status).toBe("authenticated");
+});
+it("expires_in en segundos prevalece sobre exp y el fallback también funciona tras refresh", async () => {
+  const { api, session } = await setup({ createChannel: () => undefined }, true);
+  api.login.mockResolvedValue({ ...tokens, access_token: `header.${btoa(JSON.stringify({ exp: (Date.now() + 3600_000) / 1000 }))}.signature` });
+  await session.login({ identificador: "ana", contrasena: "test" });
+  api.refresh.mockResolvedValue({ access_token: "malformed", token_type: "bearer" });
+  session.onActivity(); await vi.advanceTimersByTimeAsync(30_000);
+  expect(api.refresh).toHaveBeenCalledTimes(1);
+  session.onActivity(); await vi.advanceTimersByTimeAsync(479_999);
+  expect(api.refresh).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1); expect(api.refresh).toHaveBeenCalledTimes(2);
+});
+it("fallo proactivo rearma a 15/30/60 segundos con actividad y nunca después de expirar", async () => {
+  const { api, session } = await setup({ createChannel: () => undefined });
+  api.login.mockResolvedValue({ ...tokens, expires_in: 600 });
+  await session.login({ identificador: "ana", contrasena: "test" });
+  cleanups.push(session.watchPrincipal(window, document));
+  // Explicit recovery failure uses the same re-arm as proactive recovery.
+  api.refresh.mockRejectedValue(new ApiError(503, "temporal", null));
+  session.onActivity(); const outcome = expect(session.refresh()).rejects.toMatchObject({ status: 0 });
+  await vi.advanceTimersByTimeAsync(750); await outcome;
+  for (const delay of [15_000, 30_000, 60_000, 60_000]) {
+    await vi.advanceTimersByTimeAsync(delay - 1); const before = api.refresh.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(1); expect(api.refresh).toHaveBeenCalledTimes(before + 1);
+    await vi.advanceTimersByTimeAsync(750); expect(api.refresh).toHaveBeenCalledTimes(before + 3);
+  }
+  vi.setSystemTime(Date.now() + 600_000);
+  await vi.advanceTimersByTimeAsync(60_000); const count = api.refresh.mock.calls.length;
+  session.onActivity(); await vi.advanceTimersByTimeAsync(60_000);
+  expect(api.refresh).toHaveBeenCalledTimes(count); expect(vi.getTimerCount()).toBe(0);
+  expect(session.getSnapshot().status).toBe("authenticated");
+});
+it.each(["unmount", "logout", "terminal", "inactive"])("reintento proactivo se detiene por %s sin fugas", async (reason) => {
+  const { api, session } = await setup({ createChannel: () => undefined });
+  const stop = session.watchPrincipal(window, document); cleanups.push(stop);
+  api.refresh.mockRejectedValue(new ApiError(0, "red", null));
+  if (reason !== "inactive") session.onActivity();
+  const outcome = expect(session.refresh()).rejects.toMatchObject({ status: 0 });
+  await vi.advanceTimersByTimeAsync(750); await outcome;
+  if (reason === "unmount") stop();
+  if (reason === "logout") await session.logout();
+  if (reason === "terminal") {
+    api.refresh.mockRejectedValue(new ApiError(403, "expiró", null));
+    await expect(session.refresh()).rejects.toMatchObject({ status: 403 });
+  }
+  const count = api.refresh.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(120_000);
+  expect(api.refresh).toHaveBeenCalledTimes(count); expect(vi.getTimerCount()).toBe(0);
+});
+it.each([
+  [401, "cualquier detalle", false, "sesión inválida/expirada", "terminal"],
+  [403, "CSRF token missing", false, "se perdió la cookie CSRF", "terminal"],
+  [401, "Solicitud sin token CSRF valido", false, "se perdió la cookie CSRF", "terminal"],
+  [403, "origen no permitido.", true, "origen no permitido", "terminal"],
+  [403, "Origin not allowed synthetic-secret", true, "sesión inválida/expirada", "terminal"],
+  [403, "Origin not allowed".repeat(10), true, "sesión inválida/expirada", "terminal"],
+  [403, "Origin not allowed", true, "origen no permitido", "terminal"],
+  [503, "detalle privado", true, "red", "transient"],
+  [0, "detalle privado", false, "red", "transient"],
+] as const)("diagnóstico seguro único para refresh %s", async (status, detail, csrf, cause, classification) => {
+  vi.stubEnv("DEV", true); const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  const cookie = vi.spyOn(document, "cookie", "get").mockReturnValue(csrf ? "nexora_csrf_token=synthetic-secret" : "");
+  const { api, session } = await setup(); api.refresh.mockRejectedValue(new ApiError(status, detail, null));
+  const outcome = expect(session.refresh()).rejects.toMatchObject({ status: classification === "terminal" ? status : 0 });
+  await vi.advanceTimersByTimeAsync(750); await outcome;
+  expect(warn).toHaveBeenCalledExactlyOnceWith(`[auth] refresh failed: status=${status || "network"} classification=${classification} cause=${cause}`);
+  cookie.mockRestore();
+});
+it("producción y cancelación no publican diagnósticos", async () => {
+  vi.stubEnv("DEV", false); const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  const { api, session } = await setup(); api.refresh.mockRejectedValue(new ApiError(401, "privado", null));
+  await expect(session.refresh()).rejects.toMatchObject({ status: 401 }); expect(warn).not.toHaveBeenCalled();
+  vi.stubEnv("DEV", true);
+  await session.login({ identificador: "ana", contrasena: "test" });
+  api.refresh.mockRejectedValue(new ApiError(0, "privado", null));
+  const flight = session.refresh().catch(() => undefined); await vi.advanceTimersByTimeAsync(0);
+  await session.logout(); await flight; expect(warn).not.toHaveBeenCalled();
+});
+it("dos controladores comparten navigator.locks y nunca rotan simultáneamente la misma cookie", async () => {
+  let tail = Promise.resolve(); let cookieRevision = 0; const used: number[] = [];
+  const request = vi.fn((_name: string, callback: () => Promise<void>) => {
+    const flight = tail.then(callback); tail = flight.catch(() => undefined); return flight;
+  });
+  const first = await setup({ locks: { request }, createChannel: () => undefined });
+  const second = await setup({ locks: { request }, createChannel: () => undefined });
+  const rotate = async () => { const revision = cookieRevision; used.push(revision); await Promise.resolve(); cookieRevision = revision + 1; return tokens; };
+  first.api.refresh.mockImplementation(rotate); second.api.refresh.mockImplementation(rotate);
+  await Promise.all([first.session.refresh(), second.session.refresh()]);
+  expect(used).toEqual([0, 1]); expect(request).toHaveBeenCalledTimes(2);
+  expect(first.api.refresh).toHaveBeenCalledTimes(1); expect(second.api.refresh).toHaveBeenCalledTimes(1);
+  expect(first.session.getSnapshot().status).toBe("authenticated"); expect(second.session.getSnapshot().status).toBe("authenticated");
+});
 
 it.each([0, 500, 503, 429, 422])("refresh %s reintenta con backoff, conserva estado y permite otra solicitud", async (status) => {
   const { api, store, session } = await setup();

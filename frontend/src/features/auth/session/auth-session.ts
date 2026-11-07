@@ -2,6 +2,20 @@ import { ApiError } from "../../../lib/http/api-error";
 import type { AuthApi } from "../api/auth-api";
 import type { AuthState, LoginInput, MeResponse, TokenResponse } from "../types";
 import type { createTokenStore } from "./token-store";
+import { warnRefreshFailure } from "./refresh-diagnostics";
+
+function jwtExpiresAt(token: string): number | undefined {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return undefined;
+    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const claims: unknown = JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "=")));
+    if (!claims || typeof claims !== "object" || !("exp" in claims)
+      || typeof claims.exp !== "number" || !Number.isFinite(claims.exp) || claims.exp < 0) return undefined;
+    const expiry = claims.exp * 1000;
+    return Number.isFinite(expiry) ? expiry : undefined;
+  } catch { return undefined; }
+}
 
 type RefreshLocks = { request: (name: string, callback: () => Promise<void>) => Promise<void> };
 type LogoutChannel = {
@@ -30,6 +44,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
   let forbiddenTimer: ReturnType<typeof setTimeout> | undefined;
   const reloadInterval = 30_000;
   let expiresAt = Infinity;
+  let renewalFailures = 0;
   let active = false;
   let lastActivity = -Infinity;
   let renewalTimer: ReturnType<typeof setTimeout> | undefined;
@@ -55,11 +70,14 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
 
   function scheduleRenewal() {
     cancelRenewal();
-    if (!stopWatch || state.status !== "authenticated" || !Number.isFinite(expiresAt)) return;
+    if (!stopWatch || state.status !== "authenticated" || !Number.isFinite(expiresAt)
+      || (renewalFailures > 0 && (!active || Date.now() >= expiresAt))) return;
     renewalTimer = setTimeout(() => {
       renewalTimer = undefined;
-      if (active) void refresh().catch(() => undefined);
-    }, Math.max(0, expiresAt - Date.now() - 30_000));
+      if (active && (renewalFailures === 0 || Date.now() < expiresAt)) void refresh().catch(() => undefined);
+    }, renewalFailures > 0
+      ? Math.min(15_000 * 2 ** Math.min(renewalFailures - 1, 2), Math.max(0, expiresAt - Date.now()))
+      : Math.max(0, expiresAt - Date.now() - 30_000));
   }
 
   function onActivity() {
@@ -73,8 +91,11 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
 
   function acceptToken(result: TokenResponse) {
     store.setAccessToken(result.access_token);
-    expiresAt = Number.isFinite(result.expires_in) && result.expires_in >= 0
-      ? Date.now() + result.expires_in * 1000 : Infinity;
+    expiresAt = typeof result.expires_in === "number" && Number.isFinite(result.expires_in) && result.expires_in >= 0
+      && Number.isFinite(Date.now() + result.expires_in * 1000)
+      ? Date.now() + result.expires_in * 1000
+      // This is a scheduling estimate, not a token lifetime or an authorization verdict.
+      : jwtExpiresAt(result.access_token) ?? Date.now() + 510_000;
   }
 
   function broadcastLogout() {
@@ -87,7 +108,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
       if (revision !== refreshRevision) throw new ApiError(0, "Renovación interrumpida. Intenta de nuevo.", null);
       try { return await operation(); } catch (error) {
         if (current !== generation || definitive(error)) throw error;
-        if (attempt === 2) throw new ApiError(0, "No se pudo renovar la sesión. Intenta de nuevo.", null);
+        if (attempt === 2) throw error;
         await new Promise<void>((resolve) => {
           const done = () => { clearTimeout(timer); pendingWaits.delete(done); resolve(); };
           const timer = setTimeout(done, attempt === 0 ? 250 : 500);
@@ -124,6 +145,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     stopWatch?.();
     active = false;
     expiresAt = Infinity;
+    renewalFailures = 0;
     lastActivity = -Infinity;
     store.clear();
     principalFlight = null;
@@ -141,6 +163,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
       : await api.me();
     if (current !== generation) throw new Error("Sesión cancelada");
     publishPrincipal(principal);
+    renewalFailures = 0;
     scheduleRenewal();
   }
 
@@ -151,7 +174,8 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     const current = generation;
     const revision = refreshRevision;
     cancelRenewal();
-    // Events during the flight belong to the next renewal, not its retries.
+    // Successful renewal consumes prior activity; failures retain it for bounded recovery.
+    const hadActivity = active;
     active = false;
     const rotate = async () => {
       if (current !== generation) throw new Error("Sesión cancelada");
@@ -163,12 +187,20 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
         await loadPrincipal(current, result, true, revision);
       } catch (error) {
         const invalid = error instanceof ApiError && (error.status === 401 || (refreshing && error.status === 403));
-        if (current === generation && invalid) {
-          broadcastLogout();
-          clear();
-          expiredListeners.forEach((listener) => listener());
+        if (current === generation && revision === refreshRevision) {
+          warnRefreshFailure(error, invalid);
+          if (invalid) {
+            broadcastLogout();
+            clear();
+            expiredListeners.forEach((listener) => listener());
+          } else {
+            renewalFailures = Math.min(renewalFailures + 1, 3);
+            active ||= hadActivity;
+            scheduleRenewal();
+          }
         }
-        throw error;
+        if (invalid || current !== generation) throw error;
+        throw new ApiError(0, "No se pudo renovar la sesión. Intenta de nuevo.", null);
       }
     };
     refreshFlight = (async () => {
@@ -222,6 +254,8 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     const events = ["pointerdown", "keydown", "wheel", "scroll", "touchstart"];
     const onVisible = () => {
       if (state.status !== "authenticated" || document.visibilityState !== "visible") return;
+      // Focus must not bypass a pending transient backoff or revive an expired retry cycle.
+      if (renewalFailures > 0) return;
       if (expiresAt - Date.now() <= 30_000) {
         // A focus event alone must not renew an idle tab through /me's 401 recovery.
         if (active) void refresh().catch(() => undefined);

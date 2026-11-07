@@ -13,6 +13,10 @@ function csrfHeaders(): HeadersInit {
   }
 }
 
+export function hasCsrfCookie(): boolean {
+  return new Headers(csrfHeaders()).has("X-CSRF-Token");
+}
+
 export function createAuthApi(client = httpClient) {
   return {
     login: (input: LoginInput) => client.post<LoginResponse>("/auth/login", { body: input }),
