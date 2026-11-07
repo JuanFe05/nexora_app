@@ -193,6 +193,33 @@ describe("forbidden notifications", () => {
 });
 
 describe("authenticated HTTP recovery", () => {
+  it.each(["get", "getWithMeta", "post", "put", "patch", "delete"] as const)("%s registra respuesta autenticada exitosa sin cambiar resultado/opciones", async (method) => {
+    const onServerActivity = vi.fn(); const onActivity = vi.fn();
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ saved: true }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, getAccessToken: () => "synthetic", onActivity, onServerActivity });
+    const result = await client[method]("draft", { headers: { "X-Test": "kept" } });
+    expect(method === "getWithMeta" ? (result as { data: unknown }).data : result).toEqual({ saved: true });
+    expect(onActivity).toHaveBeenCalledTimes(1); expect(onServerActivity).toHaveBeenCalledTimes(1); expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(new Headers(fetchImpl.mock.calls[0][1]?.headers).get("X-Test")).toBe("kept");
+  });
+  it.each(["anonymous", "auth", "403", "500", "network", "invalid-json", "stale"])("%s no cuenta como respuesta autenticada exitosa", async (mode) => {
+    const onServerActivity = vi.fn(); let token: string | null = mode === "anonymous" ? null : "synthetic";
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => {
+      if (mode === "network") throw new TypeError("network");
+      if (mode === "stale") token = null;
+      if (mode === "invalid-json") return new Response("not json");
+      return Response.json({}, { status: mode === "403" ? 403 : mode === "500" ? 500 : 200 });
+    });
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, getAccessToken: () => token, onServerActivity });
+    await client.get(mode === "auth" ? "/auth/me" : "draft").catch(() => undefined);
+    expect(onServerActivity).not.toHaveBeenCalled(); expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+  it("204 y reintento exitoso tras 401 cuentan una vez, nunca la respuesta rechazada", async () => {
+    const onServerActivity = vi.fn();
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({}, { status: 401 })).mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, getAccessToken: () => "synthetic", refreshSession: vi.fn().mockResolvedValue(undefined), onServerActivity });
+    expect(await client.delete("draft")).toBeUndefined(); expect(onServerActivity).toHaveBeenCalledTimes(1); expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
   it("propagates transient refresh errors without replacing them with 401 or retrying the request", async () => {
     const error = new ApiError(0, "Renovación temporalmente no disponible", null);
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}, { status: 401 }));

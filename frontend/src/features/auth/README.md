@@ -8,13 +8,27 @@ El access token vive exclusivamente en memoria. El backend administra las cookie
 | --- | --- |
 | Access token próximo a vencer | Usa `expires_in` (segundos) de login/refresh para renovar 30 segundos antes, únicamente con actividad. Si falta o no es un número finito no negativo, intenta leer `exp` del payload JWT base64url defensivamente, sin verificarlo ni usarlo para autorizar. Si tampoco es válido, programa una renovación a los 8 minutos con actividad (horizonte local estimado de 8 min 30 s). Es solo planificación: no modifica la vigencia real del token ni los límites del backend. |
 | Actividad válida | `pointerdown`, `keydown`, `wheel`, `scroll`, `touchstart` con listeners pasivos y throttle de 1 segundo, o una petición API ajena a autenticación. Las peticiones internas `/auth/me` y `/auth/refresh` no cuentan como actividad. |
-| Sin actividad | No renueva. Focus/visibility por sí solos tampoco recuperan un token vencido; la expiración por inactividad la determina el backend. |
+| Sin actividad | No renueva. Focus/visibility por sí solos tampoco recuperan un token vencido. Con el contrato de aviso, el controlador cierra localmente al alcanzar la inactividad o el límite absoluto; el backend sigue imponiendo ambos límites. |
 | Focus/visibility con actividad | Si el token está vencido o a menos de 30 segundos de vencer, renueva dentro del mismo single-flight. Conserva la recarga anterior del principal en pestañas visibles cuando el token aún no está próximo a vencer. |
 | 401 en una petición de negocio | Una única renovación compartida por pestaña y un único reintento de la petición con el bearer actualizado. Nunca reintenta una operación prohibida (403). |
 | Refresh 401/403 o `/auth/me` posterior 401 | Borra token y principal, difunde el cierre local y deja que el guard redirija a `/signin`. Un componente global bajo ToastProvider consume la señal React-free y muestra «Tu sesión expiró». |
 | Red, timeout, 5xx u otros errores de renovación | Dos reintentos tras 250 y 500 ms, dentro del single-flight. Cada refresh HTTP tiene timeout de 10 segundos. Si falla, conserva el estado actual y devuelve un `ApiError(0)` seguro, sin redirigir al login. Rearma recuperación a los 15, 30 y 60 segundos (tope de 60), conservando la actividad pendiente; no inicia reintentos programados cuando vence el access token o el horizonte local estimado. Una recuperación exitosa reinicia el backoff y consume la actividad anterior; eventos durante la petición cuentan para el siguiente ciclo. Otra petición de negocio puede solicitar recuperación. Un fallo temporal de `/auth/me` reintenta solo esa lectura, sin rotar otra vez. |
 
 La renovación y los fallos temporales nunca publican `loading` ni `anonymous` sobre una sesión autenticada: los guards conservan la ruta y los formularios montados. El reintento de un POST tras 401 mantiene el mismo cuerpo JSON y se hace una sola vez.
+
+### Aviso de expiración por inactividad
+
+Login y refresh pueden devolver `idle_timeout_seconds`, `warning_seconds` y `session_expires_at` (ISO-8601 UTC) junto a los tokens. Son opcionales: sin los tres campos válidos se conserva el comportamiento anterior, sin diálogo. Se rechazan números no finitos, no positivos, tiempos cuyo cálculo desborda, avisos iguales o mayores que la inactividad y fechas no parseables. El contrato y los plazos viven solo en memoria; no se aumentan las vigencias.
+
+El controlador registra `lastServerActivityAt` al recibir login/refresh o una respuesta autenticada exitosa (incluido `/auth/me` y 204). Una petición fallida, una respuesta de un bearer ya limpiado/rotado o un evento de teclado no reinicia ese reloj. El deadline es `min(lastServerActivityAt + idle_timeout_seconds * 1000, session_expires_at)`. Una renovación nunca desplaza hacia adelante el límite absoluto conocido de la misma sesión.
+
+A `deadline - warning_seconds * 1000` se abre «Tu sesión está por expirar. ¿Deseas continuar trabajando?» con contador `mm:ss`. Es un overlay global hermano de las rutas: su store separado no cambia el principal ni desmonta formularios. El contador visual cambia cada segundo con `role=timer` y `aria-live=off`, evitando anuncios por segundo. Escape y clic exterior **mantienen el diálogo abierto**, sin elegir por el usuario.
+
+- **Continuar sesión** solicita refresh por el single-flight/Web Locks existente. Una respuesta exitosa cierra y rearma el aviso; un fallo temporal conserva auth y muestra «No se pudo renovar la sesión. Intenta de nuevo.» tras el backoff acotado existente. Un 401/403 definitivo mantiene el flujo de expiración.
+- **Cerrar sesión** limpia localmente de inmediato; la revocación del servidor sigue siendo best-effort y el guard redirige a `/signin`.
+- Al alcanzar cero, el controlador limpia, difunde logout y redirige con el toast existente «Tu sesión expiró». El plazo sigue corriendo incluso durante una renovación pendiente.
+- Escribir/moverse con el aviso abierto no lo cierra ni dispara renovación proactiva silenciosa. Una respuesta API/refresh exitosa en este controlador sí lo cierra y reinicia el plazo. No se transmite renovación entre pestañas; el canal sigue transportando únicamente logout sin tokens.
+- Logout y desmontaje cancelan los timers de aviso/expiración; el contador del overlay limpia su intervalo. El reloj del controlador es inyectable para tests deterministas.
 
 ### Diagnóstico en desarrollo
 

@@ -10,4 +10,5 @@ httpClient.configureAuth({
   refreshSession: authSession.refresh,
   onForbidden: authSession.onForbidden,
   onActivity: authSession.onActivity,
+  onServerActivity: authSession.onServerActivity,
 });

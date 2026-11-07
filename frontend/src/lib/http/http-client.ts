@@ -15,6 +15,7 @@ type AuthHandlers = {
   refreshSession?: () => Promise<void>;
   onForbidden?: () => void | Promise<void>;
   onActivity?: () => void;
+  onServerActivity?: () => void;
 };
 
 type HttpClientConfig = AuthHandlers & {
@@ -41,8 +42,8 @@ function errorDetail(body: unknown): string {
   return messages.join("; ") || RESPONSE_ERROR;
 }
 
-export function createHttpClient({ baseUrl, getAccessToken, refreshSession, onForbidden, onActivity, fetchImpl }: HttpClientConfig) {
-  let auth: AuthHandlers = { getAccessToken, refreshSession, onForbidden, onActivity };
+export function createHttpClient({ baseUrl, getAccessToken, refreshSession, onForbidden, onActivity, onServerActivity, fetchImpl }: HttpClientConfig) {
+  let auth: AuthHandlers = { getAccessToken, refreshSession, onForbidden, onActivity, onServerActivity };
 
   async function request<T>(method: string, path: string, options: HttpOptions = {}, retried = false): Promise<HttpResult<T>> {
     const isAuthEndpoint = /^auth(?:\/|\?|$)/.test(path.replace(/^\/+/, ""));
@@ -85,7 +86,14 @@ export function createHttpClient({ baseUrl, getAccessToken, refreshSession, onFo
         // A consumer callback must not replace the HTTP error.
       }
     }
-    if (response.status === 204 && response.ok) return { data: undefined as T, headers: response.headers };
+    const notifyServerActivity = () => {
+      // Ignore anonymous, auth-internal and stale responses from a cleared/rotated bearer.
+      if (!isAuthEndpoint && token && token === auth.getAccessToken?.()) auth.onServerActivity?.();
+    };
+    if (response.status === 204 && response.ok) {
+      notifyServerActivity();
+      return { data: undefined as T, headers: response.headers };
+    }
 
     let result: unknown;
     try {
@@ -94,6 +102,7 @@ export function createHttpClient({ baseUrl, getAccessToken, refreshSession, onFo
       throw new ApiError(response.status, RESPONSE_ERROR, null, response.headers.get("Retry-After"));
     }
     if (!response.ok) throw new ApiError(response.status, errorDetail(result), result, response.headers.get("Retry-After"));
+    notifyServerActivity();
     return { data: result as T, headers: response.headers };
   }
 

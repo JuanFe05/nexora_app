@@ -26,6 +26,7 @@ type LogoutChannel = {
 type SessionOptions = {
   locks?: RefreshLocks | null;
   createChannel?: () => LogoutChannel | undefined;
+  now?: () => number;
 };
 
 // React-free: HTTP recovery, proactive renewal and principal reads share one flight.
@@ -52,6 +53,64 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
   let stopWatch: (() => void) | undefined;
   let channel: LogoutChannel | undefined;
   const pendingWaits = new Set<() => void>();
+  const now = options.now ?? Date.now;
+  const warningListeners = new Set<() => void>();
+  let sessionWarning = { open: false, deadlineAt: 0 };
+  let lastServerActivityAt = -Infinity;
+  let idleTimeoutMs = 0;
+  let warningMs = 0;
+  let absoluteDeadlineAt = Infinity;
+  let warningTimer: ReturnType<typeof setTimeout> | undefined;
+  let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function publishWarning(open: boolean, deadlineAt: number) {
+    if (sessionWarning.open === open && sessionWarning.deadlineAt === deadlineAt) return;
+    sessionWarning = { open, deadlineAt };
+    warningListeners.forEach((listener) => listener());
+  }
+
+  function cancelWarning() {
+    clearTimeout(warningTimer);
+    clearTimeout(expiryTimer);
+    warningTimer = expiryTimer = undefined;
+  }
+
+  function expire() {
+    if (state.status !== "authenticated") return;
+    broadcastLogout();
+    clear();
+    expiredListeners.forEach((listener) => listener());
+  }
+
+  function scheduleWarning() {
+    cancelWarning();
+    if (!idleTimeoutMs || state.status !== "authenticated") return;
+    const deadlineAt = Math.min(lastServerActivityAt + idleTimeoutMs, absoluteDeadlineAt);
+    publishWarning(false, deadlineAt);
+    if (!stopWatch) return;
+    // Long deadlines are rechecked rather than overflowing the browser's signed timer delay.
+    const arm = (at: number, callback: () => void): ReturnType<typeof setTimeout> => setTimeout(() => {
+      if (now() < at) {
+        if (callback === expire) expiryTimer = arm(at, callback);
+        else warningTimer = arm(at, callback);
+      } else callback();
+    }, Math.min(2_147_483_647, Math.max(0, at - now())));
+    warningTimer = arm(deadlineAt - warningMs, () => {
+      warningTimer = undefined;
+      publishWarning(true, deadlineAt);
+      // The modal requires an explicit choice: keystrokes must not start silent renewal.
+      cancelRenewal();
+    });
+    expiryTimer = arm(deadlineAt, expire);
+  }
+
+  function onServerActivity() {
+    if (state.status !== "authenticated") return;
+    const wasWarningOpen = sessionWarning.open;
+    lastServerActivityAt = now();
+    scheduleWarning();
+    if (wasWarningOpen) scheduleRenewal();
+  }
 
   function cancelPendingRefresh() {
     ++refreshRevision;
@@ -70,7 +129,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
 
   function scheduleRenewal() {
     cancelRenewal();
-    if (!stopWatch || state.status !== "authenticated" || !Number.isFinite(expiresAt)
+    if (!stopWatch || state.status !== "authenticated" || sessionWarning.open || !Number.isFinite(expiresAt)
       || (renewalFailures > 0 && (!active || Date.now() >= expiresAt))) return;
     renewalTimer = setTimeout(() => {
       renewalTimer = undefined;
@@ -91,6 +150,22 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
 
   function acceptToken(result: TokenResponse) {
     store.setAccessToken(result.access_token);
+    const idle = result.idle_timeout_seconds;
+    const warning = result.warning_seconds;
+    const absolute = typeof result.session_expires_at === "string" ? Date.parse(result.session_expires_at) : NaN;
+    if (typeof idle === "number" && Number.isFinite(idle) && idle > 0
+      && typeof warning === "number" && Number.isFinite(warning) && warning > 0 && warning < idle
+      && Number.isFinite(absolute) && Number.isFinite(now() + idle * 1000)) {
+      idleTimeoutMs = idle * 1000;
+      warningMs = warning * 1000;
+      absoluteDeadlineAt = Math.min(absoluteDeadlineAt, absolute);
+      lastServerActivityAt = now();
+      scheduleWarning();
+    } else {
+      idleTimeoutMs = warningMs = 0;
+      cancelWarning();
+      publishWarning(false, 0);
+    }
     expiresAt = typeof result.expires_in === "number" && Number.isFinite(result.expires_in) && result.expires_in >= 0
       && Number.isFinite(Date.now() + result.expires_in * 1000)
       ? Date.now() + result.expires_in * 1000
@@ -141,6 +216,11 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     ++generation;
     ++principalRevision;
     cancelRenewal();
+    cancelWarning();
+    idleTimeoutMs = warningMs = 0;
+    absoluteDeadlineAt = Infinity;
+    lastServerActivityAt = -Infinity;
+    publishWarning(false, 0);
     pendingWaits.forEach((done) => done());
     stopWatch?.();
     active = false;
@@ -164,6 +244,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     if (current !== generation) throw new Error("Sesión cancelada");
     publishPrincipal(principal);
     renewalFailures = 0;
+    onServerActivity();
     scheduleRenewal();
   }
 
@@ -227,7 +308,10 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     principalFlight = (async () => {
       try {
         const principal = await api.me();
-        if (current === generation && revision === principalRevision) publishPrincipal(principal);
+        if (current === generation && revision === principalRevision) {
+          publishPrincipal(principal);
+          onServerActivity();
+        }
       } catch (error) {
         if (current === generation && error instanceof ApiError && error.status === 401) {
           await refresh().catch(() => undefined);
@@ -253,7 +337,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     stopWatch?.();
     const events = ["pointerdown", "keydown", "wheel", "scroll", "touchstart"];
     const onVisible = () => {
-      if (state.status !== "authenticated" || document.visibilityState !== "visible") return;
+      if (state.status !== "authenticated" || sessionWarning.open || document.visibilityState !== "visible") return;
       // Focus must not bypass a pending transient backoff or revive an expired retry cycle.
       if (renewalFailures > 0) return;
       if (expiresAt - Date.now() <= 30_000) {
@@ -284,12 +368,13 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
         events.forEach((event) => target.removeEventListener(event, onActivity, true));
         if (channel) { channel.onmessage = null; channel.close(); channel = undefined; }
         cancelRenewal();
+        cancelWarning();
         cancelForbiddenReload();
         stopWatch = undefined;
       };
     };
     startWatch = start;
-    if (state.status === "authenticated") { start(); scheduleRenewal(); }
+    if (state.status === "authenticated") { start(); scheduleRenewal(); scheduleWarning(); }
     return () => {
       if (startWatch !== start) return;
       if (stopWatch) stopWatch();
@@ -300,6 +385,12 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
 
   return {
     getSnapshot: () => state,
+    getWarningSnapshot: () => sessionWarning,
+    subscribeWarning: (listener: () => void) => {
+      warningListeners.add(listener);
+      return () => { warningListeners.delete(listener); };
+    },
+    onServerActivity,
     onActivity,
     subscribeExpired: (listener: () => void) => {
       expiredListeners.add(listener);
