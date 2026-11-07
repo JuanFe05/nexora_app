@@ -16,8 +16,9 @@ function csrfHeaders(): HeadersInit {
 export function createAuthApi(client = httpClient) {
   return {
     login: (input: LoginInput) => client.post<LoginResponse>("/auth/login", { body: input }),
-    refresh: () => client.post<TokenResponse>("/auth/refresh", { headers: csrfHeaders() }),
+    refresh: () => client.post<TokenResponse>("/auth/refresh", { headers: csrfHeaders(), signal: AbortSignal.timeout(10_000) }),
     logout: () => client.post<void>("/auth/logout", { headers: csrfHeaders() }),
+    logoutAll: () => client.post<void>("/auth/logout-all", { headers: csrfHeaders() }),
     me: () => client.get<MeResponse>("/auth/me"),
   };
 }

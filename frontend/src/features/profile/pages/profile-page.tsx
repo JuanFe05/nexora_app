@@ -3,7 +3,7 @@ import { InlineAlert } from "@/components/shared/inline-alert";
 import { useToast } from "@/components/shared/toast/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { PasswordForm } from "../components/password-form";
+import { SecuritySection } from "../components/security-section";
 import { ProfileForm } from "../components/profile-form";
 import { ProfileHeaderCard } from "../components/profile-header-card";
 import { useProfile } from "../hooks/use-profile";
@@ -20,7 +20,7 @@ export default function ProfilePage() {
       {profile && <div className="space-y-6">
         <ProfileHeaderCard profile={profile} />
         <ProfileForm key={profile.id} profile={profile} onUpdated={update} />
-        <PasswordForm />
+        <SecuritySection />
       </div>}
     </>
   );

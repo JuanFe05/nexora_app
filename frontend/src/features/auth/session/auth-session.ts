@@ -1,13 +1,26 @@
 import { ApiError } from "../../../lib/http/api-error";
 import type { AuthApi } from "../api/auth-api";
-import type { AuthState, LoginInput, MeResponse } from "../types";
+import type { AuthState, LoginInput, MeResponse, TokenResponse } from "../types";
 import type { createTokenStore } from "./token-store";
 
-// The session controller is independent of React, so refresh and HTTP recovery share one flight.
-export function createAuthSession(api: AuthApi, store: ReturnType<typeof createTokenStore>) {
+type RefreshLocks = { request: (name: string, callback: () => Promise<void>) => Promise<void> };
+type LogoutChannel = {
+  onmessage: ((event: MessageEvent<unknown>) => void) | null;
+  postMessage: (data: unknown) => void;
+  close: () => void;
+};
+type SessionOptions = {
+  locks?: RefreshLocks | null;
+  createChannel?: () => LogoutChannel | undefined;
+};
+
+// React-free: HTTP recovery, proactive renewal and principal reads share one flight.
+export function createAuthSession(api: AuthApi, store: ReturnType<typeof createTokenStore>, options: SessionOptions = {}) {
   let state: AuthState = { status: "loading", user: null, roles: [], permissions: [] };
   const listeners = new Set<() => void>();
+  const expiredListeners = new Set<() => void>();
   let generation = 0;
+  let refreshRevision = 0;
   let refreshFlight: Promise<void> | null = null;
   let restoreFlight: Promise<void> | null = null;
   let principalFlight: Promise<void> | null = null;
@@ -16,14 +29,77 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
   let lastForbiddenReload = -Infinity;
   let forbiddenTimer: ReturnType<typeof setTimeout> | undefined;
   const reloadInterval = 30_000;
+  let expiresAt = Infinity;
+  let active = false;
+  let lastActivity = -Infinity;
+  let renewalTimer: ReturnType<typeof setTimeout> | undefined;
+  let startWatch: (() => void) | undefined;
+  let stopWatch: (() => void) | undefined;
+  let channel: LogoutChannel | undefined;
+  const pendingWaits = new Set<() => void>();
+
+  function cancelPendingRefresh() {
+    ++refreshRevision;
+    pendingWaits.forEach((done) => done());
+  }
 
   function cancelForbiddenReload() {
     clearTimeout(forbiddenTimer);
     forbiddenTimer = undefined;
   }
 
+  function cancelRenewal() {
+    clearTimeout(renewalTimer);
+    renewalTimer = undefined;
+  }
+
+  function scheduleRenewal() {
+    cancelRenewal();
+    if (!stopWatch || state.status !== "authenticated" || !Number.isFinite(expiresAt)) return;
+    renewalTimer = setTimeout(() => {
+      renewalTimer = undefined;
+      if (active) void refresh().catch(() => undefined);
+    }, Math.max(0, expiresAt - Date.now() - 30_000));
+  }
+
+  function onActivity() {
+    if (state.status !== "authenticated") return;
+    // The first activity after renewal must not be lost to the previous cycle's throttle.
+    if (active && Date.now() - lastActivity < 1000) return;
+    lastActivity = Date.now();
+    active = true;
+    if (!refreshFlight && renewalTimer === undefined) scheduleRenewal();
+  }
+
+  function acceptToken(result: TokenResponse) {
+    store.setAccessToken(result.access_token);
+    expiresAt = Number.isFinite(result.expires_in) && result.expires_in >= 0
+      ? Date.now() + result.expires_in * 1000 : Infinity;
+  }
+
+  function broadcastLogout() {
+    try { channel?.postMessage({ type: "logout" }); } catch { /* Optional cross-tab transport. */ }
+  }
+
+  async function retryTransient<T>(operation: () => Promise<T>, current: number, revision: number, definitive: (error: unknown) => boolean): Promise<T> {
+    for (let attempt = 0; ; ++attempt) {
+      if (current !== generation) throw new Error("Sesión cancelada");
+      if (revision !== refreshRevision) throw new ApiError(0, "Renovación interrumpida. Intenta de nuevo.", null);
+      try { return await operation(); } catch (error) {
+        if (current !== generation || definitive(error)) throw error;
+        if (attempt === 2) throw new ApiError(0, "No se pudo renovar la sesión. Intenta de nuevo.", null);
+        await new Promise<void>((resolve) => {
+          const done = () => { clearTimeout(timer); pendingWaits.delete(done); resolve(); };
+          const timer = setTimeout(done, attempt === 0 ? 250 : 500);
+          pendingWaits.add(done);
+        });
+      }
+    }
+  }
+
   function publishPrincipal(principal: MeResponse) {
     ++principalRevision;
+    startWatch?.();
     const user = state.user;
     const sameUser = user !== null && (Object.keys(principal.usuario) as (keyof typeof user)[])
       .every((key) => user[key] === principal.usuario[key]);
@@ -40,8 +116,15 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
   }
 
   function clear() {
-    // Invalidate pending principal reads even when refresh (not explicit logout) clears auth.
+    // Invalidate every pending read/rotation before publishing an anonymous principal.
+    ++generation;
     ++principalRevision;
+    cancelRenewal();
+    pendingWaits.forEach((done) => done());
+    stopWatch?.();
+    active = false;
+    expiresAt = Infinity;
+    lastActivity = -Infinity;
     store.clear();
     principalFlight = null;
     cancelForbiddenReload();
@@ -50,12 +133,15 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     publish({ status: "anonymous", user: null, roles: [], permissions: [] });
   }
 
-  async function loadPrincipal(current: number, token: string) {
+  async function loadPrincipal(current: number, result: TokenResponse, renewing = false, revision = refreshRevision) {
     if (current !== generation) throw new Error("Sesión cancelada");
-    store.setAccessToken(token);
-    const principal = await api.me();
+    acceptToken(result);
+    const principal = renewing
+      ? await retryTransient(api.me, current, revision, (error) => error instanceof ApiError && error.status === 401)
+      : await api.me();
     if (current !== generation) throw new Error("Sesión cancelada");
     publishPrincipal(principal);
+    scheduleRenewal();
   }
 
   function refresh(): Promise<void> {
@@ -63,22 +149,43 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     // Once anonymous, only an explicit login can establish a new session.
     if (state.status === "anonymous") return Promise.reject(new Error("Sesión no disponible"));
     const current = generation;
+    const revision = refreshRevision;
+    cancelRenewal();
+    // Events during the flight belong to the next renewal, not its retries.
+    active = false;
+    const rotate = async () => {
+      if (current !== generation) throw new Error("Sesión cancelada");
+      let refreshing = true;
+      try {
+        const result = await retryTransient(api.refresh, current, revision,
+          (error) => error instanceof ApiError && (error.status === 401 || error.status === 403));
+        refreshing = false;
+        await loadPrincipal(current, result, true, revision);
+      } catch (error) {
+        const invalid = error instanceof ApiError && (error.status === 401 || (refreshing && error.status === 403));
+        if (current === generation && invalid) {
+          broadcastLogout();
+          clear();
+          expiredListeners.forEach((listener) => listener());
+        }
+        throw error;
+      }
+    };
     refreshFlight = (async () => {
       try {
-        const result = await api.refresh();
-        await loadPrincipal(current, result.access_token);
+        const locks = options.locks === undefined
+          ? (typeof navigator === "undefined" ? undefined : navigator.locks) : options.locks;
+        if (locks) await locks.request("nexora-auth-refresh", rotate);
+        else await rotate();
       } catch (error) {
-        if (current === generation) clear();
-        throw error;
-      } finally {
-        refreshFlight = null;
+        if (error instanceof ApiError || current !== generation) throw error;
+        throw new ApiError(0, "No se pudo renovar la sesión. Intenta de nuevo.", null);
       }
-    })();
+    })().finally(() => { refreshFlight = null; });
     return refreshFlight;
   }
 
-  // /auth/me deliberately bypasses HTTP's automatic 401 retry. Use the same session
-  // refresh path here, while keeping transient network/403 failures non-destructive.
+  // /auth/me bypasses HTTP's 401 retry. Network/403 failures remain non-destructive.
   function reloadPrincipal(): Promise<void> {
     if (state.status !== "authenticated") return Promise.resolve();
     if (refreshFlight) return refreshFlight.catch(() => undefined);
@@ -111,23 +218,59 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
   }
 
   function watchPrincipal(target: Window, document: Document) {
+    stopWatch?.();
+    const events = ["pointerdown", "keydown", "wheel", "scroll", "touchstart"];
     const onVisible = () => {
-      if (state.status !== "authenticated" || document.visibilityState !== "visible"
-        || Date.now() - lastFocusReload < reloadInterval) return;
+      if (state.status !== "authenticated" || document.visibilityState !== "visible") return;
+      if (expiresAt - Date.now() <= 30_000) {
+        // A focus event alone must not renew an idle tab through /me's 401 recovery.
+        if (active) void refresh().catch(() => undefined);
+        return;
+      }
+      if (Date.now() - lastFocusReload < reloadInterval) return;
       lastFocusReload = Date.now();
       void reloadPrincipal();
     };
-    target.addEventListener("focus", onVisible);
-    document.addEventListener("visibilitychange", onVisible);
+    const start = () => {
+      if (stopWatch) return;
+      try {
+        channel = options.createChannel ? options.createChannel()
+          : typeof BroadcastChannel === "undefined" ? undefined : new BroadcastChannel("nexora-auth-session");
+        if (channel) channel.onmessage = ({ data }) => {
+          if (data && typeof data === "object" && "type" in data && data.type === "logout") clear();
+        };
+      } catch { channel = undefined; }
+      target.addEventListener("focus", onVisible);
+      document.addEventListener("visibilitychange", onVisible);
+      events.forEach((event) => target.addEventListener(event, onActivity, { passive: true, capture: true }));
+      stopWatch = () => {
+        cancelPendingRefresh();
+        target.removeEventListener("focus", onVisible);
+        document.removeEventListener("visibilitychange", onVisible);
+        events.forEach((event) => target.removeEventListener(event, onActivity, true));
+        if (channel) { channel.onmessage = null; channel.close(); channel = undefined; }
+        cancelRenewal();
+        cancelForbiddenReload();
+        stopWatch = undefined;
+      };
+    };
+    startWatch = start;
+    if (state.status === "authenticated") { start(); scheduleRenewal(); }
     return () => {
-      target.removeEventListener("focus", onVisible);
-      document.removeEventListener("visibilitychange", onVisible);
-      cancelForbiddenReload();
+      if (startWatch !== start) return;
+      if (stopWatch) stopWatch();
+      else cancelPendingRefresh();
+      startWatch = undefined;
     };
   }
 
   return {
     getSnapshot: () => state,
+    onActivity,
+    subscribeExpired: (listener: () => void) => {
+      expiredListeners.add(listener);
+      return () => { expiredListeners.delete(listener); };
+    },
     reloadPrincipal,
     onForbidden,
     watchPrincipal,
@@ -137,31 +280,46 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     },
     refresh,
     restore: () => {
-      restoreFlight ??= refresh().catch(() => undefined);
+      const revision = refreshRevision;
+      restoreFlight ??= refresh().catch(async () => {
+        // StrictMode can remount while the first restoration is being cancelled.
+        if (state.status === "loading" && revision !== refreshRevision && startWatch) {
+          await refresh().catch(() => undefined);
+        }
+        // A transient/cancelled restoration is not a permanent anonymous verdict.
+        if (state.status === "loading") restoreFlight = null;
+      });
       return restoreFlight;
     },
     login: async (input: LoginInput) => {
-      const current = ++generation;
       clear();
+      const current = generation;
       try {
         // Finish a previous cookie rotation before starting another authentication operation.
         await refreshFlight?.catch(() => undefined);
         if (current !== generation) return;
         const result = await api.login(input);
-        await loadPrincipal(current, result.access_token);
+        await loadPrincipal(current, result);
       } catch (error) {
         if (current === generation) clear();
         throw error;
       }
     },
+    logoutAll: async () => {
+      const current = generation;
+      await refreshFlight?.catch(() => undefined);
+      if (current !== generation) throw new Error("Sesión cancelada");
+      await api.logoutAll();
+      if (current === generation) { broadcastLogout(); clear(); }
+    },
     logout: async () => {
-      ++generation;
+      broadcastLogout();
       clear();
       try {
         await refreshFlight?.catch(() => undefined);
         await api.logout();
       } catch {
-        // Local logout is unconditional, including when the server is unavailable.
+        // Local logout remains unconditional, including when the server is unavailable.
       }
     },
     hasPermission: (permission: string) => state.status === "authenticated" && state.permissions.includes(permission),

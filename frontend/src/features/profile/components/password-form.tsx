@@ -5,7 +5,6 @@ import { useToast } from "@/components/shared/toast/use-toast";
 import { FormDialog } from "@/components/shared/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { LockIcon } from "@/icons";
 import { changePassword, passwordFailure } from "../api/profile-api";
 import { useFormFocus } from "../hooks/use-form-focus";
 import type { FieldErrors, PasswordValues } from "../types";
@@ -23,11 +22,9 @@ const description = `${PASSWORD_VALIDATION_MESSAGE} Usa una contraseña diferent
 export function PasswordForm() {
   const [open, setOpen] = useState(false);
   return <>
-    <Card className="min-w-0" aria-labelledby="security-title">
-      <h2 id="security-title" className="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
-        <LockIcon aria-hidden="true" className="size-6" />Seguridad
-      </h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
+    <Card className="min-w-0" aria-labelledby="password-title">
+      <h3 id="password-title" className="text-lg font-semibold text-gray-800 dark:text-white/90">Cambiar contraseña</h3>
+      <p className="text-sm text-gray-500 dark:text-gray-400">Actualiza la contraseña de tu cuenta.</p>
       <Button variant="outline" className="w-full sm:w-auto sm:self-start" onClick={() => setOpen(true)}>Cambiar contraseña</Button>
     </Card>
     {open && <PasswordEditor onClose={() => setOpen(false)} />}

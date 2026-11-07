@@ -16,6 +16,7 @@ function sessionSetup() {
     login: vi.fn().mockResolvedValue({ ...tokens, usuario }),
     refresh: vi.fn().mockResolvedValue(tokens),
     logout: vi.fn().mockResolvedValue(undefined),
+    logoutAll: vi.fn().mockResolvedValue(undefined),
     me: vi.fn().mockResolvedValue(principal),
   };
   const store = createTokenStore();
@@ -23,6 +24,22 @@ function sessionSetup() {
 }
 
 describe("auth API", () => {
+  it("logoutAll sends bearer, current CSRF cookie, credentials and no body; accepts 204", async () => {
+    vi.stubGlobal("document", { cookie: "nexora_csrf_token=csrf-value" });
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    try {
+      const api = createAuthApi(createHttpClient({ baseUrl: "/api/v1", fetchImpl, getAccessToken: () => "test-access" }));
+      expect(await api.logoutAll()).toBeUndefined();
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchImpl.mock.calls[0];
+      expect(url).toBe("/api/v1/auth/logout-all");
+      expect(init).toMatchObject({ method: "POST", credentials: "include" });
+      expect(init?.body).toBeUndefined();
+      const headers = new Headers(init?.headers);
+      expect(headers.get("Authorization")).toBe("Bearer test-access");
+      expect(headers.get("X-CSRF-Token")).toBe("csrf-value"); expect(headers.has("Origin")).toBe(false);
+    } finally { vi.unstubAllGlobals(); }
+  });
   it("sends the exact login body and gets the principal with bearer", async () => {
     const fetchImpl = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json({ ...tokens, usuario }))
@@ -176,6 +193,23 @@ describe("forbidden notifications", () => {
 });
 
 describe("authenticated HTTP recovery", () => {
+  it("propagates transient refresh errors without replacing them with 401 or retrying the request", async () => {
+    const error = new ApiError(0, "Renovación temporalmente no disponible", null);
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}, { status: 401 }));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, refreshSession: vi.fn().mockRejectedValue(error) });
+    await expect(client.get("resource")).rejects.toBe(error);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("only ordinary API requests count as activity, not auth calls or the 401 retry", async () => {
+    const onActivity = vi.fn();
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({}, { status: 401 })).mockImplementation(async () => Response.json({}));
+    const client = createHttpClient({ baseUrl: "/api", fetchImpl, onActivity, refreshSession: vi.fn().mockResolvedValue(undefined) });
+    await client.get("resource");
+    await client.post("/auth/refresh"); await client.get("/auth/me");
+    expect(onActivity).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+  });
   it("configures the shared-client hooks without changing ordinary GET behavior", async () => {
     const store = createTokenStore();
     store.setAccessToken("first");

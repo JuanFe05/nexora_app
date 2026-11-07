@@ -9,7 +9,7 @@ const tokens = { access_token: "token", token_type: "bearer", expires_in: 600 };
 async function setup() {
   const api = {
     login: vi.fn().mockResolvedValue({ ...tokens, usuario }), refresh: vi.fn().mockResolvedValue(tokens),
-    logout: vi.fn().mockResolvedValue(undefined), me: vi.fn().mockResolvedValue(principal),
+    logout: vi.fn().mockResolvedValue(undefined), logoutAll: vi.fn().mockResolvedValue(undefined), me: vi.fn().mockResolvedValue(principal),
   };
   const store = createTokenStore();
   const session = createAuthSession(api, store);

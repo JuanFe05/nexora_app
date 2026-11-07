@@ -14,6 +14,7 @@ type AuthHandlers = {
   getAccessToken?: () => string | null | undefined;
   refreshSession?: () => Promise<void>;
   onForbidden?: () => void | Promise<void>;
+  onActivity?: () => void;
 };
 
 type HttpClientConfig = AuthHandlers & {
@@ -40,10 +41,12 @@ function errorDetail(body: unknown): string {
   return messages.join("; ") || RESPONSE_ERROR;
 }
 
-export function createHttpClient({ baseUrl, getAccessToken, refreshSession, onForbidden, fetchImpl }: HttpClientConfig) {
-  let auth: AuthHandlers = { getAccessToken, refreshSession, onForbidden };
+export function createHttpClient({ baseUrl, getAccessToken, refreshSession, onForbidden, onActivity, fetchImpl }: HttpClientConfig) {
+  let auth: AuthHandlers = { getAccessToken, refreshSession, onForbidden, onActivity };
 
   async function request<T>(method: string, path: string, options: HttpOptions = {}, retried = false): Promise<HttpResult<T>> {
+    const isAuthEndpoint = /^auth(?:\/|\?|$)/.test(path.replace(/^\/+/, ""));
+    if (!isAuthEndpoint && !retried) auth.onActivity?.();
     const { body, headers: extraHeaders, ...rest } = options;
     const headers = new Headers(extraHeaders);
     headers.set("Accept", "application/json");
@@ -65,11 +68,11 @@ export function createHttpClient({ baseUrl, getAccessToken, refreshSession, onFo
     } catch {
       throw new ApiError(0, NETWORK_ERROR, null);
     }
-    const isAuthEndpoint = /^auth(?:\/|\?|$)/.test(path.replace(/^\/+/, ""));
     if (response.status === 401 && !isAuthEndpoint && !retried && auth.refreshSession) {
       try {
         await auth.refreshSession();
-      } catch {
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 0) throw error;
         throw new ApiError(401, "No autenticado", null, response.headers.get("Retry-After"));
       }
       return request<T>(method, path, options, true);

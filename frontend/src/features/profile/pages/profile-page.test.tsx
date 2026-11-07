@@ -7,8 +7,14 @@ import { ApiError } from "@/lib/http/api-error";
 import { ToastProvider } from "@/components/shared/toast/toast-provider";
 import * as api from "../api/profile-api";
 import ProfilePage from "./profile-page";
+import { MemoryRouter, Routes, Route } from "react-router";
+import { AuthProvider } from "@/features/auth/auth-provider";
+import { ProtectedRoute } from "@/features/auth/components/route-guards";
+import { authSession } from "@/features/auth/session/session";
+import { tokenStore } from "@/features/auth/session/token-store";
 
-vi.mock("@/features/auth/use-auth", () => ({ useAuth: () => ({ status: "authenticated", user: { id: "1", correo: "ana@example.test" }, roles: [] }) }));
+const { authApi } = vi.hoisted(() => ({ authApi: { login: vi.fn(), refresh: vi.fn(), me: vi.fn(), logout: vi.fn(), logoutAll: vi.fn() } }));
+vi.mock("@/features/auth/api/auth-api", () => ({ authApi }));
 vi.mock("../api/profile-api", async (importOriginal) => ({ ...await importOriginal<typeof api>(), getProfile: vi.fn(), updateProfile: vi.fn(), changePassword: vi.fn() }));
 const profile = { id: "1", nombre_usuario: "ana", correo: "ana@example.test", primer_nombre: "Ana", segundo_nombre: null, primer_apellido: "Pérez", segundo_apellido: null, numero_telefono: null, estado: "ACTIVO", roles: ["ESTADISTICA", "FACTURACION"] };
 const current = () => screen.getByLabelText(/^Contraseña actual/);
@@ -16,15 +22,73 @@ const next = () => screen.getByLabelText(/^Nueva contraseña/);
 const confirmation = () => screen.getByLabelText(/^Confirmar contraseña/);
 const save = () => screen.getByRole("button", { name: "Guardar" });
 const change = save;
-async function loaded() { render(<ToastProvider><ProfilePage /></ToastProvider>); await screen.findByRole("heading", { name: "Información personal" }); }
+function mount() { return render(<ToastProvider><AuthProvider><MemoryRouter><Routes><Route element={<ProtectedRoute />}><Route path="/" element={<ProfilePage />} /></Route><Route path="/signin" element={<h1>Iniciar sesión</h1>} /></Routes></MemoryRouter></AuthProvider></ToastProvider>); }
+async function loaded() { mount(); await screen.findByRole("heading", { name: "Información personal" }); }
 async function editProfile(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("button", { name: "Editar" })); await screen.findByRole("dialog", { name: "Editar información personal" }); }
 async function editPassword(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("button", { name: "Cambiar contraseña" })); await screen.findByRole("dialog", { name: "Cambiar contraseña" }); }
 async function closed() { await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument()); expect(document.querySelectorAll("input")).toHaveLength(0); }
 async function fillPasswords(user: ReturnType<typeof userEvent.setup>, actual = "actual-privada", nueva = "Nueva-privada-123", confirm = nueva) {
   await user.type(current(), actual); await user.type(next(), nueva); await user.type(confirmation(), confirm);
 }
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.getProfile).mockResolvedValue(profile); vi.mocked(api.changePassword).mockResolvedValue(undefined); });
-afterEach(cleanup);
+beforeEach(async () => {
+  vi.clearAllMocks();
+  authApi.login.mockResolvedValue({ access_token: "token", expires_in: 600 });
+  authApi.refresh.mockResolvedValue({ access_token: "token", expires_in: 600 });
+  authApi.me.mockResolvedValue({ usuario: { id: "1", correo: profile.correo, nombre_usuario: "ana", nombre_completo: "Ana" }, roles: [], permisos: [] });
+  authApi.logoutAll.mockResolvedValue(undefined);
+  await authSession.login({ identificador: "ana", contrasena: "test" });
+  vi.mocked(api.getProfile).mockResolvedValue(profile); vi.mocked(api.changePassword).mockResolvedValue(undefined);
+});
+afterEach(async () => { cleanup(); await authSession.logout(); });
+
+describe("seguridad y sesiones", () => {
+  it("muestra dos tarjetas responsive con texto breve y cancelar no cierra sesiones", async () => {
+    const user = userEvent.setup(); await loaded();
+    const section = screen.getByRole("region", { name: "Seguridad" });
+    expect(within(section).getByRole("heading", { name: "Cambiar contraseña" })).toBeInTheDocument();
+    expect(within(section).getByRole("heading", { name: "Cerrar todas las sesiones" })).toBeInTheDocument();
+    expect(section.querySelector(".grid")).toHaveClass("grid-cols-1", "md:grid-cols-2");
+    expect(section.querySelectorAll('[data-slot="card"]')).toHaveLength(2);
+    expect(section).not.toHaveTextContent("6 y 24");
+    await user.click(screen.getByRole("button", { name: "Cerrar todas las sesiones" }));
+    expect(screen.getByRole("alertdialog", { name: "¿Cerrar todas las sesiones?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(authApi.logoutAll).not.toHaveBeenCalled(); expect(authSession.getSnapshot().status).toBe("authenticated");
+    expect(tokenStore.getAccessToken()).toBe("token");
+  });
+  it("confirma una vez, bloquea mientras revoca, borra sesión y redirige al login", async () => {
+    let resolve!: () => void;
+    authApi.logoutAll.mockImplementation(() => new Promise<void>((done) => { resolve = done; }));
+    const user = userEvent.setup(); await loaded();
+    await user.click(screen.getByRole("button", { name: "Cerrar todas las sesiones" }));
+    await user.click(screen.getByRole("button", { name: "Cerrar sesiones" }));
+    expect(screen.getByRole("button", { name: "Cerrando sesiones…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    expect(authSession.getSnapshot().status).toBe("authenticated"); expect(tokenStore.getAccessToken()).toBe("token");
+    await act(async () => resolve());
+    expect(await screen.findByRole("heading", { name: "Iniciar sesión" })).toBeInTheDocument();
+    expect(authApi.logoutAll).toHaveBeenCalledTimes(1); expect(authSession.getSnapshot().status).toBe("anonymous");
+    expect(tokenStore.getAccessToken()).toBeNull(); expect(authApi.logout).not.toHaveBeenCalled();
+  });
+  it("fallo al revocar conserva sesión y modal, anuncia un error seguro y permite reintentar", async () => {
+    authApi.logoutAll.mockRejectedValue(new ApiError(0, "private detail", null));
+    const user = userEvent.setup(); await loaded();
+    await user.click(screen.getByRole("button", { name: "Cerrar todas las sesiones" }));
+    await user.click(screen.getByRole("button", { name: "Cerrar sesiones" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudieron cerrar las sesiones. Intenta de nuevo.");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument(); expect(screen.getByRole("button", { name: "Cerrar sesiones" })).toBeEnabled();
+    expect(authSession.getSnapshot().status).toBe("authenticated"); expect(tokenStore.getAccessToken()).toBe("token");
+    expect(screen.queryByRole("heading", { name: "Iniciar sesión" })).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("private detail"); expect(authApi.logoutAll).toHaveBeenCalledTimes(1);
+  });
+  it("expiración real muestra aviso global incluso después de redirigir", async () => {
+    await loaded(); authApi.refresh.mockRejectedValue(new ApiError(401, "expirada", null));
+    await act(async () => { await authSession.refresh().catch(() => undefined); });
+    expect(await screen.findByRole("heading", { name: "Iniciar sesión" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Tu sesión expiró");
+  });
+});
 
 describe("perfil propio", () => {
   it("carga datos y roles sin inputs; usuario solo lectura y guardar inactivo al editar", async () => {
@@ -64,7 +128,7 @@ describe("perfil propio", () => {
   });
   it("muestra carga y error con reintento", async () => {
     vi.mocked(api.getProfile).mockRejectedValueOnce(new ApiError(0, "red", null));
-    render(<ToastProvider><ProfilePage /></ToastProvider>);
+    mount();
     expect(screen.getByRole("status")).toHaveTextContent("Cargando perfil");
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar");
     await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));

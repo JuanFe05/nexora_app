@@ -11,7 +11,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext value={{ ...state, login: authSession.login, logout: authSession.logout, hasPermission: authSession.hasPermission, reloadPrincipal: authSession.reloadPrincipal }}>
+    <AuthContext value={{ ...state, login: authSession.login, logout: authSession.logout, logoutAll: authSession.logoutAll, hasPermission: authSession.hasPermission, reloadPrincipal: authSession.reloadPrincipal }}>
       {children}
     </AuthContext>
   );

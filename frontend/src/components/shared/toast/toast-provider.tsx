@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { DEFAULT_TOAST_DURATION, ToastContext, type ToastApi, type ToastItem } from "./toast-context";
 import { Toast } from "./toast-item";
+import { SessionExpiryNotice } from "../../../features/auth/components/session-expiry-notice";
 
 const MAX_VISIBLE = 5;
 
@@ -25,6 +26,7 @@ export function ToastProvider({ children, duration = DEFAULT_TOAST_DURATION }: {
   }, [dismiss]);
   return (
     <ToastContext.Provider value={api}>
+      <SessionExpiryNotice />
       {children}
       <section aria-label="Notificaciones" aria-live="polite" className="pointer-events-none fixed inset-x-4 top-4 z-99999 sm:inset-x-auto sm:end-6 sm:top-6 sm:w-full sm:max-w-sm">
         <ol className="flex flex-col gap-3">
