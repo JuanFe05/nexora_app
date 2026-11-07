@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { UserCircleIcon } from "@/icons";
+import { PencilIcon, UserCircleIcon } from "@/icons";
 import { profileFailure, updateProfile } from "../api/profile-api";
 import { useFormFocus } from "../hooks/use-form-focus";
 import { profileFields, type FieldErrors, type Profile, type ProfileField } from "../types";
@@ -31,7 +31,7 @@ export function ProfileForm({ profile, onUpdated }: Props) {
         <h2 id="personal-title" className="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
           <UserCircleIcon aria-hidden="true" className="size-6" />Información personal
         </h2>
-        <Button variant="outline" onClick={() => setOpen(true)}>Editar</Button>
+        <Button variant="outline" size="sm" onClick={() => setOpen(true)}><PencilIcon aria-hidden="true" className="size-5" />Editar</Button>
       </div>
       <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="min-w-0">

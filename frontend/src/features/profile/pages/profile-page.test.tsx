@@ -42,13 +42,21 @@ beforeEach(async () => {
 afterEach(async () => { cleanup(); await authSession.logout(); });
 
 describe("seguridad y sesiones", () => {
-  it("muestra dos tarjetas responsive con texto breve y cancelar no cierra sesiones", async () => {
+  it("muestra una tarjeta de seguridad responsive con texto breve y cancelar no cierra sesiones", async () => {
     const user = userEvent.setup(); await loaded();
     const section = screen.getByRole("region", { name: "Seguridad" });
     expect(within(section).getByRole("heading", { name: "Cambiar contraseña" })).toBeInTheDocument();
     expect(within(section).getByRole("heading", { name: "Cerrar todas las sesiones" })).toBeInTheDocument();
     expect(section.querySelector(".grid")).toHaveClass("grid-cols-1", "md:grid-cols-2");
-    expect(section.querySelectorAll('[data-slot="card"]')).toHaveLength(2);
+    expect(section.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
+    const card = section.querySelector('[data-slot="card"]') as HTMLElement;
+    expect(within(card).getByRole("heading", { name: "Seguridad", level: 2 })).toBeInTheDocument();
+    expect(within(card).getAllByRole("heading", { level: 3 })).toHaveLength(2);
+    for (const name of ["Cambiar contraseña", "Cerrar todas las sesiones"]) {
+      expect(within(card).getByRole("button", { name })).toBeInTheDocument();
+    }
+    expect(within(card).getByRole("heading", { name: "Cerrar todas las sesiones" }).parentElement).toHaveClass("border-t", "md:border-t-0", "md:border-l", "dark:border-gray-800");
+    expect(section).toHaveTextContent("Gestiona el acceso a tu cuenta.");
     expect(section).not.toHaveTextContent("6 y 24");
     await user.click(screen.getByRole("button", { name: "Cerrar todas las sesiones" }));
     expect(screen.getByRole("alertdialog", { name: "¿Cerrar todas las sesiones?" })).toBeInTheDocument();
@@ -87,6 +95,54 @@ describe("seguridad y sesiones", () => {
     await act(async () => { await authSession.refresh().catch(() => undefined); });
     expect(await screen.findByRole("heading", { name: "Iniciar sesión" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Tu sesión expiró");
+  });
+});
+
+describe("presentación TailAdmin", () => {
+  it("mantiene nombres accesibles e iconos decorativos con un único estilo de botón", async () => {
+    await loaded();
+    const buttons = ["Editar", "Cambiar contraseña", "Cerrar todas las sesiones"].map((name) => screen.getByRole("button", { name }));
+    for (const button of buttons) {
+      expect(button).toHaveAccessibleName(button.textContent);
+      expect(button.querySelectorAll("svg")).toHaveLength(1);
+      expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+      expect(button.querySelector("svg")).toHaveClass("size-5");
+      expect(button).toHaveClass("h-9", "border-gray-300", "hover:bg-gray-50", "focus-visible:ring-3", "disabled:text-gray-300", "dark:border-gray-700", "dark:hover:bg-gray-700/50", "dark:disabled:text-gray-600");
+      expect(button.className.split(" ").filter((name) => !name.includes("aria-invalid:")).join(" ")).not.toMatch(/(?:text|bg|border)-error|(?:text|bg|border)-red/);
+    }
+    // Ignore layout-only sizing: all interactive styling comes from the same variant.
+    const styles = buttons.map((button) => button.className.split(" ").filter((name) => !["w-full", "sm:w-auto", "sm:self-start"].includes(name)).join(" "));
+    expect(new Set(styles).size).toBe(1);
+    expect(api.updateProfile).not.toHaveBeenCalled();
+    expect(api.changePassword).not.toHaveBeenCalled();
+    expect(authApi.logoutAll).not.toHaveBeenCalled();
+  });
+  it("presenta los roles como una lista discreta sin fondos de color", async () => {
+    await loaded();
+    const roles = screen.getByRole("list", { name: "Roles asignados" });
+    expect(within(roles).getAllByRole("listitem").map((item) => item.textContent)).toEqual(profile.roles);
+    for (const item of [roles, ...within(roles).getAllByRole("listitem")]) {
+      expect(item.className).not.toMatch(/bg-brand|(?:^|\s)(?:dark:)?bg-/);
+    }
+    for (const item of within(roles).getAllByRole("listitem")) expect(item).toHaveClass("text-gray-500", "dark:text-gray-400");
+  });
+  it("conserva el mensaje cuando no hay roles asignados", async () => {
+    vi.mocked(api.getProfile).mockResolvedValue({ ...profile, roles: [] });
+    await loaded();
+    expect(screen.getByRole("list", { name: "Roles asignados" })).toBeEmptyDOMElement();
+    expect(screen.getByText("Sin roles asignados")).toBeInTheDocument();
+  });
+  it.each([
+    ["activo", "Activo", "success"], ["ACTIVO", "Activo", "success"],
+    ["inactivo", "Inactivo", "error"], ["INACTIVO", "Inactivo", "error"],
+    ["Pendiente REVISIÓN", "Pendiente REVISIÓN", "neutral"],
+  ])("muestra estado %s con texto %s y variante %s", async (estado, label, variant) => {
+    vi.mocked(api.getProfile).mockResolvedValue({ ...profile, estado });
+    await loaded();
+    const badge = screen.getByText(label, { exact: true });
+    expect(badge).toHaveAttribute("data-slot", "badge");
+    expect(badge).toHaveAttribute("data-variant", variant);
+    expect(badge).not.toHaveClass("capitalize");
   });
 });
 

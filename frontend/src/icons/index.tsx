@@ -19,3 +19,4 @@ export { KeyIcon } from "./key";
 export { LockIcon } from "./lock";
 export { UserCircleIcon } from "./user-circle";
 export { PlusIcon } from "./plus";
+export { PencilIcon } from "./pencil";

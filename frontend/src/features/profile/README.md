@@ -5,7 +5,9 @@ La ruta existente `/configuracion/perfil` permite a cualquier usuario autenticad
 ## Uso
 
 - **Datos personales** muestra el nombre de usuario de solo lectura y los roles asignados. Permite editar nombres, apellidos, teléfono y correo electrónico. Los asteriscos indican campos obligatorios. «Guardar cambios» se habilita únicamente cuando hay diferencias; al guardar muestra «Datos actualizados».
-- **Seguridad** presenta una explicación breve y dos tarjetas: apiladas en móvil y lado a lado desde `md`, con estilos claros/oscuros de TailAdmin.
+- **Seguridad** presenta una explicación breve dentro de una única tarjeta, con dos opciones: apiladas en móvil y lado a lado desde `md`, separadas por un divisor con estilos claros/oscuros de TailAdmin.
+- **Acciones**: «Editar», «Cambiar contraseña» y «Cerrar todas las sesiones» reutilizan `Button` con variante `outline`, tamaño `sm` e iconos decorativos. El estilo destructivo queda reservado a la confirmación de cierre de sesiones.
+- **Roles y estado**: los roles conservan su lista accesible sin fondos de color. El estado usa `Badge`: verde para «Activo», rojo para «Inactivo» (sin distinguir mayúsculas/minúsculas del backend) y neutral para otros valores, que se muestran sin modificar.
 - **Cerrar todas las sesiones** abre una confirmación compartida. Cancelar no envía solicitudes; confirmar bloquea los botones mientras revoca las sesiones. Solo el éxito borra la sesión local y redirige a `/signin`; ante un fallo se conserva el acceso y se muestra un toast de error seguro.
 - **Cambiar contraseña** abre el modal existente y pide la actual, una nueva de 6–24 caracteres Unicode (sin recortar espacios), con mayúscula, minúscula, número y carácter especial (puntuación o símbolo), diferente de la actual, y su confirmación. La actual conserva el límite legacy de 1–128. Los requisitos se muestran y actualizan mientras escribes. Cada campo tiene un botón accesible para mostrar u ocultar su contenido. El éxito muestra «Contraseña actualizada. Se cerraron tus otras sesiones.»; la sesión actual sigue activa.
 - Si el perfil no carga, «Reintentar» vuelve a consultar el servidor. Las validaciones se muestran debajo del campo y enfocan el primero inválido. Los avisos globales usan la API existente `useToast`; las validaciones de campo permanecen en el formulario.
@@ -36,7 +38,7 @@ El cliente HTTP compartido añade `/api/v1` y gestiona la sesión. La UI no reci
 - `types.ts` / `validation.ts`: contrato cerrado, diferencias y validación pura.
 - `hooks/`: carga de perfil y foco después de habilitar los controles.
 - `components/`: formularios pequeños sobre las primitivas compartidas de TailAdmin.
-- `components/security-section.tsx`: dos tarjetas responsive, confirmación y estado pendiente del cierre global.
+- `components/security-section.tsx`: tarjeta única con dos columnas responsive, confirmación y estado pendiente del cierre global.
 - `pages/profile-page.tsx`: composición del perfil, sin cambiar ruta ni exportación por defecto.
 
 Desde `frontend/`: `npx vitest run`, `npx tsc -b` y `npm run lint`. Las pruebas de página simulan las API y ejercitan el controlador de sesión y el guard de ruta; las del adaptador simulan el cliente HTTP compartido. No realizan solicitudes de red ni requieren credenciales. La comprobación visual en navegador y la integración contra un backend activo quedan fuera de estas pruebas deterministas.
