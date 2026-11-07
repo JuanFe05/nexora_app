@@ -4,6 +4,7 @@ import { act, cleanup, render, screen, waitFor, within } from "@testing-library/
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/http/api-error";
+import { ToastProvider } from "@/components/shared/toast/toast-provider";
 import * as api from "../api/profile-api";
 import ProfilePage from "./profile-page";
 
@@ -15,7 +16,7 @@ const next = () => screen.getByLabelText(/^Nueva contraseña/);
 const confirmation = () => screen.getByLabelText(/^Confirmar contraseña/);
 const save = () => screen.getByRole("button", { name: "Guardar cambios" });
 const change = () => screen.getByRole("button", { name: "Actualizar contraseña" });
-async function loaded() { render(<ProfilePage />); await screen.findByDisplayValue("ana"); }
+async function loaded() { render(<ToastProvider><ProfilePage /></ToastProvider>); await screen.findByDisplayValue("ana"); }
 async function fillPasswords(user: ReturnType<typeof userEvent.setup>, actual = "actual-privada", nueva = "nueva-privada-123", confirm = nueva) {
   await user.type(current(), actual); await user.type(next(), nueva); await user.type(confirmation(), confirm);
 }
@@ -26,6 +27,10 @@ describe("perfil propio", () => {
   it("carga datos y roles de un usuario sin permiso administrador; usuario solo lectura y guardar inactivo", async () => {
     await loaded();
     expect(screen.getByRole("heading", { name: "Perfil de usuario" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ana Pérez" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Datos personales" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cambiar contraseña" })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Roles asignados" })).toHaveTextContent("ESTADISTICA");
     expect(screen.getByLabelText("Nombre de usuario")).toHaveAttribute("readonly");
     expect(screen.getByText("ESTADISTICA")).toBeInTheDocument();
     expect(screen.getByText("FACTURACION")).toBeInTheDocument();
@@ -34,7 +39,7 @@ describe("perfil propio", () => {
   });
   it("muestra carga y error con reintento", async () => {
     vi.mocked(api.getProfile).mockRejectedValueOnce(new ApiError(0, "red", null));
-    render(<ProfilePage />);
+    render(<ToastProvider><ProfilePage /></ToastProvider>);
     expect(screen.getByRole("status")).toHaveTextContent("Cargando perfil");
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar");
     await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
@@ -51,7 +56,8 @@ describe("perfil propio", () => {
     expect(api.updateProfile).toHaveBeenCalledExactlyOnceWith(profile, expect.objectContaining({ correo: "nueva@example.test" }));
     expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
     await act(async () => { resolve({ ...profile, correo: "nueva@example.test" }); });
-    expect(await screen.findByRole("status")).toHaveTextContent("Datos actualizados");
+    expect(await within(screen.getByRole("region", { name: "Notificaciones" })).findByRole("status")).toHaveTextContent("Datos actualizados");
+    expect(screen.getByRole("form", { name: "Datos personales" })).not.toHaveTextContent("Datos actualizados");
     expect(save()).toBeDisabled();
   });
   it.each([409, 422])("presenta error %s sin perder datos y permite corregir", async (status) => {

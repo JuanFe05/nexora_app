@@ -1,5 +1,5 @@
 import { useState, type SubmitEvent } from "react";
-import { InlineAlert } from "@/components/shared/inline-alert";
+import { useToast } from "@/components/shared/toast/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { LockIcon } from "@/icons";
@@ -18,8 +18,7 @@ const fields = [
 export function PasswordForm() {
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<FieldErrors<keyof PasswordValues>>({});
-  const [message, setMessage] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const toast = useToast();
   const [generation, setGeneration] = useState(0);
   const { formRef, focusField } = useFormFocus(pending);
 
@@ -39,7 +38,7 @@ export function PasswordForm() {
       confirmacion: readField("confirmacion"),
     };
     const invalid = validatePassword(values);
-    setErrors(invalid); setMessage(null); setSuccess(false);
+    setErrors(invalid);
     const first = fields.find(({ name }) => invalid[name]);
     if (first) { focusField(first.name); return; }
     setPending(true);
@@ -50,27 +49,26 @@ export function PasswordForm() {
       values.contrasena_actual = ""; values.contrasena_nueva = ""; values.confirmacion = "";
       data.delete("contrasena_actual"); data.delete("contrasena_nueva"); data.delete("confirmacion");
       await request;
-      setSuccess(true);
+      toast.success("Contraseña actualizada. Se cerraron tus otras sesiones.");
     } catch (error) {
       const failure = passwordFailure(error);
-      setErrors(failure.fields); setMessage(failure.message);
+      setErrors(failure.fields);
+      if (failure.message) toast.error(failure.message);
       focusField(fields.find(({ name }) => failure.fields[name])?.name);
     } finally { setPending(false); }
   }
 
   return (
-    <Card className="min-w-0 self-start" aria-labelledby="password-title">
+    <Card className="min-w-0" aria-labelledby="password-title">
       <h2 id="password-title" className="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
         <LockIcon aria-hidden="true" className="size-6" />Cambiar contraseña
       </h2>
       <p id="password-hint" className="text-sm text-gray-500 dark:text-gray-400">Usa entre 12 y 128 caracteres y una contraseña diferente de la actual. Al cambiarla, se cerrarán tus otras sesiones; esta sesión seguirá activa.</p>
-      <form ref={formRef} noValidate onSubmit={submit} aria-labelledby="password-title" aria-describedby="password-hint" aria-busy={pending} className="space-y-5">
+      <form ref={formRef} noValidate onSubmit={submit} aria-labelledby="password-title" aria-describedby="password-hint" aria-busy={pending} className="max-w-xl space-y-5">
         {fields.map((field) => <PasswordField key={`${generation}-${field.name}`} {...field} pending={pending} error={errors[field.name]} onChange={() => {
           // New password and confirmation validation depend on each other.
-          setErrors({}); setMessage(null); setSuccess(false);
+          setErrors({});
         }} />)}
-        {message && <InlineAlert variant="error">{message}</InlineAlert>}
-        {success && <InlineAlert variant="success">Contraseña actualizada. Se cerraron tus otras sesiones.</InlineAlert>}
         <Button type="submit" disabled={pending} className="w-full sm:w-auto">{pending ? "Actualizando…" : "Actualizar contraseña"}</Button>
       </form>
     </Card>
