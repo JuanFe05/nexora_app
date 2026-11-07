@@ -104,12 +104,12 @@ describe("independent user permissions", () => {
     const canRoles = codes.includes(P.usersAssignRoles) && codes.includes(P.rolesView);
     if (canRoles) await userEvent.click(await screen.findByRole("checkbox", { name: /Facturación/ }));
     else expect(screen.queryByRole("group", { name: "Roles" })).not.toBeInTheDocument();
-    for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "123456789012"]]) {
+    for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "Abc123!x"]]) {
       fireEvent.change(screen.getByLabelText(new RegExp(`^${label}`)), { target: { value } });
     }
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(api.createUser).toHaveBeenCalledExactlyOnceWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "Nueva", primer_apellido: "Sol", contrasena: "123456789012" });
+    expect(api.createUser).toHaveBeenCalledExactlyOnceWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "Nueva", primer_apellido: "Sol", contrasena: "Abc123!x" });
     if (canRoles) expect(api.assignUserRole).toHaveBeenCalledExactlyOnceWith("u", "billing");
     else { expect(loadRoleOptions).not.toHaveBeenCalled(); expect(api.assignUserRole).not.toHaveBeenCalled(); }
     expect(api.updateUser).not.toHaveBeenCalled();
@@ -119,7 +119,7 @@ describe("independent user permissions", () => {
     render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     await screen.findByRole("checkbox", { name: /Facturación/ });
-    for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "123456789012"]]) {
+    for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "Abc123!x"]]) {
       fireEvent.change(screen.getByLabelText(new RegExp(`^${label}`)), { target: { value } });
     }
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
@@ -147,7 +147,7 @@ describe("independent user permissions", () => {
     render(<ToastProvider><UsersPage /></ToastProvider>);
     await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     await userEvent.click(await screen.findByRole("checkbox", { name: /Facturación/ }));
-    for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "123456789012"]]) {
+    for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "Abc123!x"]]) {
       fireEvent.change(screen.getByLabelText(new RegExp(`^${label}`)), { target: { value } });
     }
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));

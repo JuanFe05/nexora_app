@@ -5,7 +5,7 @@ La ruta existente `/configuracion/perfil` permite a cualquier usuario autenticad
 ## Uso
 
 - **Datos personales** muestra el nombre de usuario de solo lectura y los roles asignados. Permite editar nombres, apellidos, teléfono y correo electrónico. Los asteriscos indican campos obligatorios. «Guardar cambios» se habilita únicamente cuando hay diferencias; al guardar muestra «Datos actualizados».
-- **Cambiar contraseña** pide la actual, una nueva de 12–128 caracteres diferente de la actual y su confirmación. Cada campo tiene un botón accesible para mostrar u ocultar su contenido. El éxito muestra «Contraseña actualizada. Se cerraron tus otras sesiones.»; la sesión actual sigue activa.
+- **Cambiar contraseña** pide la actual, una nueva de 6–24 caracteres Unicode (sin recortar espacios), con mayúscula, minúscula, número y carácter especial (puntuación o símbolo), diferente de la actual, y su confirmación. La actual conserva el límite legacy de 1–128. Los requisitos se muestran y actualizan mientras escribes. Cada campo tiene un botón accesible para mostrar u ocultar su contenido. El éxito muestra «Contraseña actualizada. Se cerraron tus otras sesiones.»; la sesión actual sigue activa.
 - Si el perfil no carga, «Reintentar» vuelve a consultar el servidor. Las validaciones se muestran debajo del campo y enfocan el primero inválido. Los avisos usan `InlineAlert` con `alert` o `status`.
 
 ## Contratos y límites
@@ -21,7 +21,7 @@ La ruta existente `/configuracion/perfil` permite a cualquier usuario autenticad
 | `400` de contraseña | Solo se marca la contraseña actual, con mensaje seguro. |
 | `429` de contraseña | Usa `ApiError.retryAfter`: «Demasiados intentos. Intenta de nuevo en N segundos.»; si no es un entero seguro no negativo, pide reintentar más tarde. |
 
-El cliente HTTP compartido añade `/api/v1` y gestiona la sesión. La UI no recibe IDs para seleccionar otro usuario ni gestiona revocación de sesiones: corresponde al backend. Las contraseñas no se almacenan en estado React, almacenamiento persistente ni logs. Al iniciar una petición válida se vacían los controles y se oculta su visibilidad; los errores de contraseña nunca reproducen cuerpos ni detalles arbitrarios del servidor.
+El cliente HTTP compartido añade `/api/v1` y gestiona la sesión. La UI no recibe IDs para seleccionar otro usuario ni gestiona revocación de sesiones: corresponde al backend. La política única vive en `src/lib/password-policy.ts`; el backend realiza la validación definitiva y mantiene el almacenamiento seguro (Argon2id). Las contraseñas no se almacenan en estado React, almacenamiento persistente ni logs; solo se guardan los booleanos de cumplimiento para el checklist accesible. Al iniciar una petición válida se vacían los controles y se oculta su visibilidad; los errores de contraseña nunca reproducen cuerpos ni detalles arbitrarios del servidor.
 
 ### Correo de la cabecera
 

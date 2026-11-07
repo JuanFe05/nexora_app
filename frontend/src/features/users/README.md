@@ -25,8 +25,12 @@ Eliminar no concede consultar, crear, editar ni asignar roles.
   el encabezado y el pie permanecen fuera del área desplazable. Cancelar, Escape y X
   cierran sin guardar; no cierran mientras hay una mutación pendiente.
 - **Nuevo usuario** solicita usuario, correo, primer nombre, primer apellido y contraseña
-  (12–128 caracteres). La contraseña solo existe en el control del formulario y en la
-  petición de creación; se limpia tras la respuesta y nunca se muestra en errores.
+  (6–24 caracteres Unicode, sin recortar espacios, con mayúscula, minúscula, número y
+  carácter especial de puntuación o símbolo). Los requisitos se actualizan en vivo con
+  estados accesibles; React solo guarda los booleanos de cumplimiento. La contraseña
+  permanece en el control y en la petición de creación; se limpia al iniciar la petición
+  y nunca se muestra en errores. La política única está en `src/lib/password-policy.ts`;
+  el backend valida definitivamente y mantiene Argon2id.
   Solo se ofrecen roles con ambos permisos de catálogo y asignación; se asignan después
   de crear. Si ese segundo paso falla, reintentar no crea otro usuario ni solicita otra contraseña.
 - **Editar** envía un único PATCH mínimo con los campos modificados y autorizados:

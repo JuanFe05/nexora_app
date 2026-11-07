@@ -1,4 +1,5 @@
 import { useId, useRef, useState, type FormEvent } from "react";
+import { evaluatePasswordPolicy } from "@/lib/password-policy";
 import { FormDialog } from "@/components/shared/form-dialog";
 import { useUserPermissions } from "../hooks/use-user-permissions";
 import { useToast } from "@/components/shared/toast/use-toast";
@@ -17,6 +18,7 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
   const [values, setValues] = useState(() => userValues(user));
   const [selected, setSelected] = useState(user?.roles ?? []);
   const [errors, setErrors] = useState<UserFieldErrors>({});
+  const [evaluation, setEvaluation] = useState(() => evaluatePasswordPolicy(""));
   const toast = useToast();
   const permissions = useUserPermissions();
   const { save, pending, createdUser } = useUserSave(user, permissions);
@@ -34,7 +36,9 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
     if (!canSave) { onClose(); return; }
     const form = event.currentTarget;
     const password = form.elements.namedItem("contrasena") as HTMLInputElement | null;
-    const submitted = { ...values, contrasena: password?.value ?? "" };
+    const data = new FormData(form);
+    const secret = data.get("contrasena");
+    const submitted = { ...values, contrasena: typeof secret === "string" ? secret : "" };
     const nextErrors = validateUser(submitted, user ?? createdUser);
     if (user) {
       for (const name of Object.keys(nextErrors) as (keyof UserValues)[]) {
@@ -44,8 +48,12 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) { focusError(nextErrors); return; }
     if (!catalog.ready) { toast.error("Carga el catálogo completo de roles antes de guardar."); return; }
-    const result = await save(submitted, selected, catalog.items);
+    const request = save(submitted, selected, catalog.items);
     if (password) password.value = "";
+    setEvaluation(evaluatePasswordPolicy(""));
+    submitted.contrasena = "";
+    data.delete("contrasena");
+    const result = await request;
     if (result.ok) onSaved();
     else {
       setErrors(result.fields);
@@ -56,9 +64,12 @@ export function UserDrawer({ user, onClose, onSaved, onFailed }: {
   }
 
   return <FormDialog open onOpenChange={open => { if (!open) onClose(); }} title={user ? `Editar usuario: ${user.nombre_usuario}` : "Nuevo usuario"} description={user ? "Edita los datos personales, el estado y los roles. Los cambios se guardan por pasos; no se cambia la contraseña." : "Los campos con * son obligatorios."} formId={formId} pending={pending} submitLabel={canSave ? "Guardar" : "Cerrar"}>
-    <form id={formId} ref={formRef} onSubmit={event => { void submit(event); }} noValidate className="space-y-5 py-4">
+    <form id={formId} ref={formRef} onSubmit={event => { void submit(event); }} noValidate onReset={() => setEvaluation(evaluatePasswordPolicy(""))} className="space-y-5 py-4">
       <fieldset disabled={pending} className="space-y-5">
-        <UserFields values={values} errors={errors} editing={!!user} personalEditable={personalEditable} statusEditable={permissions.deactivate} onChange={(name, value) => {
+        <UserFields values={values} errors={errors} editing={!!user} personalEditable={personalEditable} statusEditable={permissions.deactivate} evaluation={evaluation} onPasswordChange={next => {
+          setEvaluation(next);
+          setErrors(current => ({ ...current, contrasena: undefined }));
+        }} onChange={(name, value) => {
           setValues(current => ({ ...current, [name]: value }));
           setErrors(current => ({ ...current, [name]: undefined }));
         }} />

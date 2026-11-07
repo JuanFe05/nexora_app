@@ -1,3 +1,4 @@
+import { PASSWORD_VALIDATION_MESSAGE } from "@/lib/password-policy";
 import { ApiError } from "@/lib/http/api-error";
 import type { UserField, UserFieldErrors } from "../types";
 
@@ -17,7 +18,7 @@ export function userError(error: unknown): { message: string; fields: UserFieldE
         const field = issue.loc[0] === "body" ? issue.loc[1] as UserField : undefined;
         if (field && fields.has(field)) {
           // Never render FastAPI input/context or raw messages: they may include a password.
-          result.fields[field] = field === "contrasena" ? "Revisa la contraseña (entre 12 y 128 caracteres)." : "Revisa este campo.";
+          result.fields[field] = field === "contrasena" ? PASSWORD_VALIDATION_MESSAGE : "Revisa este campo.";
         }
       }
     }

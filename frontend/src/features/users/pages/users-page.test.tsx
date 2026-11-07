@@ -38,11 +38,33 @@ async function openEdit() {
 }
 async function fillCreate() {
   await userEvent.click(screen.getByRole("button", { name: "Nuevo usuario" }));
-  for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "123456789012"]]) {
+  for (const [label, value] of [["Nombre de usuario", "nueva"], ["Correo", "nueva@example.org"], ["Primer nombre", "Nueva"], ["Primer apellido", "Sol"], ["Contraseña", "Abc123!x"]]) {
     fireEvent.change(screen.getByLabelText(new RegExp(`^${label}`)), { target: { value } });
   }
 }
 describe("Usuarios", () => {
+  it("actualiza requisitos en creación sin serializar secretos y reinicia al cerrar", async () => {
+    const user = userEvent.setup(); render(<ToastProvider><UsersPage /></ToastProvider>);
+    await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
+    const password = screen.getByLabelText(/^Contraseña/);
+    const list = screen.getByRole("list", { name: "Requisitos de contraseña" });
+    expect(within(list).getAllByText("pendiente")).toHaveLength(5);
+    await user.type(password, "Abc123!x");
+    expect(within(list).getAllByText("cumplido")).toHaveLength(5);
+    expect(password).toHaveAccessibleDescription(/Entre 6 y 24 caracteres/);
+    expect(password).not.toHaveAttribute("value");
+    expect(document.body.innerHTML).not.toContain("Abc123!x");
+    await user.clear(password); await user.type(password, "abc12!");
+    expect(within(list).getAllByText("cumplido")).toHaveLength(4);
+    expect(within(list).getAllByText("pendiente")).toHaveLength(1);
+    await user.clear(password);
+    expect(within(list).getAllByText("pendiente")).toHaveLength(5);
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
+    expect(within(screen.getByRole("list", { name: "Requisitos de contraseña" })).getAllByText("pendiente")).toHaveLength(5);
+    expect(api.createUser).not.toHaveBeenCalled();
+  });
   it("renders real rows, role/status badges, full name and named icon actions", async () => {
     render(<ToastProvider><UsersPage /></ToastProvider>);
     expect(await screen.findByRole("button", { name: "Editar ana" })).toBeVisible();
@@ -83,7 +105,7 @@ describe("Usuarios", () => {
     render(<ToastProvider><UsersPage /></ToastProvider>);
     await fillCreate();
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
-    await waitFor(() => expect(api.createUser).toHaveBeenCalledWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "Nueva", primer_apellido: "Sol", contrasena: "123456789012" }));
+    await waitFor(() => expect(api.createUser).toHaveBeenCalledWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "Nueva", primer_apellido: "Sol", contrasena: "Abc123!x" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(within(screen.getByRole("region", { name: "Notificaciones" })).getByText("Usuario creado correctamente.").closest("[data-toast]")).toHaveAttribute("role", "status");
     expect(api.listUsers).toHaveBeenCalledTimes(2);
@@ -96,9 +118,12 @@ describe("Usuarios", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("El nombre de usuario o el correo ya estan registrados");
     expect(screen.getByRole("dialog")).toBeVisible();
     expect(screen.getByLabelText(/^Contraseña/)).toHaveValue("");
+    expect(within(screen.getByRole("list", { name: "Requisitos de contraseña" })).getAllByText("pendiente")).toHaveLength(5);
   });
   it("sends one minimal PATCH followed by role diff calls", async () => {
     const billing = await openEdit();
+    expect(screen.queryByRole("list", { name: "Requisitos de contraseña" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Contraseña/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/^Primer nombre/), { target: { value: "Luz" } });
     await userEvent.click(billing);
     await userEvent.click(screen.getByRole("checkbox", { name: /^Administrador/ }));

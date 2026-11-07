@@ -3,20 +3,28 @@ import { changedUserFields, createUserBody, userValues, validateUser } from "./u
 import type { User } from "../types";
 
 const user: User = { id: "u", nombre_usuario: "ana", correo: "ana@example.org", primer_nombre: "Ana", primer_apellido: "Sol", segundo_nombre: null, segundo_apellido: null, numero_telefono: null, estado: "activo", roles: ["ADMINISTRADOR"] };
-const values = { ...userValues(user), contrasena: "123456789012" };
+const values = { ...userValues(user), contrasena: "Abc123!x" };
 describe("user validation and payloads", () => {
   it("requires creation fields, trims text but never trims a password", () => {
-    expect(validateUser({ ...values, nombre_usuario: "  ", correo: "", primer_nombre: "", primer_apellido: "", contrasena: "" }, null)).toEqual({ nombre_usuario: "Este campo es obligatorio.", correo: "Este campo es obligatorio.", primer_nombre: "Este campo es obligatorio.", primer_apellido: "Este campo es obligatorio.", contrasena: "La contraseña debe tener entre 12 y 128 caracteres." });
-    expect(validateUser({ ...values, contrasena: " ".repeat(12) }, null)).toEqual({});
-    expect(createUserBody({ ...values, primer_nombre: " Ana ", contrasena: " 123456789012 " })).toEqual({ nombre_usuario: "ana", correo: "ana@example.org", primer_nombre: "Ana", primer_apellido: "Sol", contrasena: " 123456789012 " });
+    expect(validateUser({ ...values, nombre_usuario: "  ", correo: "", primer_nombre: "", primer_apellido: "", contrasena: "" }, null)).toEqual({ nombre_usuario: "Este campo es obligatorio.", correo: "Este campo es obligatorio.", primer_nombre: "Este campo es obligatorio.", primer_apellido: "Este campo es obligatorio.", contrasena: "La contraseña debe tener entre 6 y 24 caracteres, al menos una letra mayúscula, una minúscula, un número y un carácter especial." });
+    expect(validateUser({ ...values, contrasena: " Ab1! " }, null)).toEqual({});
+    expect(validateUser({ ...values, contrasena: " ".repeat(12) }, null).contrasena).toBeTruthy();
+    expect(createUserBody({ ...values, primer_nombre: " Ana ", contrasena: " Abc123!x " })).toEqual({ nombre_usuario: "ana", correo: "ana@example.org", primer_nombre: "Ana", primer_apellido: "Sol", contrasena: " Abc123!x " });
   });
-  it.each([["nombre_usuario", 50], ["correo", 255], ["primer_nombre", 100], ["primer_apellido", 100], ["segundo_nombre", 100], ["segundo_apellido", 100], ["numero_telefono", 30], ["contrasena", 128]] as const)("enforces %s length %s", (field, max) => {
+  it.each([["nombre_usuario", 50], ["correo", 255], ["primer_nombre", 100], ["primer_apellido", 100], ["segundo_nombre", 100], ["segundo_apellido", 100], ["numero_telefono", 30]] as const)("enforces %s length %s", (field, max) => {
     expect(validateUser({ ...values, [field]: "a".repeat(max) }, null)[field]).toBeUndefined();
     expect(validateUser({ ...values, [field]: "a".repeat(max + 1) }, null)[field]).toBeTruthy();
   });
+  it.each([5, 6, 24, 25])("enforces creation password boundary %s", length => {
+    const password = `Ab1!${"x".repeat(length - 4)}`;
+    expect(!!validateUser({ ...values, contrasena: password }, null).contrasena).toBe(length < 6 || length > 24);
+  });
+  it.each(["abc12!", "ABC12!", "Abcde!", "Abc123", "Ab1   "])("rejects missing classes in %s", password => {
+    expect(validateUser({ ...values, contrasena: password }, null).contrasena).toBe("La contraseña debe tener entre 6 y 24 caracteres, al menos una letra mayúscula, una minúscula, un número y un carácter especial.");
+  });
   it("mirrors the backend string email contract without inventing a format restriction", () => {
     expect(validateUser({ ...values, correo: "internal-address" }, null)).toEqual({});
-    expect(validateUser({ ...values, contrasena: "a".repeat(11) }, null).contrasena).toBeTruthy();
+    expect(validateUser({ ...values, contrasena: "a".repeat(5) }, null).contrasena).toBeTruthy();
     expect(validateUser({ ...values, contrasena: "" }, user)).toEqual({});
   });
   it("omits unchanged fields and nulls; rejects clearing an existing optional field", () => {

@@ -20,7 +20,7 @@ describe("users API", () => {
     expect(vi.mocked(httpClient.getWithMeta).mock.calls[0][0]).toBe("/users?limit=10&offset=0");
   });
   it("keeps creation, minimal patch, deletion and role routes separate", async () => {
-    const body = { nombre_usuario: "ana", correo: "ana@example.org", primer_nombre: "Ana", primer_apellido: "Sol", contrasena: "123456789012" };
+    const body = { nombre_usuario: "ana", correo: "ana@example.org", primer_nombre: "Ana", primer_apellido: "Sol", contrasena: "Abc123!x" };
     await createUser(body);
     await updateUser("u", { primer_nombre: "Ana María" });
     await deleteUser("u");
@@ -55,7 +55,7 @@ describe("users API", () => {
   it("maps 422 locations without echoing password input or raw messages", () => {
     const result = userError(new ApiError(422, "secret-password", { detail: [{ loc: ["body", "correo"], msg: "bad" }, { loc: ["body", "contrasena"], msg: "secret-password", input: "secret-password" }] }));
     expect(result.fields.correo).toBe("Revisa este campo.");
-    expect(result.fields.contrasena).toBe("Revisa la contraseña (entre 12 y 128 caracteres).");
+    expect(result.fields.contrasena).toBe("La contraseña debe tener entre 6 y 24 caracteres, al menos una letra mayúscula, una minúscula, un número y un carácter especial.");
     expect(JSON.stringify(result)).not.toContain("secret-password");
     expect(userError(new ApiError(422, "raw", { detail: [{ loc: ["query", "unknown"] }] })).message).toBe("Revisa los datos e inténtalo de nuevo.");
   });

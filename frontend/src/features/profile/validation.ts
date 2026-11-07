@@ -1,3 +1,4 @@
+import { passwordMeetsPolicy, PASSWORD_VALIDATION_MESSAGE } from "@/lib/password-policy";
 import { profileFields, type FieldErrors, type PasswordValues, type ProfileChanges, type ProfileData, type ProfileField, type ProfileValues } from "./types";
 
 export function toProfileValues(profile: ProfileData): ProfileValues {
@@ -42,11 +43,10 @@ export function validateProfile(values: ProfileValues, original: ProfileData): F
 export function validatePassword(values: PasswordValues): FieldErrors<keyof PasswordValues> {
   const errors: FieldErrors<keyof PasswordValues> = {};
   const actualLength = Array.from(values.contrasena_actual).length;
-  const newLength = Array.from(values.contrasena_nueva).length;
   if (!actualLength) errors.contrasena_actual = "Este campo es obligatorio.";
   else if (actualLength > 128) errors.contrasena_actual = "La contraseña actual debe tener como máximo 128 caracteres.";
-  if (!newLength) errors.contrasena_nueva = "Este campo es obligatorio.";
-  else if (newLength < 12 || newLength > 128) errors.contrasena_nueva = "La contraseña nueva debe tener entre 12 y 128 caracteres.";
+  if (!values.contrasena_nueva) errors.contrasena_nueva = "Este campo es obligatorio.";
+  else if (!passwordMeetsPolicy(values.contrasena_nueva)) errors.contrasena_nueva = PASSWORD_VALIDATION_MESSAGE;
   else if (values.contrasena_nueva === values.contrasena_actual) errors.contrasena_nueva = "La contraseña nueva debe ser diferente de la actual.";
   if (!values.confirmacion) errors.confirmacion = "Este campo es obligatorio.";
   else if (values.confirmacion !== values.contrasena_nueva) errors.confirmacion = "Las contraseñas no coinciden.";

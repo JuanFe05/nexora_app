@@ -1,4 +1,6 @@
 import { useState, type SubmitEvent } from "react";
+import { PasswordRequirements } from "@/components/shared/password-requirements";
+import { evaluatePasswordPolicy, PASSWORD_VALIDATION_MESSAGE } from "@/lib/password-policy";
 import { useToast } from "@/components/shared/toast/use-toast";
 import { FormDialog } from "@/components/shared/form-dialog";
 import { Button } from "@/components/ui/button";
@@ -16,7 +18,7 @@ const fields = [
   { name: "confirmacion", label: "Confirmar contraseña", toggleLabel: "confirmación de contraseña" },
 ] as const;
 
-const description = "Usa entre 12 y 128 caracteres y una contraseña diferente de la actual. Al cambiarla, se cerrarán tus otras sesiones; esta sesión seguirá activa.";
+const description = `${PASSWORD_VALIDATION_MESSAGE} Usa una contraseña diferente de la actual. Al cambiarla, se cerrarán tus otras sesiones; esta sesión seguirá activa.`;
 
 export function PasswordForm() {
   const [open, setOpen] = useState(false);
@@ -34,6 +36,7 @@ export function PasswordForm() {
 
 function PasswordEditor({ onClose }: { onClose: () => void }) {
   const [pending, setPending] = useState(false);
+  const [evaluation, setEvaluation] = useState(() => evaluatePasswordPolicy(""));
   const [errors, setErrors] = useState<FieldErrors<keyof PasswordValues>>({});
   const toast = useToast();
   const [generation, setGeneration] = useState(0);
@@ -60,7 +63,7 @@ function PasswordEditor({ onClose }: { onClose: () => void }) {
     if (first) { focusField(first.name); return; }
     setPending(true);
     // Clear the DOM and visibility immediately; keep only the in-flight request body.
-    form.reset(); setGeneration((previous) => previous + 1);
+    form.reset(); setEvaluation(evaluatePasswordPolicy("")); setGeneration((previous) => previous + 1);
     try {
       const request = changePassword({ contrasena_actual: values.contrasena_actual, contrasena_nueva: values.contrasena_nueva });
       values.contrasena_actual = ""; values.contrasena_nueva = ""; values.confirmacion = "";
@@ -79,11 +82,14 @@ function PasswordEditor({ onClose }: { onClose: () => void }) {
   return (
     <FormDialog open onOpenChange={(open) => { if (!open) onClose(); }} title="Cambiar contraseña"
       description={description} formId="password-form" pending={pending} pendingLabel="Actualizando…">
-      <form id="password-form" ref={formRef} noValidate onSubmit={submit} aria-label="Cambiar contraseña" aria-busy={pending} className="space-y-5">
-        {fields.map((field) => <PasswordField key={`${generation}-${field.name}`} {...field} pending={pending} error={errors[field.name]} onChange={() => {
-          // New password and confirmation validation depend on each other.
-          setErrors({});
-        }} />)}
+      <form id="password-form" ref={formRef} noValidate onSubmit={submit} onReset={() => setEvaluation(evaluatePasswordPolicy(""))} aria-label="Cambiar contraseña" aria-busy={pending} className="space-y-5">
+        {fields.map((field) => <PasswordField key={`${generation}-${field.name}`} {...field} pending={pending} error={errors[field.name]}
+          requirements={field.name === "contrasena_nueva" ? <PasswordRequirements evaluation={evaluation} /> : undefined}
+          onChange={(event) => {
+            if (field.name === "contrasena_nueva") setEvaluation(evaluatePasswordPolicy(event.currentTarget.value));
+            // New password and confirmation validation depend on each other.
+            setErrors({});
+          }} />)}
       </form>
     </FormDialog>
   );

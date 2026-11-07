@@ -20,7 +20,7 @@ async function loaded() { render(<ToastProvider><ProfilePage /></ToastProvider>)
 async function editProfile(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("button", { name: "Editar" })); await screen.findByRole("dialog", { name: "Editar información personal" }); }
 async function editPassword(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("button", { name: "Cambiar contraseña" })); await screen.findByRole("dialog", { name: "Cambiar contraseña" }); }
 async function closed() { await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument()); expect(document.querySelectorAll("input")).toHaveLength(0); }
-async function fillPasswords(user: ReturnType<typeof userEvent.setup>, actual = "actual-privada", nueva = "nueva-privada-123", confirm = nueva) {
+async function fillPasswords(user: ReturnType<typeof userEvent.setup>, actual = "actual-privada", nueva = "Nueva-privada-123", confirm = nueva) {
   await user.type(current(), actual); await user.type(next(), nueva); await user.type(confirmation(), confirm);
 }
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.getProfile).mockResolvedValue(profile); vi.mocked(api.changePassword).mockResolvedValue(undefined); });
@@ -122,12 +122,32 @@ describe("perfil propio", () => {
 });
 
 describe("cambio de contraseña", () => {
+  it("actualiza requisitos en vivo sin serializar el secreto y reinicia al cerrar", async () => {
+    const user = userEvent.setup(); await loaded(); await editPassword(user);
+    const list = screen.getByRole("list", { name: "Requisitos de contraseña" });
+    expect(within(list).getAllByText("pendiente")).toHaveLength(5);
+    await user.type(next(), "Abc123!x");
+    expect(within(list).getAllByText("cumplido")).toHaveLength(5);
+    expect(next()).toHaveAccessibleDescription(/Entre 6 y 24 caracteres/);
+    expect(next()).not.toHaveAttribute("value");
+    expect(document.body.innerHTML).not.toContain("Abc123!x");
+    await user.clear(next()); await user.type(next(), "abc12!");
+    expect(within(list).getAllByText("cumplido")).toHaveLength(4);
+    expect(within(list).getAllByText("pendiente")).toHaveLength(1);
+    await user.clear(next());
+    expect(within(list).getAllByText("pendiente")).toHaveLength(5);
+    await user.click(screen.getByRole("button", { name: "Cancelar" })); await closed();
+    await editPassword(user);
+    expect(within(screen.getByRole("list", { name: "Requisitos de contraseña" })).getAllByText("pendiente")).toHaveLength(5);
+    expect(api.changePassword).not.toHaveBeenCalled();
+  });
   it("exige los tres campos con mensajes accesibles y foco", async () => {
     const user = userEvent.setup(); await loaded(); await editPassword(user); await user.click(change());
     expect(current()).toHaveFocus();
     for (const field of [current(), next(), confirmation()]) {
       expect(field).toBeRequired(); expect(field).toHaveAttribute("aria-invalid", "true");
-      expect(field).toHaveAccessibleDescription("Este campo es obligatorio.");
+      if (field === next()) expect(field).toHaveAccessibleDescription("Entre 6 y 24 caracteres pendiente Al menos una letra mayúscula pendiente Al menos una letra minúscula pendiente Al menos un número pendiente Al menos un carácter especial (@, #, $, %, &, !…) pendiente 0 de 5 requisitos cumplidos. Este campo es obligatorio.");
+      else expect(field).toHaveAccessibleDescription("Este campo es obligatorio.");
     }
     expect(api.changePassword).not.toHaveBeenCalled();
   });
@@ -140,9 +160,9 @@ describe("cambio de contraseña", () => {
     expect(api.changePassword).not.toHaveBeenCalled(); expect(document.body.innerHTML).not.toContain("privada");
   });
   it.each([
-    ["actual-privada", "corta", "corta", "La contraseña nueva debe tener entre 12 y 128 caracteres."],
-    ["actual-privada", "nueva-privada-123", "distinta", "Las contraseñas no coinciden."],
-    ["misma-privada-123", "misma-privada-123", "misma-privada-123", "La contraseña nueva debe ser diferente de la actual."],
+    ["actual-privada", "corta", "corta", "La contraseña debe tener entre 6 y 24 caracteres, al menos una letra mayúscula, una minúscula, un número y un carácter especial."],
+    ["actual-privada", "Nueva-privada-123", "distinta", "Las contraseñas no coinciden."],
+    ["Misma-privada-123", "Misma-privada-123", "Misma-privada-123", "La contraseña nueva debe ser diferente de la actual."],
   ])("rechaza longitud, discrepancia o igualdad sin enviar", async (actual, nueva, confirm, message) => {
     const user = userEvent.setup(); await loaded(); await editPassword(user); await fillPasswords(user, actual, nueva, confirm); await user.click(change());
     expect(screen.getByText(message)).toHaveAttribute("role", "alert"); expect(api.changePassword).not.toHaveBeenCalled();
@@ -156,13 +176,14 @@ describe("cambio de contraseña", () => {
     expect(next()).toHaveAttribute("aria-invalid", "false"); expect(confirmation()).toHaveAttribute("aria-invalid", "false");
     for (const field of [current(), next(), confirmation()]) expect(field).toHaveValue("");
     expect(document.body.innerHTML).not.toContain("actual-privada");
+    expect(within(screen.getByRole("list", { name: "Requisitos de contraseña" })).getAllByText("pendiente")).toHaveLength(5);
   });
   it("429 anuncia Retry-After sin marcar campos ni revelar secretos", async () => {
-    vi.mocked(api.changePassword).mockRejectedValue(new ApiError(429, "nueva-privada-123", null, "42"));
+    vi.mocked(api.changePassword).mockRejectedValue(new ApiError(429, "Nueva-privada-123", null, "42"));
     const user = userEvent.setup(); await loaded(); await editPassword(user); await fillPasswords(user); await user.click(change());
     expect(await screen.findByRole("alert")).toHaveTextContent("Demasiados intentos. Intenta de nuevo en 42 segundos.");
     for (const field of [current(), next(), confirmation()]) { expect(field).toHaveAttribute("aria-invalid", "false"); expect(field).toHaveValue(""); }
-    expect(document.body.innerHTML).not.toContain("nueva-privada-123");
+    expect(document.body.innerHTML).not.toContain("Nueva-privada-123");
   });
   it("204 bloquea envío concurrente, limpia claves inmediatamente, cierra y conserva sesión", async () => {
     let resolve!: () => void;
@@ -175,7 +196,8 @@ describe("cambio de contraseña", () => {
     await user.click(screen.getByRole("button", { name: "Actualizando…" }));
     await user.click(screen.getByRole("button", { name: "Cerrar" })); await user.keyboard("{Escape}");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(api.changePassword).toHaveBeenCalledExactlyOnceWith({ contrasena_actual: "actual-privada", contrasena_nueva: "nueva-privada-123" });
+    expect(within(screen.getByRole("list", { name: "Requisitos de contraseña" })).getAllByText("pendiente")).toHaveLength(5);
+    expect(api.changePassword).toHaveBeenCalledExactlyOnceWith({ contrasena_actual: "actual-privada", contrasena_nueva: "Nueva-privada-123" });
     await act(async () => { resolve(); });
     expect(await screen.findByRole("status")).toHaveTextContent("Contraseña actualizada. Se cerraron tus otras sesiones.");
     await closed(); await editPassword(user);

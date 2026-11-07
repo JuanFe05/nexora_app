@@ -21,13 +21,13 @@ describe("adaptador real /profile", () => {
   });
   it("POST conserva secretos sin recortar y no envía confirmación", async () => {
     vi.mocked(httpClient.post).mockResolvedValue(undefined);
-    await expect(changePassword({ contrasena_actual: " actual ", contrasena_nueva: " nueva-segura " })).resolves.toBeUndefined();
-    expect(httpClient.post).toHaveBeenCalledExactlyOnceWith("/profile/password", { body: { contrasena_actual: " actual ", contrasena_nueva: " nueva-segura " } });
+    await expect(changePassword({ contrasena_actual: " actual ", contrasena_nueva: " Nueva-segura1! " })).resolves.toBeUndefined();
+    expect(httpClient.post).toHaveBeenCalledExactlyOnceWith("/profile/password", { body: { contrasena_actual: " actual ", contrasena_nueva: " Nueva-segura1! " } });
   });
   it("preserva ApiError y Retry-After del cliente", async () => {
     const failure = new ApiError(429, "interno", null, "23");
     vi.mocked(httpClient.post).mockRejectedValue(failure);
-    await expect(changePassword({ contrasena_actual: "actual", contrasena_nueva: "nueva-segura-123" })).rejects.toBe(failure);
+    await expect(changePassword({ contrasena_actual: "actual", contrasena_nueva: "Nueva-segura-123" })).rejects.toBe(failure);
     expect(passwordFailure(failure)).toEqual({ message: "Demasiados intentos. Intenta de nuevo en 23 segundos.", fields: {} });
   });
   it.each([null, "tomorrow", "-1", "9007199254740992"])("429 con Retry-After inválido %s usa fallback", (retryAfter) => {

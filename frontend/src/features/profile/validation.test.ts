@@ -26,16 +26,22 @@ describe("validación del perfil", () => {
 });
 
 describe("validación de contraseña", () => {
-  const valid = { contrasena_actual: "actual", contrasena_nueva: "n".repeat(12), confirmacion: "n".repeat(12) };
+  const valid = { contrasena_actual: "actual", contrasena_nueva: "Abc123!x", confirmacion: "Abc123!x" };
   it("exige los tres campos", () => {
     expect(Object.keys(validatePassword({ contrasena_actual: "", contrasena_nueva: "", confirmacion: "" }))).toEqual(["contrasena_actual", "contrasena_nueva", "confirmacion"]);
   });
-  it.each([12, 128])("acepta nueva con %s caracteres sin recortar", (length) => {
-    const password = ` ${"n".repeat(length - 2)} `;
+  it.each([6, 24])("acepta nueva con %s caracteres sin recortar", (length) => {
+    const password = ` Ab1!${"n".repeat(length - 6)} `;
     expect(validatePassword({ ...valid, contrasena_nueva: password, confirmacion: password })).toEqual({});
   });
-  it.each([11, 129])("rechaza nueva con %s caracteres", (length) => {
+  it.each([5, 25])("rechaza nueva con %s caracteres", (length) => {
     expect(validatePassword({ ...valid, contrasena_nueva: "n".repeat(length) }).contrasena_nueva).toBeTruthy();
+  });
+  it.each(["abc12!", "ABC12!", "Abcde!", "Abc123", "Ab1   "])("rechaza clases ausentes en %s", password => {
+    expect(validatePassword({ ...valid, contrasena_nueva: password, confirmacion: password })).toEqual({ contrasena_nueva: "La contraseña debe tener entre 6 y 24 caracteres, al menos una letra mayúscula, una minúscula, un número y un carácter especial." });
+  });
+  it.each(["x", "a".repeat(128)])("conserva contraseña actual legacy %s", actual => {
+    expect(validatePassword({ ...valid, contrasena_actual: actual })).toEqual({});
   });
   it("limita actual a 128, rechaza igualdad y confirmación distinta", () => {
     expect(validatePassword({ ...valid, contrasena_actual: "a".repeat(129) }).contrasena_actual).toBeTruthy();

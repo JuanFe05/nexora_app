@@ -1,3 +1,4 @@
+import { passwordMeetsPolicy, PASSWORD_VALIDATION_MESSAGE } from "@/lib/password-policy";
 import type { User, UserCreate, UserFieldErrors, UserPatch, UserValues } from "../types";
 
 export const userTextFields = [
@@ -22,8 +23,8 @@ export function validateUser(values: UserValues, original: User | null): UserFie
     else if (!value && original?.[field.name]) errors[field.name] = "El backend no permite vaciar este campo; conserva su valor o escribe uno nuevo.";
     else if (Array.from(value).length > field.max) errors[field.name] = `Usa como máximo ${field.max} caracteres.`;
   }
-  if (!original && (Array.from(values.contrasena).length < 12 || Array.from(values.contrasena).length > 128)) {
-    errors.contrasena = "La contraseña debe tener entre 12 y 128 caracteres.";
+  if (!original && !passwordMeetsPolicy(values.contrasena)) {
+    errors.contrasena = PASSWORD_VALIDATION_MESSAGE;
   }
   if (values.estado !== "activo" && values.estado !== "inactivo") errors.estado = "Selecciona un estado válido.";
   return errors;

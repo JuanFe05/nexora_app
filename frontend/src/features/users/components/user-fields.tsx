@@ -1,16 +1,20 @@
+import { PasswordRequirements } from "@/components/shared/password-requirements";
+import { evaluatePasswordPolicy, PASSWORD_RULES, type PasswordPolicyEvaluation } from "@/lib/password-policy";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { userTextFields } from "../hooks/user-validation";
 import type { UserFieldErrors, UserValues } from "../types";
 
-export function UserFields({ values, errors, onChange, editing, personalEditable, statusEditable }: {
+export function UserFields({ values, errors, onChange, editing, personalEditable, statusEditable, evaluation, onPasswordChange }: {
   values: UserValues;
   errors: UserFieldErrors;
   onChange: (name: keyof UserValues, value: string) => void;
   editing: boolean;
   personalEditable: boolean;
   statusEditable: boolean;
+  evaluation: PasswordPolicyEvaluation;
+  onPasswordChange: (evaluation: PasswordPolicyEvaluation) => void;
 }) {
   return <>
     {userTextFields.map(({ name, label, required, max }) => <Field key={name} controlId={`user-${name}`} data-invalid={!!errors[name]}>
@@ -20,8 +24,9 @@ export function UserFields({ values, errors, onChange, editing, personalEditable
     </Field>)}
     {!editing && <Field controlId="user-contrasena" data-invalid={!!errors.contrasena}>
       <Label htmlFor="user-contrasena">Contraseña<span aria-hidden="true" className="text-red-500">*</span></Label>
-      <Input name="contrasena" disabled={!personalEditable} type="password" autoComplete="new-password" required aria-invalid={!!errors.contrasena} aria-describedby={errors.contrasena ? "user-contrasena-error" : "user-password-help"} />
-      <p id="user-password-help" className="text-sm text-gray-500 dark:text-gray-400">Entre 12 y 128 caracteres. Solo se establece al crear el usuario.</p>
+      <Input name="contrasena" disabled={!personalEditable} type="password" autoComplete="new-password" required aria-invalid={!!errors.contrasena} aria-describedby={`user-password-help user-password-requirements${errors.contrasena ? " user-contrasena-error" : ""}`} onChange={event => onPasswordChange(evaluatePasswordPolicy(event.currentTarget.value))} />
+      <p id="user-password-help" className="text-sm text-gray-500 dark:text-gray-400">{PASSWORD_RULES[0].label}. Solo se establece al crear el usuario.</p>
+      <div id="user-password-requirements"><PasswordRequirements evaluation={evaluation} /></div>
       {errors.contrasena && <p id="user-contrasena-error" className="text-sm text-red-500 dark:text-red-400">{errors.contrasena}</p>}
     </Field>}
     {editing && <Field controlId="user-estado" data-invalid={!!errors.estado}>
