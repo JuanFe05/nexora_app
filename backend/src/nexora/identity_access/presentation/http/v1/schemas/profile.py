@@ -7,6 +7,7 @@ from typing import Self
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 
+from nexora.identity_access.domain.value_objects.password_policy import validate_password_policy
 from nexora.identity_access.presentation.http.v1.schemas.administration import (
     Contract,
     Email,
@@ -39,7 +40,13 @@ class ProfileUpdate(PatchContract):
 
 class PasswordUpdate(Contract):
     contrasena_actual: SecretStr = Field(min_length=1, max_length=128)
-    contrasena_nueva: SecretStr = Field(min_length=12, max_length=128)
+    contrasena_nueva: SecretStr
+
+    @field_validator("contrasena_nueva")
+    @classmethod
+    def _password_policy(cls, value: SecretStr) -> SecretStr:
+        validate_password_policy(value.get_secret_value())
+        return value
 
     @model_validator(mode="after")
     def _different_password(self) -> Self:

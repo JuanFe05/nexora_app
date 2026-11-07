@@ -26,12 +26,31 @@ independencia de acciones y excepciones de delegacion en [administracion.md](adm
 
 ## Politica de contrasenas
 
-1. El usuario que conoce su contrasena actual puede cambiarla en
-   `POST /api/v1/profile/password` (12–128 caracteres para la nueva, diferente de la actual).
-2. Si la olvida, contacta al administrador, que supervisa el restablecimiento.
-3. El administrador autoriza el procedimiento pero nunca conoce ni establece la contrasena.
-4. El usuario ingresa personalmente la nueva contrasena.
-5. No existe recuperacion automatica por correo.
+La validacion definitiva se realiza en el backend al crear usuarios, cambiar contrasenas y
+configurar el administrador inicial (bootstrap). Una sola fuente de dominio,
+`domain/value_objects/password_policy.py`, devuelve las reglas incumplidas en este orden:
+
+| Regla | Definicion |
+| --- | --- |
+| Longitud | 6-24 code points Unicode, sin recortar ni normalizar |
+| Mayuscula | Al menos un caracter de categoria Unicode `Lu` |
+| Minuscula | Al menos un caracter de categoria Unicode `Ll` |
+| Numero | Al menos un caracter de categoria Unicode `Nd` |
+| Especial | Al menos un caracter de categoria `P*` (puntuacion) o `S*` (simbolo); `@ # $ % & !` cumplen |
+
+Los espacios cuentan para la longitud, pero no son especiales. Un caracter no BMP cuenta como
+un code point. El mensaje ASCII compartido nombra solo las reglas incumplidas, nunca la clave.
+HTTP responde 422 sin `input` ni `ctx`. Argon2id y el almacenamiento seguro permanecen iguales.
+
+Login y la contrasena **actual** de `POST /api/v1/profile/password` conservan 1-128 caracteres:
+no se les exige esta politica, para que claves legacy sigan permitiendo acceso y cambio.
+La contrasena **nueva** ademas debe ser diferente de la actual.
+
+No existe endpoint ni UI de restablecimiento administrativo y no se construye en este cambio.
+Cuando se implemente debe reutilizar el mismo modulo, no copiar las reglas. Si el usuario olvida
+su clave, el procedimiento supervisado por el administrador queda fuera de alcance: el usuario
+debe ingresar personalmente la nueva clave y el administrador nunca debe conocerla ni
+establecerla. No existe recuperacion automatica por correo.
 
 ## Autoservicio del perfil
 

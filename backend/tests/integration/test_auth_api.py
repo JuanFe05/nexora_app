@@ -55,6 +55,17 @@ async def test_login_con_nombre_de_usuario_devuelve_access_token_y_cookie_httpon
     assert "SameSite=lax" in cookie_header
 
 
+@pytest.mark.parametrize("password", ["x", "plainlegacy", "x" * 128])
+async def test_login_accepts_legacy_passwords(client: AsyncClient, seeder: Seeder, password: str):
+    await seeder.create_user(password=password)
+    response = await do_login(client, contrasena=password)
+    assert response.status_code == 200, response.text
+    assert response.json()["usuario"]["nombre_usuario"] == "jperez"
+    assert response.json()["token_type"] == "bearer"
+    assert await seeder.count_sessions() == 1
+    assert "hash_contrasena" not in response.text
+
+
 async def test_login_con_correo_identifica_al_mismo_usuario(
     client: AsyncClient, seeder: Seeder
 ) -> None:

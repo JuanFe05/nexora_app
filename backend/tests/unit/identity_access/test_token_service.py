@@ -16,6 +16,7 @@ from nexora.identity_access.infrastructure.security.token_service import JwtToke
 
 def build_service(**overrides: object) -> JwtTokenService:
     values: dict[str, object] = {
+        "_env_file": None,  # No importar credenciales bootstrap del entorno local.
         "jwt_secret": SecretStr("secreto-de-pruebas-de-al-menos-32-caracteres"),
         "jwt_issuer": "nexora",
         "jwt_audience": "nexora-app",

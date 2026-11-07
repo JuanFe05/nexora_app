@@ -7,6 +7,7 @@ Las migraciones de Alembic son el unico mecanismo que crea el esquema, igual que
 from __future__ import annotations
 
 import os
+from argparse import Namespace
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -68,8 +69,8 @@ def settings() -> Settings:
 def migrated_database(settings: Settings) -> Iterator[None]:
     config = Config("alembic.ini")
     config.set_main_option("sqlalchemy.url", settings.database_url)
-    config.cmd_opts = None
-    os.environ["NEXORA_DATABASE_URL"] = settings.database_url
+    # El env de Alembic ya admite -x url: usarlo evita cargar credenciales bootstrap locales.
+    config.cmd_opts = Namespace(x=[f"url={settings.database_url}"])
     command.downgrade(config, "base")
     command.upgrade(config, "head")
     yield

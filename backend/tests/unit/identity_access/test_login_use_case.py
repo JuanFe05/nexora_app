@@ -81,6 +81,16 @@ async def test_login_con_nombre_de_usuario_emite_tokens_y_crea_sesion() -> None:
     assert parts["throttle"].failures == []
 
 
+@pytest.mark.parametrize("password", ["x", "plainlegacy", "x" * 128])
+async def test_login_accepts_legacy_passwords(password: str) -> None:
+    use_case, parts = build_use_case(users=FakeUserRepository([build_user(password=password)]))
+    result = await use_case.execute(LoginCommand(identifier="jperez", password=password))
+    assert result.user.username == "jperez"
+    assert len(parts["sessions"].sessions) == 1
+    assert parts["transaction"].commits == 1
+    assert parts["throttle"].failures == []
+
+
 async def test_login_con_correo_identifica_al_mismo_usuario() -> None:
     use_case, _ = build_use_case()
 

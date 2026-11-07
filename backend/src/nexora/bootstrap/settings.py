@@ -13,6 +13,8 @@ from typing import Literal
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from nexora.identity_access.domain.value_objects.password_policy import validate_password_policy
+
 Environment = Literal["development", "testing", "production"]
 
 #: El .env vive en la raiz del repositorio, junto al docker-compose.yml. Se resuelve por ruta
@@ -22,9 +24,6 @@ _REPO_ROOT = _BACKEND_DIR.parent
 
 #: Algoritmos de firma aceptados. El algoritmo jamas se toma del encabezado del token.
 ALLOWED_JWT_ALGORITHMS = frozenset({"HS256", "HS384", "HS512"})
-
-MIN_ADMIN_PASSWORD_LENGTH = 12
-MAX_ADMIN_PASSWORD_LENGTH = 128
 
 #: Secreto publico de desarrollo. Produccion debe reemplazarlo si o si.
 DEVELOPMENT_JWT_SECRET = "development-only-secret-change-me"  # noqa: S105
@@ -90,20 +89,8 @@ class Settings(BaseSettings):
             raise ValueError(
                 "El administrador inicial exige NEXORA_BOOTSTRAP_ADMIN_USERNAME, _EMAIL y _PASSWORD"
             )
-        if (
-            password is not None
-            and all(provided)
-            and len(password.get_secret_value()) < MIN_ADMIN_PASSWORD_LENGTH
-        ):
-            raise ValueError(
-                f"NEXORA_BOOTSTRAP_ADMIN_PASSWORD debe tener al menos "
-                f"{MIN_ADMIN_PASSWORD_LENGTH} caracteres"
-            )
-        if password is not None and len(password.get_secret_value()) > MAX_ADMIN_PASSWORD_LENGTH:
-            raise ValueError(
-                f"NEXORA_BOOTSTRAP_ADMIN_PASSWORD debe tener como maximo "
-                f"{MAX_ADMIN_PASSWORD_LENGTH} caracteres"
-            )
+        if password is not None and all(provided):
+            validate_password_policy(password.get_secret_value())
         return self
 
     @model_validator(mode="after")

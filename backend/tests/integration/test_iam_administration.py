@@ -27,7 +27,7 @@ from nexora.identity_access.infrastructure.security.password_hasher import Argon
 from nexora.shared_kernel.clock import SystemClock
 from tests.integration.conftest import ORIGIN, PASSWORD, Seeder
 
-NEW_PASSWORD = "Clave123456*"
+NEW_PASSWORD = "Abc123!x"
 USER = {
     "nombre_usuario": "nuevo",
     "correo": "nuevo@example.test",
@@ -548,7 +548,7 @@ async def test_validation_pagination_and_immutable_codes(
 async def test_validation_errors_never_echo_secrets(
     client: AsyncClient, admin: dict[str, str], endpoint: str
 ) -> None:
-    secret = "short-D1" if endpoint == "users" else "D1-secret-" * 15
+    secret = "shortD1" if endpoint == "users" else "D1-secret-" * 15
     payload = (
         {**USER, "contrasena": secret}
         if endpoint == "users"
@@ -611,10 +611,25 @@ async def test_create_user_password_length_boundaries(
     client: AsyncClient, admin: dict[str, str]
 ) -> None:
     before = await snapshot(client, admin)
-    await request(client, admin, "POST", "/users", 422, {**USER, "contrasena": "x" * 129})
-    assert await snapshot(client, admin) == before
-    for length in (12, 128):
-        password = "x" * length
+    for password in (
+        "Ab1!x",
+        "Ab1!" + "x" * 21,
+        "abc1!x",
+        "ABC1!X",
+        "Abcd!x",
+        "Abc123",
+        "Ab1 \t\n",
+    ):
+        rejected = await request(
+            client, admin, "POST", "/users", 422, {**USER, "contrasena": password}
+        )
+        assert password not in rejected.text
+        assert all(
+            "input" not in error and "ctx" not in error for error in rejected.json()["detail"]
+        )
+        assert await snapshot(client, admin) == before
+    for length in (6, 24):
+        password = "Ab1!" + "x" * (length - 4)
         username = f"length{length}"
         created = await request(
             client,

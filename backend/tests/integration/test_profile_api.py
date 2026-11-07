@@ -18,7 +18,7 @@ from nexora.identity_access.presentation.http.v1.dependencies.auth import (
 from tests.integration.conftest import ORIGIN, PASSWORD, Seeder
 from tests.integration.test_iam_administration import assign_seeded_role, login
 
-NEW = "ClaveNueva123456*"
+NEW = "Abc123!x"
 PATH = "/api/v1/profile"
 
 
@@ -190,7 +190,13 @@ async def test_wrong_password_is_400_then_throttled_per_user(client, seeder, db_
     "current,new",
     [
         (NEW, NEW),
-        (PASSWORD, "short-secret"[:8]),
+        (PASSWORD, "Ab1!x"),
+        (PASSWORD, "Ab1!" + "x" * 21),
+        (PASSWORD, "abc1!x"),
+        (PASSWORD, "ABC1!X"),
+        (PASSWORD, "Abcd!x"),
+        (PASSWORD, "Abc123"),
+        (PASSWORD, "Ab1 \t\n"),
         ("", NEW),
         ("x" * 129, NEW),
         (PASSWORD, "x" * 129),
@@ -286,6 +292,28 @@ async def test_password_change_login_session_revocation_and_timestamp(client, se
             json={"contrasena_actual": "wrong", "contrasena_nueva": NEW},
         )
         assert bad.status_code == 400
+
+
+@pytest.mark.parametrize("new", ["Ab1!xx", "Ab1😀" + "x" * 20, "Éé١!xx", " Ab1! "])
+async def test_legacy_current_password_can_change_to_policy_boundaries(client, seeder, new):
+    legacy = "plainlegacy"
+    await seeder.create_user(password=legacy)
+    headers = await login(client, "jperez", legacy)
+    response = await client.post(
+        PATH + "/password",
+        headers=headers,
+        json={"contrasena_actual": legacy, "contrasena_nueva": new},
+    )
+    assert response.status_code == 204, response.text
+    assert response.content == b""
+    await login(client, "jperez", new)
+    old = await client.post(
+        "/api/v1/auth/login",
+        headers={"origin": ORIGIN},
+        json={"identificador": "jperez", "contrasena": legacy},
+    )
+    assert old.status_code == 401
+    assert old.json() == {"detail": "Credenciales invalidas"}
 
 
 async def test_password_write_and_revocation_rollback_together(

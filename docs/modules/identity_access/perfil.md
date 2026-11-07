@@ -47,9 +47,15 @@ Ejemplo:
 { "contrasena_actual": "<actual>", "contrasena_nueva": "<nueva>" }
 ```
 
-La actual admite 1–128 caracteres; la nueva, 12–128. No se recortan espacios en contrasenas.
-La nueva debe ser diferente de la actual (`422` si son iguales). Las entradas son secretos;
-los errores de validacion no devuelven los valores recibidos ni su contexto interno.
+La actual admite claves legacy de 1-128 caracteres, sin requisitos de composicion; login
+conserva el mismo limite. La nueva exige 6-24 code points Unicode, una mayuscula (`Lu`), una
+minuscula (`Ll`), un numero (`Nd`) y un especial (`P*` o `S*`, como `@ # $ % & !`). No se
+recortan espacios: cuentan para la longitud, pero no como especial.
+La nueva debe ser diferente de la actual (`422` si son iguales). La validacion definitiva
+reutiliza `domain/value_objects/password_policy.py`, igual que crear usuarios y bootstrap.
+Las entradas son secretos; los errores de validacion nombran los requisitos que faltan y
+no devuelven los valores recibidos ni su contexto interno.
+[Definicion Unicode](seguridad.md#politica-de-contrasenas).
 
 | Situacion | Resultado |
 | --- | --- |
@@ -74,7 +80,8 @@ Las sesiones de otros usuarios no cambian. Si falla la escritura o la revocacion
 toda la transaccion. Los cambios concurrentes de clave se serializan sobre el usuario.
 
 Tras el cambio, login acepta la clave nueva y rechaza la anterior. No se implementa aqui
-recuperacion de contrasena olvidada ni restablecimiento administrativo.
+recuperacion de contrasena olvidada ni restablecimiento administrativo. Un futuro reset
+administrativo debe usar el mismo modulo unico de politica.
 
 ## Referencias
 

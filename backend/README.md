@@ -90,11 +90,26 @@ Todas usan el prefijo `NEXORA_`.
 | `NEXORA_CSRF_COOKIE_PATH` | `/` | Ruta de la cookie CSRF legible por el front |
 | `NEXORA_BOOTSTRAP_ADMIN_USERNAME` | — | Administrador inicial; obligatorio en produccion si no hay administrador |
 | `NEXORA_BOOTSTRAP_ADMIN_EMAIL` | — | Correo del administrador inicial |
-| `NEXORA_BOOTSTRAP_ADMIN_PASSWORD` | — | Contrasena inicial, 12 a 128 caracteres (Argon2id); ver `administracion.md` |
+| `NEXORA_BOOTSTRAP_ADMIN_PASSWORD` | — | Contrasena inicial, 6-24 code points Unicode con mayuscula, minuscula, numero y especial (Argon2id); ver politica abajo |
 | `NEXORA_ALLOWED_ORIGINS` | `["http://localhost:5173"]` | Origenes de CORS y validacion CSRF |
 | `NEXORA_LOGIN_MAX_ATTEMPTS` | `5` | Intentos antes del bloqueo |
 | `NEXORA_LOGIN_ATTEMPT_WINDOW_SECONDS` | `300` | Ventana de conteo |
 | `NEXORA_LOGIN_BLOCK_SECONDS` | `900` | Duracion del bloqueo |
+
+### Politica de contrasenas nuevas
+
+Crear usuarios, cambiar la contrasena y configurar el administrador inicial exige **6-24
+code points Unicode**, al menos una mayuscula (`Lu`), una minuscula (`Ll`), un numero (`Nd`)
+y un especial (categoria `P*` o `S*`, por ejemplo `@ # $ % & !`). No se recortan espacios:
+cuentan para la longitud, pero no satisfacen el requisito de especial.
+
+La fuente unica del backend es
+`src/nexora/identity_access/domain/value_objects/password_policy.py`. Los errores HTTP son
+422 sin eco de secretos. Login y contrasena **actual** siguen admitiendo claves legacy de
+1-128 caracteres sin exigir esta politica. La nueva ademas debe ser diferente de la actual.
+Argon2id y el almacenamiento no cambian. No hay endpoint de restablecimiento administrativo;
+cuando se implemente, debe reutilizar este mismo modulo. Detalles en
+[seguridad.md](../docs/modules/identity_access/seguridad.md#politica-de-contrasenas).
 
 `NEXORA_JWT_SECRET` se genera con:
 

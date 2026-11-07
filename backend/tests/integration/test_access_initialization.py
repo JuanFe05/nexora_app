@@ -237,26 +237,28 @@ async def test_production_healthy_admin_is_idempotent(
     assert {table: await count(db_session, table) for table in tables} == before
 
 
-@pytest.mark.parametrize("length", [129, 256])
-def test_bootstrap_password_over_128_is_rejected(length: int) -> None:
-    with pytest.raises(ValidationError, match="128"):
+@pytest.mark.parametrize("length", [25, 129, 256])
+def test_bootstrap_password_over_24_is_rejected(length: int) -> None:
+    with pytest.raises(ValidationError, match="entre 6 y 24 caracteres"):
         Settings(  # type: ignore[call-arg]
             _env_file=None,
             bootstrap_admin_username="admin",
             bootstrap_admin_email="admin@nexora.co",
-            bootstrap_admin_password=SecretStr("x" * length),
+            bootstrap_admin_password=SecretStr("Ab1!" + "x" * (length - 4)),
         )
 
 
-@pytest.mark.parametrize("length", [12, 128])
+@pytest.mark.parametrize("length", [6, 24])
 def test_bootstrap_password_valid_boundaries(length: int) -> None:
+    password = "Ab1!" + "x" * (length - 4)
     configured = Settings(  # type: ignore[call-arg]
         _env_file=None,
         bootstrap_admin_username="admin",
         bootstrap_admin_email="admin@nexora.co",
-        bootstrap_admin_password=SecretStr("x" * length),
+        bootstrap_admin_password=SecretStr(password),
     )
     assert configured.has_bootstrap_admin
+    assert configured.bootstrap_admin_password.get_secret_value() == password
 
 
 def test_credenciales_parciales_se_rechazan() -> None:
@@ -265,7 +267,7 @@ def test_credenciales_parciales_se_rechazan() -> None:
 
 
 def test_contrasena_inicial_corta_se_rechaza() -> None:
-    with pytest.raises(ValidationError, match="al menos 12 caracteres"):
+    with pytest.raises(ValidationError, match="entre 6 y 24 caracteres"):
         Settings(  # type: ignore[call-arg]
             _env_file=None,
             bootstrap_admin_username="admin",

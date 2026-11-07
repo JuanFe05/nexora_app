@@ -10,6 +10,9 @@ Entrada:
 { "identificador": "jperez", "contrasena": "********" }
 ```
 
+`contrasena` admite 1-128 caracteres, incluidas claves legacy sin los requisitos para claves
+nuevas. No se recortan espacios.
+
 Salida `200`:
 
 ```json
@@ -82,6 +85,15 @@ Roles y permisos se recargan desde la base en cada peticion con el mismo token. 
 revocacion rige desde la **peticion siguiente**; una peticion ya autorizada y en curso puede
 terminar tras la revocacion (ver `administracion.md`). Los roles inactivos no conceden acceso.
 
+### Contrasena al crear usuarios
+
+`POST /api/v1/users` exige en `contrasena` 6-24 code points Unicode, una mayuscula (`Lu`),
+una minuscula (`Ll`), un numero (`Nd`) y un especial (`P*` o `S*`, como `@ # $ % & !`). No
+recorta espacios; los espacios no son especiales. Una clave invalida produce 422 sin `input`
+ni `ctx`, con un mensaje que nombra las reglas incumplidas. Bootstrap y cambio de clave usan
+la misma fuente de backend: `domain/value_objects/password_policy.py`.
+No hay endpoint de reset administrativo; uno futuro debe reutilizar ese modulo.
+
 ## Perfil propio (cualquier usuario autenticado)
 
 Los tres endpoints requieren `Authorization: Bearer <access_token>`; sin token valido responden
@@ -115,7 +127,11 @@ no permitidos producen `422`. `nombre_usuario` es de solo lectura; tampoco se ac
 ### POST /api/v1/profile/password
 
 Entrada: `{"contrasena_actual": "<actual>", "contrasena_nueva": "<nueva>"}`.
-Actual de 1–128 caracteres; nueva de 12–128 y diferente de la actual. Salida `204` sin cuerpo.
+Actual de 1-128 caracteres, incluidas claves legacy sin requisitos de composicion.
+Nueva de 6-24 code points Unicode con mayuscula (`Lu`), minuscula (`Ll`), numero (`Nd`) y
+especial (`P*` o `S*`, como `@ # $ % & !`), diferente de la actual. No se recortan espacios;
+no cuentan como especial. La validacion definitiva usa el mismo modulo unico que crear
+usuarios y bootstrap. Salida `204` sin cuerpo.
 El hash y la fecha se actualizan atomicamente con la revocacion de las otras sesiones;
 la sesion del solicitante permanece activa.
 

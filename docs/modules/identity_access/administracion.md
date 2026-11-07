@@ -30,7 +30,7 @@ Solo por variables de entorno; el codigo no trae ninguna credencial por defecto.
 | --- | --- |
 | `NEXORA_BOOTSTRAP_ADMIN_USERNAME` | Nombre de usuario |
 | `NEXORA_BOOTSTRAP_ADMIN_EMAIL` | Correo |
-| `NEXORA_BOOTSTRAP_ADMIN_PASSWORD` | Contrasena de 12-128 caracteres; se guarda con Argon2id |
+| `NEXORA_BOOTSTRAP_ADMIN_PASSWORD` | Contrasena de 6-24 code points Unicode con mayuscula, minuscula, numero y especial; se guarda con Argon2id |
 | `NEXORA_BOOTSTRAP_ADMIN_FIRST_NAME` / `_LAST_NAME` | Nombre y apellido (por defecto `Administrador` / `NEXORA`) |
 
 - Las tres primeras son todo o nada: configurar solo una impide arrancar.
@@ -141,7 +141,13 @@ Nunca se devuelve `hash_contrasena`.
 El codigo de un rol o permiso es inmutable. Los errores 422 conservan `detail`, `loc` y `msg`,
 pero nunca devuelven `input` ni `ctx`, para no exponer contrasenas ni otros datos enviados.
 En `PATCH`, cualquier campo con `null` explicito se rechaza con 422; omitirlo significa no cambiarlo.
-Al crear usuarios, `contrasena` debe tener 12-128 caracteres.
+Al crear usuarios, `contrasena` debe tener 6-24 code points Unicode, al menos una mayuscula
+(`Lu`), una minuscula (`Ll`), un numero (`Nd`) y un especial (`P*` o `S*`, por ejemplo
+`@ # $ % & !`). No se recortan espacios; no cuentan como especial. Bootstrap y el cambio
+personal usan la misma fuente: `domain/value_objects/password_policy.py`.
+Login y contrasena actual mantienen 1-128 caracteres sin requisitos de composicion.
+No existe endpoint de restablecimiento administrativo; al implementarlo debe usar ese mismo
+modulo. [Politica y compatibilidad legacy](seguridad.md#politica-de-contrasenas).
 
 ## Reglas de consistencia (409)
 

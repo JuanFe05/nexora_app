@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, SecretStr, StringConstraints, field_validator
 
 from nexora.identity_access.application.use_cases.administration import RoleDetail, UserDetail
 from nexora.identity_access.domain.entities.role import Permission
 from nexora.identity_access.domain.value_objects.enums import RoleStatus, UserStatus
+from nexora.identity_access.domain.value_objects.password_policy import validate_password_policy
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 Username = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
@@ -39,10 +40,16 @@ class UserCreate(Contract):
     correo: Email
     primer_nombre: Name
     primer_apellido: Name
-    contrasena: SecretStr = Field(min_length=12, max_length=128)
+    contrasena: SecretStr
     segundo_nombre: Name | None = None
     segundo_apellido: Name | None = None
     numero_telefono: Phone | None = None
+
+    @field_validator("contrasena")
+    @classmethod
+    def _password_policy(cls, value: SecretStr) -> SecretStr:
+        validate_password_policy(value.get_secret_value())
+        return value
 
 
 class PatchContract(Contract):
