@@ -31,10 +31,17 @@ export default function RolesPage() {
   const [pendingDelete, setPendingDelete] = useState(false);
   const deleteLock = useRef(false);
   const toast = useToast();
+  const assignmentWarning = deleting && deleting.usuarios_asignados > 0
+    ? `Este rol tiene ${deleting.usuarios_asignados} usuario(s) asignado(s). Revoca sus asignaciones antes de eliminarlo.`
+    : null;
 
   function openDrawer(role: Role | null) { setDrawer({ role }); }
   async function confirmDelete() {
     if (!canDelete || !deleting || deleteLock.current || !canDeleteRole(deleting.codigo)) return;
+    if (assignmentWarning) {
+      toast.warning(assignmentWarning);
+      return;
+    }
     deleteLock.current = true;
     setPendingDelete(true);
     try {
@@ -56,6 +63,6 @@ export default function RolesPage() {
       {canDelete && canDeleteRole(row.codigo) && <RowActionButton variant="danger" aria-label={`Eliminar ${row.nombre}`} onClick={() => { setDeleting(row); }} />}
     </>} />
     {drawer && <RoleDrawer role={drawer.role} onClose={() => setDrawer(null)} onReload={query.reload} onSuccess={created => { setDrawer(null); toast.success(created ? "Rol creado correctamente." : "Rol actualizado correctamente."); }} />}
-    <ConfirmDialog open={deleting !== null} onOpenChange={open => { if (!open && !pendingDelete) setDeleting(null); }} title="Eliminar rol" description={<span>¿Eliminar el rol {deleting?.nombre}? Esta acción no se puede deshacer.</span>} confirmLabel="Eliminar" variant="danger" pending={pendingDelete} onConfirm={() => { void confirmDelete(); }} />
+    <ConfirmDialog open={deleting !== null} onOpenChange={open => { if (!open && !pendingDelete) setDeleting(null); }} title="Eliminar rol" description={<><span>¿Eliminar el rol {deleting?.nombre}? Esta acción no se puede deshacer.</span>{assignmentWarning && <span className="mt-2 block font-medium text-warning-600 dark:text-warning-400">{assignmentWarning}</span>}</>} confirmLabel="Eliminar" variant="danger" pending={pendingDelete} onConfirm={() => { void confirmDelete(); }} />
   </div>;
 }

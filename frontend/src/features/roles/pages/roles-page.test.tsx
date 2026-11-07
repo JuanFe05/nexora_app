@@ -318,6 +318,57 @@ describe("role form presentation", () => {
 });
 
 describe("Roles page", () => {
+  it.each([1, 7, 42])("warns with %i assigned users and blocks deletion without changing the list", async count => {
+    vi.mocked(api.listRoles).mockResolvedValue({ items: [{ ...role, usuarios_asignados: count }], total: 1 });
+    render(<ToastProvider><RolesPage /></ToastProvider>);
+    await userEvent.click(await screen.findByRole("button", { name: "Eliminar Ventas" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Eliminar rol" });
+    const message = `Este rol tiene ${count} usuario(s) asignado(s). Revoca sus asignaciones antes de eliminarlo.`;
+    expect(within(dialog).getByText(message)).toBeVisible();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Eliminar" }));
+    const notifications = screen.getByRole("region", { name: "Notificaciones" });
+    expect(within(notifications).getByText(message)).toBeVisible();
+    expect(within(notifications).getByRole("alert")).toHaveAttribute("data-variant", "warning");
+    expect(dialog).toBeInTheDocument();
+    expect(api.deleteRole).not.toHaveBeenCalled();
+    expect(api.listRoles).toHaveBeenCalledTimes(1);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    const row = screen.getByText("VENTAS").closest("tr")!;
+    expect(within(row).getByRole("cell", { name: String(count) })).toBeVisible();
+    expect(api.createRole).not.toHaveBeenCalled();
+    expect(api.updateRole).not.toHaveBeenCalled();
+    expect(api.assignPermission).not.toHaveBeenCalled();
+    expect(api.revokePermission).not.toHaveBeenCalled();
+  });
+  it("keeps zero-count deletion destructive with the trash icon, cancel focus and pending lock", async () => {
+    let resolve!: () => void;
+    vi.mocked(api.deleteRole).mockImplementation(() => new Promise<void>(done => { resolve = done; }));
+    render(<ToastProvider><RolesPage /></ToastProvider>);
+    const button = await screen.findByRole("button", { name: "Eliminar Ventas" });
+    expect(button).toHaveClass("text-red-500", "hover:bg-red-50", "hover:text-red-600", "dark:text-red-400", "dark:hover:bg-red-500/10");
+    const icon = button.querySelector("svg")!;
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+    expect(icon.querySelector("path")).toHaveAttribute("d", expect.stringContaining("M6.541 3.792"));
+    await userEvent.click(button);
+    const dialog = screen.getByRole("alertdialog", { name: "Eliminar rol" });
+    expect(within(dialog).getByText("¿Eliminar el rol Ventas? Esta acción no se puede deshacer.")).toBeVisible();
+    expect(within(dialog).queryByText(/Revoca sus asignaciones/)).not.toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Cancelar" })).toHaveFocus());
+    const confirm = within(dialog).getByRole("button", { name: "Eliminar" });
+    expect(confirm).toBeEnabled();
+    await userEvent.click(confirm);
+    expect(within(dialog).getByRole("button", { name: "Eliminando…" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    await userEvent.keyboard("{Escape}");
+    expect(dialog).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Eliminando…" }));
+    expect(api.deleteRole).toHaveBeenCalledExactlyOnceWith("r1");
+    await act(async () => resolve());
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(screen.getByText("Rol eliminado correctamente.")).toBeVisible();
+    await waitFor(() => expect(api.listRoles).toHaveBeenCalledTimes(2));
+  });
   it("shows assigned-user counts after permissions for zero, one and many users", async () => {
     vi.mocked(api.listRoles).mockResolvedValue({ items: [0, 1, 42].map((count, index) => ({ ...role, id: `r${index}`, codigo: `ROL${index}`, usuarios_asignados: count })), total: 3 });
     render(<ToastProvider><RolesPage /></ToastProvider>);

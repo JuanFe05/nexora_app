@@ -85,10 +85,19 @@ ninguna parte editable ofrece **Cerrar** en lugar de **Guardar cambios**.
 - Escape, Cancelar y X cierran sin guardar. Durante el guardado no se puede cerrar ni volver
   a enviar. El cuerpo tiene scroll independiente y altura máxima relativa a la pantalla;
   el encabezado y el pie permanecen fuera del área de scroll del checklist.
-- **Eliminar** exige ConfirmDialog. Los roles del sistema (`ADMINISTRADOR`, `ESTADISTICA`,
-  `FACTURACION`) no tienen papelera. `ADMINISTRADOR` tampoco permite cambiar estado ni permisos.
-  El backend sigue siendo la autoridad y explica conflictos y rechazos 403 mediante su
-  `detail` en un InlineAlert.
+- **Eliminar** exige ConfirmDialog, con foco inicial en **Cancelar** y controles bloqueados
+  durante la solicitud. Los roles del sistema (`ADMINISTRADOR`, `ESTADISTICA`, `FACTURACION`)
+  no tienen papelera. `ADMINISTRADOR` tampoco permite cambiar estado ni permisos.
+  Si `usuarios_asignados > 0`, el diálogo muestra «Este rol tiene N usuario(s) asignado(s).
+  Revoca sus asignaciones antes de eliminarlo.». El ConfirmDialog compartido no ofrece una
+  opción para deshabilitar solo la confirmación: como alternativa local mínima, **Eliminar**
+  no envía DELETE ni recarga la lista y muestra el mismo mensaje en un toast de advertencia;
+  el diálogo permanece abierto y puede cancelarse. Tras revocar asignaciones, volver a la
+  página obtiene el contador actualizado del backend.
+  Con contador `0`, confirmar envía DELETE normalmente. El backend sigue siendo la autoridad:
+  si el contador está desactualizado y responde 409 (o rechaza con 403), su `detail` aparece
+  en un toast de error, se recarga la tabla y el diálogo permanece abierto. Una eliminación
+  exitosa cierra el diálogo y muestra un toast de éxito.
 
 ## Límites del módulo
 
@@ -109,6 +118,10 @@ columnas y estados
 vacío/deshabilitado. La página verifica paneles responsive, permisos precargados y persistencia
 solo de diferencias, incluidos reintentos parciales y códigos fuera del catálogo.
 La tabla prueba conteos `0`, `1` y múltiples usuarios, alineación y recarga al volver a montar.
+La eliminación cubre advertencia con conteos `1`, `7` y `42`, toast.warning y ausencia de
+mutaciones o recargas cuando hay asignaciones; con `0`, papelera, clases destructivas,
+foco inicial, bloqueo pendiente y DELETE. Se conservan los casos de permisos, roles del
+sistema y contador desactualizado con 409, diálogo abierto y reintento.
 Las pruebas del adaptador comprueban los cuerpos PATCH mínimos, las llamadas HTTP y la
 normalización de conteos ausentes o inválidos en lista, creación, edición y asignación de permisos.
 Las pruebas no necesitan un backend ni credenciales. La estructura de scroll se comprueba
