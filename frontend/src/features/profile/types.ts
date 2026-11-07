@@ -10,6 +10,15 @@ export type ProfileData = {
   numero_telefono: string | null;
 };
 export type Profile = ProfileData & { id: string; nombre_usuario: string; estado: string; roles: string[] };
+export type ProfileSession = {
+  id: string;
+  direccion_ip: string | null;
+  agente_usuario: string | null;
+  fecha_creacion: string;
+  fecha_ultima_actividad: string;
+  fecha_vencimiento: string;
+  actual: boolean;
+};
 export type ProfileChanges = Partial<ProfileValues>;
 export type FieldErrors<K extends string> = Partial<Record<K, string>>;
 export type PasswordInput = { contrasena_actual: string; contrasena_nueva: string };

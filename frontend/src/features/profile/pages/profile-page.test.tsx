@@ -25,7 +25,8 @@ const change = save;
 function mount() { return render(<ToastProvider><AuthProvider><MemoryRouter><Routes><Route element={<ProtectedRoute />}><Route path="/" element={<ProfilePage />} /></Route><Route path="/signin" element={<h1>Iniciar sesión</h1>} /></Routes></MemoryRouter></AuthProvider></ToastProvider>); }
 async function loaded() { mount(); await screen.findByRole("heading", { name: "Información personal" }); }
 async function editProfile(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("button", { name: "Editar" })); await screen.findByRole("dialog", { name: "Editar información personal" }); }
-async function editPassword(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("button", { name: "Cambiar contraseña" })); await screen.findByRole("dialog", { name: "Cambiar contraseña" }); }
+async function security(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("tab", { name: "Seguridad" })); }
+async function editPassword(user: ReturnType<typeof userEvent.setup>) { await security(user); await user.click(screen.getByRole("button", { name: "Cambiar contraseña" })); await screen.findByRole("dialog", { name: "Cambiar contraseña" }); }
 async function closed() { await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument()); expect(document.querySelectorAll("input")).toHaveLength(0); }
 async function fillPasswords(user: ReturnType<typeof userEvent.setup>, actual = "actual-privada", nueva = "Nueva-privada-123", confirm = nueva) {
   await user.type(current(), actual); await user.type(next(), nueva); await user.type(confirmation(), confirm);
@@ -41,9 +42,13 @@ beforeEach(async () => {
 });
 afterEach(async () => { cleanup(); await authSession.logout(); });
 
+describe.each([false, true])("perfil existente (dark=%s)", (dark) => {
+  beforeEach(() => document.documentElement.classList.toggle("dark", dark));
+  afterEach(() => document.documentElement.classList.remove("dark"));
+
 describe("seguridad y sesiones", () => {
   it("muestra una tarjeta de seguridad responsive con texto breve y cancelar no cierra sesiones", async () => {
-    const user = userEvent.setup(); await loaded();
+    const user = userEvent.setup(); await loaded(); await security(user);
     const section = screen.getByRole("region", { name: "Seguridad" });
     expect(within(section).getByRole("heading", { name: "Cambiar contraseña" })).toBeInTheDocument();
     expect(within(section).getByRole("heading", { name: "Cerrar todas las sesiones" })).toBeInTheDocument();
@@ -68,7 +73,7 @@ describe("seguridad y sesiones", () => {
   it("confirma una vez, bloquea mientras revoca, borra sesión y redirige al login", async () => {
     let resolve!: () => void;
     authApi.logoutAll.mockImplementation(() => new Promise<void>((done) => { resolve = done; }));
-    const user = userEvent.setup(); await loaded();
+    const user = userEvent.setup(); await loaded(); await security(user);
     await user.click(screen.getByRole("button", { name: "Cerrar todas las sesiones" }));
     await user.click(screen.getByRole("button", { name: "Cerrar sesiones" }));
     expect(screen.getByRole("button", { name: "Cerrando sesiones…" })).toBeDisabled();
@@ -81,7 +86,7 @@ describe("seguridad y sesiones", () => {
   });
   it("fallo al revocar conserva sesión y modal, anuncia un error seguro y permite reintentar", async () => {
     authApi.logoutAll.mockRejectedValue(new ApiError(0, "private detail", null));
-    const user = userEvent.setup(); await loaded();
+    const user = userEvent.setup(); await loaded(); await security(user);
     await user.click(screen.getByRole("button", { name: "Cerrar todas las sesiones" }));
     await user.click(screen.getByRole("button", { name: "Cerrar sesiones" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudieron cerrar las sesiones. Intenta de nuevo.");
@@ -101,7 +106,9 @@ describe("seguridad y sesiones", () => {
 describe("presentación TailAdmin", () => {
   it("mantiene nombres accesibles e iconos decorativos con un único estilo de botón para las tres acciones", async () => {
     await loaded();
-    const buttons = ["Editar", "Cambiar contraseña", "Cerrar todas las sesiones"].map((name) => screen.getByRole("button", { name }));
+    const editButton = screen.getByRole("button", { name: "Editar" });
+    await security(userEvent.setup());
+    const buttons = [editButton, ...["Cambiar contraseña", "Cerrar todas las sesiones"].map((name) => screen.getByRole("button", { name }))];
     for (const button of buttons) {
       expect(button).toHaveAccessibleName(button.textContent);
       expect(button.querySelectorAll("svg")).toHaveLength(1);
@@ -146,7 +153,8 @@ describe("presentación TailAdmin", () => {
   ])("muestra estado %s con texto %s y variante %s", async (estado, label, variant) => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...profile, estado });
     await loaded();
-    const badge = screen.getByText(label, { exact: true });
+    const header = screen.getByRole("heading", { name: "Ana Pérez" }).closest('[data-slot="card"]') as HTMLElement;
+    const badge = within(header).getByText(label, { exact: true });
     expect(badge).toHaveAttribute("data-slot", "badge");
     expect(badge).toHaveAttribute("data-variant", variant);
     expect(badge).not.toHaveClass("capitalize");
@@ -158,10 +166,10 @@ describe("perfil propio", () => {
     const user = userEvent.setup(); await loaded();
     expect(screen.getByRole("heading", { name: "Perfil de usuario" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Ana Pérez" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Seguridad" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Seguridad" })).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Roles asignados" })).toHaveTextContent("ESTADISTICA");
-    expect(screen.getByText("ESTADISTICA")).toBeInTheDocument();
-    expect(screen.getByText("FACTURACION")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Roles asignados" })).getByText("ESTADISTICA")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Roles asignados" })).getByText("FACTURACION")).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(document.querySelectorAll("input")).toHaveLength(0);
     const card = screen.getByRole("heading", { name: "Información personal" }).closest('[data-slot="card"]') as HTMLElement;
@@ -213,7 +221,7 @@ describe("perfil propio", () => {
     expect(email).toBeDisabled();
     await act(async () => { resolve({ ...profile, correo: "nueva@example.test" }); });
     expect(await within(screen.getByRole("region", { name: "Notificaciones" })).findByRole("status")).toHaveTextContent("Datos actualizados");
-    await closed(); expect(screen.getByText("nueva@example.test")).toBeInTheDocument();
+    await closed(); expect(within(screen.getByRole("heading", { name: "Información personal" }).closest('[data-slot="card"]') as HTMLElement).getByText("nueva@example.test")).toBeInTheDocument();
     await editProfile(user);
     expect(screen.getByRole("form", { name: "Datos personales" })).not.toHaveTextContent("Datos actualizados");
     expect(screen.getByLabelText(/^Correo electrónico/)).toHaveValue("nueva@example.test"); expect(save()).toBeDisabled();
@@ -343,4 +351,5 @@ describe("cambio de contraseña", () => {
     }
     expect(api.changePassword).not.toHaveBeenCalled();
   });
+});
 });

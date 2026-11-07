@@ -1,6 +1,6 @@
 import { ApiError } from "@/lib/http/api-error";
 import { httpClient } from "@/lib/http/http-client";
-import { profileFields, type FormFailure, type PasswordInput, type PasswordValues, type Profile, type ProfileData, type ProfileField, type ProfileValues } from "../types";
+import { profileFields, type FormFailure, type PasswordInput, type PasswordValues, type Profile, type ProfileData, type ProfileField, type ProfileValues, type ProfileSession } from "../types";
 import { changedProfileFields } from "../validation";
 
 export const getProfile = (signal?: AbortSignal): Promise<Profile> => httpClient.get<Profile>("/profile", { signal });
@@ -11,6 +11,24 @@ export function updateProfile(original: ProfileData, values: ProfileValues): Pro
 
 export function changePassword(input: PasswordInput): Promise<void> {
   return httpClient.post<void>("/profile/password", { body: { contrasena_actual: input.contrasena_actual, contrasena_nueva: input.contrasena_nueva } });
+}
+
+export async function listSessions(signal?: AbortSignal): Promise<ProfileSession[]> {
+  const response = await httpClient.get<{ items: ProfileSession[] }>("/profile/sessions", { signal });
+  return response.items.map((item) => ({ ...item, direccion_ip: item.direccion_ip || null, agente_usuario: item.agente_usuario || null }));
+}
+
+export function revokeSession(id: string): Promise<void> {
+  return httpClient.delete<void>(`/profile/sessions/${encodeURIComponent(id)}`);
+}
+
+export function sessionFailure(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 404) return "La sesión ya no está disponible.";
+    if (error.status === 409) return "Para cerrar la sesión actual, usa «Cerrar sesión».";
+    if (error.status === 0) return "No se pudo conectar con el servidor. Intenta de nuevo.";
+  }
+  return "No se pudo completar la operación de sesiones. Intenta de nuevo.";
 }
 
 export function profileFailure(error: unknown): FormFailure<ProfileField> {

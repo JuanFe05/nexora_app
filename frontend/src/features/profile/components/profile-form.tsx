@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { PencilIcon, UserCircleIcon } from "@/icons";
+import { MailIcon, PhoneIcon, UserIcon, PencilIcon, UserCircleIcon } from "@/icons";
 import { profileFailure, updateProfile } from "../api/profile-api";
 import { useFormFocus } from "../hooks/use-form-focus";
 import { profileFields, type FieldErrors, type Profile, type ProfileField } from "../types";
@@ -26,7 +26,7 @@ type Props = { profile: Profile; onUpdated: (profile: Profile) => void };
 export function ProfileForm({ profile, onUpdated }: Props) {
   const [open, setOpen] = useState(false);
   return <>
-    <Card className="min-w-0" aria-labelledby="personal-title">
+    <Card className="min-w-0 shadow-theme-xs" aria-labelledby="personal-title">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h2 id="personal-title" className="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90">
           <UserCircleIcon aria-hidden="true" className="size-6" />Información personal
@@ -34,14 +34,17 @@ export function ProfileForm({ profile, onUpdated }: Props) {
         <Button variant="outline" size="sm" onClick={() => setOpen(true)}><PencilIcon aria-hidden="true" className="size-5" />Editar</Button>
       </div>
       <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <div className="min-w-0">
-          <dt className="mb-2 text-xs text-gray-500 dark:text-gray-400">Nombre de usuario</dt>
+        <div className="min-w-0 rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-800 dark:bg-white/3">
+          <dt className="mb-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"><UserIcon aria-hidden="true" className="size-4" />Nombre de usuario</dt>
           <dd className="text-sm font-medium break-words text-gray-800 dark:text-white/90">{profile.nombre_usuario}</dd>
         </div>
-        {profileFields.map((field) => <div key={field} className="min-w-0">
-          <dt className="mb-2 text-xs text-gray-500 dark:text-gray-400">{labels[field]}</dt>
+        {profileFields.map((field) => {
+          const Icon = field === "correo" ? MailIcon : field === "numero_telefono" ? PhoneIcon : UserCircleIcon;
+          return <div key={field} className="min-w-0 rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-800 dark:bg-white/3">
+          <dt className="mb-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"><Icon aria-hidden="true" className="size-4" />{labels[field]}</dt>
           <dd className="text-sm font-medium break-words text-gray-800 dark:text-white/90">{profile[field] || "—"}</dd>
-        </div>)}
+        </div>;
+        })}
       </dl>
     </Card>
     {open && <ProfileEditor profile={profile} onUpdated={onUpdated} onClose={() => setOpen(false)} />}
