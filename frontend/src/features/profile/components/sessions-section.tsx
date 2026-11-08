@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+import { useAuth } from "@/features/auth/use-auth";
 import { ApiError } from "@/lib/http/api-error";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { useToast } from "@/components/shared/toast/use-toast";
@@ -21,7 +23,22 @@ export function SessionsSection() {
   const [state, setState] = useState<{ items: ProfileSession[]; loading: boolean; error: string | null }>({ items: [], loading: true, error: null });
   const [selected, setSelected] = useState<ProfileSession | null>(null);
   const [pending, setPending] = useState(false);
+  const [logoutAllOpen, setLogoutAllOpen] = useState(false);
+  const [logoutAllPending, setLogoutAllPending] = useState(false);
+  const { logoutAll } = useAuth();
+  const navigate = useNavigate();
   const toast = useToast();
+
+  async function confirmLogoutAll() {
+    if (logoutAllPending) return;
+    setLogoutAllPending(true);
+    try {
+      await logoutAll();
+      await navigate("/signin", { replace: true });
+    } catch {
+      toast.error("No se pudieron cerrar las sesiones. Intenta de nuevo.");
+    } finally { setLogoutAllPending(false); }
+  }
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
@@ -55,7 +72,10 @@ export function SessionsSection() {
     <Card className="min-w-0 shadow-theme-xs">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h2 id="sessions-title" className="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-white/90"><DesktopIcon aria-hidden="true" className="size-6" />Sesiones activas</h2>
-        <Button variant="outline" size="sm" disabled={state.loading || pending} onClick={refresh}><RefreshIcon aria-hidden="true" className="size-5" />Actualizar</Button>
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+          <Button variant="outline" size="sm" disabled={state.loading || pending} onClick={refresh}><RefreshIcon aria-hidden="true" className="size-5" />Actualizar</Button>
+          <Button variant="outline" size="sm" className="w-full shrink-0 sm:w-auto" onClick={() => setLogoutAllOpen(true)}><LogOutIcon aria-hidden="true" className="size-5" />Cerrar todas las sesiones</Button>
+        </div>
       </div>
       <p className="text-sm text-gray-500 dark:text-gray-400">Consulta los dispositivos con acceso a tu cuenta y revoca los que no reconozcas.</p>
       {state.loading && <p role="status" className="text-sm text-gray-500 dark:text-gray-400">Cargando sesiones…</p>}
@@ -82,6 +102,9 @@ export function SessionsSection() {
         })}
       </ul>}
     </Card>
+    <ConfirmDialog open={logoutAllOpen} onOpenChange={(next) => { if (!logoutAllPending) setLogoutAllOpen(next); }} title="¿Cerrar todas las sesiones?"
+      description="Se cerrarán todas tus sesiones activas y tendrás que iniciar sesión de nuevo." variant="danger"
+      confirmLabel="Cerrar sesiones" pendingLabel="Cerrando sesiones…" pending={logoutAllPending} onConfirm={() => void confirmLogoutAll()} />
     <ConfirmDialog open={selected !== null} onOpenChange={(open) => { if (!open && !pending) setSelected(null); }} title="¿Revocar sesión?"
       description="Se cerrará el acceso en este dispositivo. Tendrá que iniciar sesión de nuevo." variant="danger" confirmLabel="Revocar sesión" pendingLabel="Revocando…" pending={pending} onConfirm={() => void confirm()} />
   </section>;

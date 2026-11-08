@@ -31,7 +31,7 @@ beforeEach(() => {
   vi.mocked(api.revokeUserRole).mockResolvedValue(undefined);
   vi.mocked(loadRoleOptions).mockResolvedValue([{ id: "admin", codigo: "ADMINISTRADOR", nombre: "Administrador" }, { id: "billing", codigo: "FACTURACION", nombre: "Facturación" }]);
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); document.documentElement.classList.remove("dark"); });
 async function openEdit() {
   render(<ToastProvider><UsersPage /></ToastProvider>);
   await userEvent.click(await screen.findByRole("button", { name: "Editar ana" }));
@@ -219,7 +219,8 @@ describe("Usuarios", () => {
     expect(screen.getByLabelText(/^Confirmar contraseña/)).toHaveValue("");
     expect(api.createUser).not.toHaveBeenCalled();
   });
-  it("shares the administration structure and renders separate names, text-only role badges and semantic status", async () => {
+  it.each([false, true])("shares the administration structure and renders separate names, text-only role badges and semantic status (dark=%s)", async dark => {
+    document.documentElement.classList.toggle("dark", dark);
     render(<ToastProvider><UsersPage /></ToastProvider>);
     expect(await screen.findByRole("button", { name: "Editar ana" })).toBeVisible();
     expect(screen.getAllByRole("heading", { name: "Usuarios" })).toHaveLength(1);

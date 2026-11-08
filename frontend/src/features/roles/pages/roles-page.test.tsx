@@ -36,7 +36,7 @@ beforeEach(() => {
   vi.mocked(api.revokePermission).mockResolvedValue(undefined);
   vi.mocked(api.deleteRole).mockResolvedValue(undefined);
 });
-afterEach(() => { cleanup(); vi.resetAllMocks(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.resetAllMocks(); vi.useRealTimers(); document.documentElement.classList.remove("dark"); });
 async function openEdit() {
   render(<ToastProvider><RolesPage /></ToastProvider>);
   await userEvent.click(await screen.findByRole("button", { name: "Editar Ventas" }));
@@ -398,7 +398,8 @@ describe("Roles page", () => {
     expect(api.assignPermission).not.toHaveBeenCalled();
     expect(api.revokePermission).not.toHaveBeenCalled();
   });
-  it("shares the administration structure with compact permission/user indicators", async () => {
+  it.each([false, true])("shares the administration structure with compact permission/user indicators (dark=%s)", async dark => {
+    document.documentElement.classList.toggle("dark", dark);
     vi.mocked(api.listRoles).mockResolvedValue({ items: [
       role,
       { ...role, id: "r2", codigo: "VACIO", nombre: "Vacío", descripcion: null, estado: "inactivo", permisos: [], usuarios_asignados: 1 },

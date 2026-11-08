@@ -7,7 +7,9 @@ Los permisos son independientes: eliminar no concede consultar, crear ni editar.
 ## Estructura compartida
 
 La página comparte `space-y-6`, `PageHeader` y la tarjeta `DataTable` con Usuarios y
-Permisos, con `LockIcon`, títulos y descripciones. Columnas: **Código**, **Nombre**,
+Permisos. Conserva el encabezado principal «Administración de roles», su `LockIcon`
+y descripción; la tarjeta muestra únicamente «Roles», sin icono ni descripción
+secundaria. Los iconos de controles y acciones se conservan. Columnas: **Código**, **Nombre**,
 **Descripción**, **Estado**, **Permisos asignados**, **Usuarios asignados** y
 **Acciones**. `StatusBadge` presenta el estado semántico. Los contadores reutilizan
 `CountIndicator`: `KeyIcon` para permisos, `UsersIcon` para usuarios, incluyendo `0`

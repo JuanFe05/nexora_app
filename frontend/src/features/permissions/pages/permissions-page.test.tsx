@@ -22,7 +22,7 @@ beforeEach(() => {
   vi.mocked(api.updatePermission).mockResolvedValue(permission);
   vi.mocked(api.deletePermission).mockResolvedValue(undefined);
 });
-afterEach(() => { cleanup(); vi.resetAllMocks(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.resetAllMocks(); vi.useRealTimers(); document.documentElement.classList.remove("dark"); });
 async function loaded() { render(<ToastProvider><PermissionsPage /></ToastProvider>); await screen.findByRole("cell", { name: permission.codigo }); }
 async function createForm() {
   await userEvent.click(screen.getByRole("button", { name: "Nuevo permiso" }));
@@ -32,7 +32,8 @@ async function createForm() {
 }
 
 describe("Permisos", () => {
-  it("shares the administration structure, technical codes and text-only brand module badges", async () => {
+  it.each([false, true])("shares the administration structure, technical codes and text-only brand module badges (dark=%s)", async dark => {
+    document.documentElement.classList.toggle("dark", dark);
     vi.mocked(api.listPermissions).mockResolvedValue({ items: [permission, { ...permission, id: "p2", codigo: "identity.users.edit", descripcion: null }], total: 2 });
     await loaded();
     expectAdminPage("Administración de permisos", "Permisos", "Consulta y mantén el catálogo de permisos del sistema.", ["Código", "Nombre", "Módulo", "Descripción", "Acciones"], "Nuevo permiso");

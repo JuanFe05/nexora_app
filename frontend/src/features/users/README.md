@@ -7,8 +7,10 @@ No se cambia el guard, la sesión ni el cliente HTTP compartido desde este módu
 
 ## Estructura compartida
 
-La página usa `space-y-6`, `PageHeader` y una tarjeta `DataTable`, ambos con
-`UsersIcon`, título y descripción, igual que Roles y Permisos. Columnas:
+La página usa `space-y-6` y conserva `PageHeader` con `UsersIcon`, el título
+«Administración de usuarios» y su descripción. La tarjeta `DataTable` muestra
+únicamente el título «Usuarios», sin icono ni descripción secundaria, igual que
+Roles y Permisos. Los iconos de controles y acciones se conservan. Columnas:
 **Usuario**, **Nombre completo**, **Correo electrónico**, **Roles**, **Estado** y
 **Acciones** (cuando hay permisos de mutación). El nombre completo reúne las partes
 no vacías y usa «—» si faltan todas. Los roles usan `Badge variant="brand"` de texto,

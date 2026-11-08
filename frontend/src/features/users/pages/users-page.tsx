@@ -22,7 +22,7 @@ export default function UsersPage() {
   const toast = useToast();
   return <div className="space-y-6">
     <PageHeader icon={<UsersIcon />} title="Administración de usuarios" description="Gestiona las cuentas, los estados y los roles de acceso." />
-    <DataTable icon={<UsersIcon />} title="Usuarios" description="Administra los datos, el estado y los roles de los usuarios." columns={userColumns} rows={query.items} getRowId={user => user.id}
+    <DataTable title="Usuarios" columns={userColumns} rows={query.items} getRowId={user => user.id}
       loading={query.loading} error={query.error ? { message: userError(query.error).message, onRetry: query.reload } : null}
       total={query.total} page={query.page} pageSize={query.pageSize} pageSizeOptions={[10, 25, 50, 100]} onPageChange={query.setPage} onPageSizeChange={query.setPageSize}
       search={query.search} onSearchChange={query.setSearch} searchPlaceholder="Buscar usuarios"

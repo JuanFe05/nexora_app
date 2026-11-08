@@ -15,7 +15,7 @@ import { tokenStore } from "@/features/auth/session/token-store";
 
 const { authApi } = vi.hoisted(() => ({ authApi: { login: vi.fn(), refresh: vi.fn(), me: vi.fn(), logout: vi.fn(), logoutAll: vi.fn() } }));
 vi.mock("@/features/auth/api/auth-api", () => ({ authApi }));
-vi.mock("../api/profile-api", async (importOriginal) => ({ ...await importOriginal<typeof api>(), getProfile: vi.fn(), updateProfile: vi.fn(), changePassword: vi.fn() }));
+vi.mock("../api/profile-api", async (importOriginal) => ({ ...await importOriginal<typeof api>(), getProfile: vi.fn(), updateProfile: vi.fn(), changePassword: vi.fn(), listSessions: vi.fn(), revokeSession: vi.fn() }));
 const profile = { id: "1", nombre_usuario: "ana", correo: "ana@example.test", primer_nombre: "Ana", segundo_nombre: null, primer_apellido: "Pérez", segundo_apellido: null, numero_telefono: null, estado: "ACTIVO", roles: ["ESTADISTICA", "FACTURACION"] };
 const current = () => screen.getByLabelText(/^Contraseña actual/);
 const next = () => screen.getByLabelText(/^Nueva contraseña/);
@@ -26,6 +26,7 @@ function mount() { return render(<ToastProvider><AuthProvider><MemoryRouter><Rou
 async function loaded() { mount(); await screen.findByRole("heading", { name: "Información personal" }); }
 async function editProfile(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("button", { name: "Editar" })); await screen.findByRole("dialog", { name: "Editar información personal" }); }
 async function security(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("tab", { name: "Seguridad" })); }
+async function sessions(user: ReturnType<typeof userEvent.setup>) { await user.click(screen.getByRole("tab", { name: "Sesiones" })); }
 async function editPassword(user: ReturnType<typeof userEvent.setup>) { await security(user); await user.click(screen.getByRole("button", { name: "Cambiar contraseña" })); await screen.findByRole("dialog", { name: "Cambiar contraseña" }); }
 async function closed() { await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument()); expect(document.querySelectorAll("input")).toHaveLength(0); }
 async function fillPasswords(user: ReturnType<typeof userEvent.setup>, actual = "actual-privada", nueva = "Nueva-privada-123", confirm = nueva) {
@@ -39,6 +40,7 @@ beforeEach(async () => {
   authApi.logoutAll.mockResolvedValue(undefined);
   await authSession.login({ identificador: "ana", contrasena: "test" });
   vi.mocked(api.getProfile).mockResolvedValue(profile); vi.mocked(api.changePassword).mockResolvedValue(undefined);
+  vi.mocked(api.listSessions).mockResolvedValue([]);
 });
 afterEach(async () => { cleanup(); await authSession.logout(); });
 
@@ -47,23 +49,26 @@ describe.each([false, true])("perfil existente (dark=%s)", (dark) => {
   afterEach(() => document.documentElement.classList.remove("dark"));
 
 describe("seguridad y sesiones", () => {
-  it("muestra una tarjeta de seguridad responsive con texto breve y cancelar no cierra sesiones", async () => {
+  it("muestra solo Cambiar contraseña en Seguridad, sin cierre global ni divisores", async () => {
     const user = userEvent.setup(); await loaded(); await security(user);
     const section = screen.getByRole("region", { name: "Seguridad" });
     expect(within(section).getByRole("heading", { name: "Cambiar contraseña" })).toBeInTheDocument();
-    expect(within(section).getByRole("heading", { name: "Cerrar todas las sesiones" })).toBeInTheDocument();
-    expect(section.querySelector(".divide-y")).toHaveClass("divide-gray-200", "dark:divide-gray-800");
+    expect(within(section).getByRole("button", { name: "Cambiar contraseña" })).toBeInTheDocument();
+    expect(section).not.toHaveTextContent("Cerrar todas las sesiones");
+    expect(section.querySelector(".divide-y")).toBeNull();
     expect(section.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
-    const card = section.querySelector('[data-slot="card"]') as HTMLElement;
-    expect(within(card).getByRole("heading", { name: "Seguridad", level: 2 })).toBeInTheDocument();
-    expect(within(card).getAllByRole("heading", { level: 3 })).toHaveLength(2);
-    for (const name of ["Cambiar contraseña", "Cerrar todas las sesiones"]) {
-      expect(within(card).getByRole("button", { name })).toBeInTheDocument();
-    }
-    expect(within(card).getByRole("heading", { name: "Cerrar todas las sesiones" }).parentElement?.parentElement).toHaveClass("flex-col", "sm:flex-row", "sm:items-center", "sm:justify-between");
-    expect(section).toHaveTextContent("Gestiona el acceso a tu cuenta.");
+    expect(within(section).getByRole("heading", { name: "Seguridad", level: 2 })).toBeInTheDocument();
+    expect(within(section).getAllByRole("heading", { level: 3 })).toHaveLength(1);
+    expect(within(section).getByRole("heading", { name: "Cambiar contraseña" }).parentElement?.parentElement).toHaveClass("flex-col", "sm:flex-row", "sm:items-center", "sm:justify-between");
     expect(section).not.toHaveTextContent("6 y 24");
-    await user.click(screen.getByRole("button", { name: "Cerrar todas las sesiones" }));
+    expect(authApi.logoutAll).not.toHaveBeenCalled();
+  });
+  it("integra el cierre global en la tarjeta de Sesiones y cancelar conserva el acceso", async () => {
+    const user = userEvent.setup(); await loaded(); await sessions(user);
+    const section = screen.getByRole("region", { name: "Sesiones activas" });
+    const button = within(section).getByRole("button", { name: "Cerrar todas las sesiones" });
+    expect(button.closest('[data-slot="card"]')).toBe(within(section).getByRole("button", { name: "Actualizar" }).closest('[data-slot="card"]'));
+    await user.click(button);
     expect(screen.getByRole("alertdialog", { name: "¿Cerrar todas las sesiones?" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
@@ -73,7 +78,7 @@ describe("seguridad y sesiones", () => {
   it("confirma una vez, bloquea mientras revoca, borra sesión y redirige al login", async () => {
     let resolve!: () => void;
     authApi.logoutAll.mockImplementation(() => new Promise<void>((done) => { resolve = done; }));
-    const user = userEvent.setup(); await loaded(); await security(user);
+    const user = userEvent.setup(); await loaded(); await sessions(user);
     await user.click(screen.getByRole("button", { name: "Cerrar todas las sesiones" }));
     await user.click(screen.getByRole("button", { name: "Cerrar sesiones" }));
     expect(screen.getByRole("button", { name: "Cerrando sesiones…" })).toBeDisabled();
@@ -86,7 +91,7 @@ describe("seguridad y sesiones", () => {
   });
   it("fallo al revocar conserva sesión y modal, anuncia un error seguro y permite reintentar", async () => {
     authApi.logoutAll.mockRejectedValue(new ApiError(0, "private detail", null));
-    const user = userEvent.setup(); await loaded(); await security(user);
+    const user = userEvent.setup(); await loaded(); await sessions(user);
     await user.click(screen.getByRole("button", { name: "Cerrar todas las sesiones" }));
     await user.click(screen.getByRole("button", { name: "Cerrar sesiones" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudieron cerrar las sesiones. Intenta de nuevo.");
@@ -107,8 +112,11 @@ describe("presentación TailAdmin", () => {
   it("mantiene nombres accesibles e iconos decorativos con un único estilo de botón para las tres acciones", async () => {
     await loaded();
     const editButton = screen.getByRole("button", { name: "Editar" });
-    await security(userEvent.setup());
-    const buttons = [editButton, ...["Cambiar contraseña", "Cerrar todas las sesiones"].map((name) => screen.getByRole("button", { name }))];
+    const user = userEvent.setup();
+    await security(user);
+    const passwordButton = screen.getByRole("button", { name: "Cambiar contraseña" });
+    await sessions(user);
+    const buttons = [editButton, passwordButton, screen.getByRole("button", { name: "Cerrar todas las sesiones" })];
     for (const button of buttons) {
       expect(button).toHaveAccessibleName(button.textContent);
       expect(button.querySelectorAll("svg")).toHaveLength(1);
@@ -120,12 +128,8 @@ describe("presentación TailAdmin", () => {
     // Ignore layout-only sizing: all interactive styling comes from the same variant.
     const styles = buttons.map((button) => button.className.split(" ").filter((name) => !["w-full", "sm:w-auto", "sm:self-start", "shrink-0"].includes(name)).join(" "));
     expect(new Set(styles).size).toBe(1);
-    const card = screen.getByRole("region", { name: "Seguridad" });
-    const rows = card.querySelectorAll(".divide-y > div");
-    expect(rows).toHaveLength(2);
-    expect(within(rows[0] as HTMLElement).getByRole("button", { name: "Cambiar contraseña" })).toBeInTheDocument();
-    expect(within(rows[1] as HTMLElement).getByRole("button", { name: "Cerrar todas las sesiones" })).toBeInTheDocument();
-    expect(rows[0]).toHaveClass("sm:flex-row", "sm:justify-between");
+    expect(passwordButton.parentElement).toHaveClass("sm:flex-row", "sm:justify-between");
+    expect(buttons[2].closest('section')).toHaveAttribute("aria-labelledby", "sessions-title");
     expect(screen.queryByText(/eliminar cuenta/i)).not.toBeInTheDocument();
     expect(api.updateProfile).not.toHaveBeenCalled();
     expect(api.changePassword).not.toHaveBeenCalled();

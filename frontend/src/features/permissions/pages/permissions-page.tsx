@@ -32,7 +32,7 @@ export default function PermissionsPage() {
   return (
     <div className="space-y-6">
       <PageHeader icon={<KeyIcon />} title="Administración de permisos" description="Consulta y mantén el catálogo de permisos del sistema." />
-      <DataTable icon={<KeyIcon />} title="Permisos" description="Administración del catálogo de permisos" columns={columns} rows={list.items}
+      <DataTable title="Permisos" columns={columns} rows={list.items}
         getRowId={row => row.id} loading={list.loading}
         error={list.error ? { message: permissionErrorMessage(list.error), onRetry: list.reload } : null}
         total={list.total} page={list.page} pageSize={list.pageSize} pageSizeOptions={[10, 25, 50, 100]}

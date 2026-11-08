@@ -6,8 +6,10 @@ permisos RBAC independientes y la autorización definitiva del backend.
 
 ## Estructura compartida
 
-Igual que Usuarios y Roles: `space-y-6`, `PageHeader` y tarjeta `DataTable`, con
-`KeyIcon`, títulos y descripciones. Columnas: **Código**, **Nombre**, **Módulo**,
+Igual que Usuarios y Roles: `space-y-6`, `PageHeader` y tarjeta `DataTable`.
+El encabezado principal conserva «Administración de permisos», su `KeyIcon` y
+su descripción. La tarjeta muestra únicamente «Permisos», sin icono ni descripción
+secundaria; los iconos de controles y acciones se conservan. Columnas: **Código**, **Nombre**, **Módulo**,
 **Descripción** y **Acciones** (cuando hay permisos de mutación). El código técnico
 conserva su tipografía monoespaciada; el módulo usa `Badge variant="brand"` de texto,
 sin iconos; una descripción nula se presenta como «—».
