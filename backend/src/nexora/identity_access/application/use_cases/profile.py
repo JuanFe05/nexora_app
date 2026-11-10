@@ -24,6 +24,7 @@ from nexora.identity_access.domain.exceptions.identity import (
     ResourceNotFound,
     SessionNotActive,
 )
+from nexora.identity_access.domain.value_objects.personal_data import normalize_personal_data
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,9 @@ class ProfileChanges:
     last_name: str | None = None
     second_last_name: str | None = None
     phone_number: str | None = None
+
+    def __post_init__(self) -> None:
+        normalize_personal_data(self)
 
 
 @dataclass(frozen=True, slots=True)

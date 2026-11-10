@@ -30,12 +30,12 @@ from tests.integration.conftest import ORIGIN, PASSWORD, Seeder
 NEW_PASSWORD = "Abc123!x"
 USER = {
     "nombre_usuario": "nuevo",
-    "correo": "nuevo@example.test",
+    "correo": "  Nuevo@Example.TEST ",
     "primer_nombre": " Ana ",
-    "primer_apellido": " Perez ",
-    "segundo_nombre": " Maria ",
-    "segundo_apellido": " Lopez ",
-    "numero_telefono": " 3001234567 ",
+    "primer_apellido": " Pérez ",
+    "segundo_nombre": " María ",
+    "segundo_apellido": " Peña ",
+    "numero_telefono": "0301234567",
     "contrasena": NEW_PASSWORD,
 }
 FORBIDDEN = {"detail": "No tiene permisos para ejecutar esta operacion"}
@@ -125,11 +125,12 @@ async def resources(client: AsyncClient, admin: dict[str, str]) -> tuple[str, st
         201,
         {"codigo": "custom.view", "nombre": " View ", "modulo": "iam_test"},
     )
-    assert user.json()["primer_nombre"] == "Ana"
-    assert user.json()["primer_apellido"] == "Perez"
-    assert user.json()["segundo_nombre"] == "Maria"
-    assert user.json()["segundo_apellido"] == "Lopez"
-    assert user.json()["numero_telefono"] == "3001234567"
+    assert user.json()["correo"] == "nuevo@example.test"
+    assert user.json()["primer_nombre"] == "ANA"
+    assert user.json()["primer_apellido"] == "PÉREZ"
+    assert user.json()["segundo_nombre"] == "MARÍA"
+    assert user.json()["segundo_apellido"] == "PEÑA"
+    assert user.json()["numero_telefono"] == "0301234567"
     assert user.json()["estado"] == "activo"
     assert user.json()["roles"] == []
     assert role.json()["nombre"] == "Custom"
@@ -199,7 +200,7 @@ async def test_administrator_crud_assignments_and_effective_permissions(
     user, role, permission = await resources(client, admin)
     await snapshot(client, admin)
     for resource, identifier, changes in (
-        ("users", user, {"primer_nombre": "Bea", "segundo_nombre": "Maria", "estado": "inactivo"}),
+        ("users", user, {"primer_nombre": "BEA", "segundo_nombre": "MARIA", "estado": "inactivo"}),
         ("roles", role, {"nombre": "Editado", "descripcion": "Detalle", "estado": "inactivo"}),
         ("permissions", permission, {"nombre": "Editado", "descripcion": "Detalle"}),
     ):

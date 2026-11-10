@@ -1,5 +1,4 @@
 import { UserIcon } from "@/icons";
-import { ProfileStatus } from "./profile-status";
 import { Card } from "@/components/ui/card";
 import type { Profile } from "../types";
 
@@ -26,7 +25,6 @@ export function ProfileHeaderCard({ profile }: { profile: Profile }) {
           </ul>
           {!profile.roles.length && <p className="text-sm text-gray-500 dark:text-gray-400">Sin roles asignados</p>}
         </div>
-        <ProfileStatus estado={profile.estado} />
       </div>
     </Card>
   );

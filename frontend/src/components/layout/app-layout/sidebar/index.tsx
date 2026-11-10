@@ -4,6 +4,7 @@ import { useAuth } from "@/features/auth/use-auth";
 import { cn } from "@/utils";
 import { Link, useLocation } from "react-router";
 import AppSidebarHeader from "./sidebar-header";
+import SidebarGroup from "./sidebar-group";
 
 export default function AppSidebar() {
   const { open, isMobile, isHovered, setOpenMobile } = useSidebar();
@@ -13,7 +14,11 @@ export default function AppSidebar() {
   const sections = navigation.map((section) => ({
     ...section,
     items: section.items.filter((item) => !item.requiredPermission || hasPermission(item.requiredPermission)),
-  })).filter((section) => section.items.length > 0);
+    groups: section.groups?.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.requiredPermission || hasPermission(item.requiredPermission)),
+    })),
+  })).filter((section) => section.items.length > 0 || (section.groups?.length ?? 0) > 0);
 
   return (
     <Sidebar side="left">
@@ -42,6 +47,9 @@ export default function AppSidebar() {
                   </li>
                 );
               })}
+              {section.groups?.map((group) => (
+                <SidebarGroup key={group.label} group={group} pathname={pathname} showContent={showContent} onNavigate={() => setOpenMobile(false)} />
+              ))}
             </ul>
           </nav>
         ))}

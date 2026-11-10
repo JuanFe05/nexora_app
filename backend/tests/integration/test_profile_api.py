@@ -59,22 +59,22 @@ async def test_any_authenticated_role_can_read_and_edit_only_self(
         PATH,
         headers=headers,
         json={
-            "correo": " own@example.test ",
+            "correo": " Own@Example.test ",
             "primer_nombre": " Ana ",
             "segundo_nombre": " Maria ",
             "primer_apellido": " Lopez ",
             "segundo_apellido": " Diaz ",
-            "numero_telefono": " 123 ",
+            "numero_telefono": "3001234567",
         },
     )
     assert response.status_code == 200, response.text
     for field, value in {
         "correo": "own@example.test",
-        "primer_nombre": "Ana",
-        "segundo_nombre": "Maria",
-        "primer_apellido": "Lopez",
-        "segundo_apellido": "Diaz",
-        "numero_telefono": "123",
+        "primer_nombre": "ANA",
+        "segundo_nombre": "MARIA",
+        "primer_apellido": "LOPEZ",
+        "segundo_apellido": "DIAZ",
+        "numero_telefono": "3001234567",
     }.items():
         assert response.json()[field] == value
     assert response.json()["nombre_usuario"] == "jperez"
@@ -126,6 +126,13 @@ async def test_profile_requires_access_token(client, method, path, payload):
         {"primer_apellido": " "},
         {"segundo_apellido": " "},
         {"numero_telefono": " "},
+        {"numero_telefono": "123"},
+        {"numero_telefono": "30012345678"},
+        {"numero_telefono": "+573001234567"},
+        {"numero_telefono": "300 123 456"},
+        {"numero_telefono": "300-123-45"},
+        {"numero_telefono": "30012345ab"},
+        {"numero_telefono": " 3001234567"},
         {"correo": " "},
         {"primer_nombre": "n" * 101},
         {"segundo_nombre": "n" * 101},

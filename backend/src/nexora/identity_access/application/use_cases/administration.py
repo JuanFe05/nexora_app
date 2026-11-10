@@ -26,6 +26,7 @@ from nexora.identity_access.domain.value_objects.access_catalog import (
     SystemRole,
 )
 from nexora.identity_access.domain.value_objects.enums import RoleStatus, UserStatus
+from nexora.identity_access.domain.value_objects.personal_data import normalize_personal_data
 
 _SYSTEM_ROLE_CODES = frozenset(role.value for role in SystemRole)
 _CATALOG_PERMISSION_CODES = frozenset(spec.code for spec in PERMISSION_CATALOG)
@@ -43,6 +44,9 @@ class NewUser:
     second_last_name: str | None = None
     phone_number: str | None = None
 
+    def __post_init__(self) -> None:
+        normalize_personal_data(self)
+
 
 @dataclass(frozen=True, slots=True)
 class UserChanges:
@@ -56,6 +60,9 @@ class UserChanges:
     second_last_name: str | None = None
     phone_number: str | None = None
     status: UserStatus | None = None
+
+    def __post_init__(self) -> None:
+        normalize_personal_data(self)
 
     def as_replacements(self) -> dict[str, object]:
         fields = (

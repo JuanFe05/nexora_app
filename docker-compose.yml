@@ -1,9 +1,3 @@
-# Orquestacion unica de NEXORA, parametrizada por el archivo .env de la raiz (desarrollo) o por
-# `--env-file .env.production` (produccion); plantillas: .env.development.template y .env.production.template.
-# Desarrollo y produccion se diferencian por variables (NEXORA_ENVIRONMENT, API_WORKERS,
-# RESTART_POLICY, puertos publicados), no por archivos distintos.
-# El frontend (React + TailAdmin) es un servicio mas de la red: `frontend` sirve la build de
-# produccion con Nginx y hace proxy de /api hacia la API; `frontend-dev` (profile dev) usa Vite.
 name: nexora
 
 x-backend-environment: &backend-environment

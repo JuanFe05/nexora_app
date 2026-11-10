@@ -1,3 +1,4 @@
+import { PHONE_LENGTH } from "@/lib/phone";
 import { type ChangeEvent } from "react";
 import { PasswordInput } from "@/components/shared/password-input";
 import { PasswordRequirements } from "@/components/shared/password-requirements";
@@ -35,7 +36,7 @@ export function UserFields({ values, errors, onChange, editing, personalEditable
   function textField({ name, label, required, max }: typeof userTextFields[number]) {
     return <Field key={name} controlId={`user-${name}`} data-invalid={!!errors[name]}>
       <Label htmlFor={`user-${name}`}>{label}{required && <span aria-hidden="true" className="text-red-500">*</span>}</Label>
-      <Input name={name} value={values[name]} readOnly={!personalEditable} onChange={event => { if (personalEditable) onChange(name, event.target.value); }} required={required} aria-invalid={!!errors[name]} aria-describedby={errors[name] ? `user-${name}-error` : undefined} autoComplete={name === "nombre_usuario" ? "off" : name === "correo" ? "email" : undefined} inputMode={name === "correo" ? "email" : name === "numero_telefono" ? "tel" : undefined} maxLength={max * 2} />
+      <Input name={name} value={values[name]} readOnly={!personalEditable} onChange={event => { if (personalEditable) onChange(name, event.target.value); }} required={required} aria-invalid={!!errors[name]} aria-describedby={errors[name] ? `user-${name}-error` : undefined} autoComplete={name === "nombre_usuario" ? "off" : name === "correo" ? "email" : undefined} inputMode={name === "correo" ? "email" : name === "numero_telefono" ? "numeric" : undefined} maxLength={name === "numero_telefono" ? PHONE_LENGTH : max * 2} />
       {errors[name] && <p id={`user-${name}-error`} className="text-sm text-red-500 dark:text-red-400">{errors[name]}</p>}
     </Field>;
   }

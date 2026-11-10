@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PHONE_LENGTH } from "@/lib/phone";
 import { MailIcon, PhoneIcon, UserIcon, PencilIcon, UserCircleIcon } from "@/icons";
 import { profileFailure, updateProfile } from "../api/profile-api";
 import { useFormFocus } from "../hooks/use-form-focus";
@@ -106,7 +107,7 @@ function ProfileEditor({ profile, onUpdated, onClose }: Props & { onClose: () =>
             const id = `profile-${field}`;
             return <Field key={field} className={field === "correo" ? "sm:col-span-2" : undefined}>
               <FieldLabel htmlFor={id}>{labels[field]}{required && <span aria-hidden="true" className="text-red-500">*</span>}</FieldLabel>
-              <Input id={id} name={field} type={field === "correo" ? "email" : field === "numero_telefono" ? "tel" : "text"}
+              <Input id={id} name={field} type={field === "correo" ? "email" : field === "numero_telefono" ? "tel" : "text"} inputMode={field === "numero_telefono" ? "numeric" : undefined} maxLength={field === "numero_telefono" ? PHONE_LENGTH : undefined}
                 required={required} autoComplete={autocomplete[field]} disabled={pending} value={values[field]}
                 aria-invalid={Boolean(errors[field])} aria-describedby={errors[field] ? `${id}-error` : undefined}
                 onChange={(event) => {

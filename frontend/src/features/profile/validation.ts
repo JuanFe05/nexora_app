@@ -1,4 +1,5 @@
 import { passwordMeetsPolicy, PASSWORD_VALIDATION_MESSAGE } from "@/lib/password-policy";
+import { PHONE_VALIDATION_MESSAGE, phoneIsValid } from "@/lib/phone";
 import { profileFields, type FieldErrors, type PasswordValues, type ProfileChanges, type ProfileData, type ProfileField, type ProfileValues } from "./types";
 
 export function toProfileValues(profile: ProfileData): ProfileValues {
@@ -31,6 +32,8 @@ export function validateProfile(values: ProfileValues, original: ProfileData): F
     if (!value) {
       if (required) errors[field] = "Este campo es obligatorio.";
       else if (original[field]) errors[field] = "No se puede vaciar este campo. Introduce un valor o conserva el anterior.";
+    } else if (field === "numero_telefono") {
+      if (value !== (original.numero_telefono ?? "") && !phoneIsValid(value)) errors[field] = PHONE_VALIDATION_MESSAGE;
     } else if (Array.from(value).length > max) {
       errors[field] = `Introduce como máximo ${max} caracteres.`;
     } else if (field === "correo" && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) {

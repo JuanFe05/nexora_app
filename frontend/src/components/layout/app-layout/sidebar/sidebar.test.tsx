@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -18,14 +18,14 @@ function mount(open = true) {
 }
 
 it("configura secciones e iconos tipados para cada entrada", () => {
-  expect(navigation.map((section) => section.title)).toEqual(["INFORMES", "CONFIGURACIONES"]);
+  expect(navigation.map((section) => section.title)).toEqual(["ESTADÍSTICA", "CONFIGURACIONES"]);
   expect(navigation[0].items[0]).toMatchObject({ label: "Inicio", path: "/", icon: expect.any(Function) });
   for (const section of navigation) for (const item of section.items) expect(item.icon).toEqual(expect.any(Function));
 });
 
 it("todos los permisos view muestran las cuatro opciones de configuración y los títulos", () => {
   mount();
-  for (const title of ["INFORMES", "CONFIGURACIONES"]) expect(screen.getByRole("heading", { name: title })).toHaveClass("menu-group-title");
+  for (const title of ["ESTADÍSTICA", "CONFIGURACIONES"]) expect(screen.getByRole("heading", { name: title })).toHaveClass("menu-group-title");
   for (const [label, path] of [["Perfil de usuario", "perfil"], ["Usuarios", "usuarios"], ["Permisos", "permisos"], ["Roles", "roles"]]) {
     expect(screen.getByRole("link", { name: label })).toHaveAttribute("href", `/configuracion/${path}`);
   }
@@ -68,7 +68,42 @@ it.each([true, false])("conserva Inicio activo e iconos expandido=%s", (open) =>
   expect(link.querySelector("svg")).toHaveClass("size-6", "menu-item-icon-active");
   expect(link.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
   if (!open) {
-    expect(screen.queryByText("INFORMES")).not.toBeInTheDocument();
+    expect(screen.queryByText("ESTADÍSTICA")).not.toBeInTheDocument();
     expect(screen.getAllByRole("heading").every((heading) => heading.querySelector("svg"))).toBe(true);
+  }
+});
+
+it("organiza ESTADÍSTICA en cuatro grupos desplegables colapsados con sus opciones reales", () => {
+  mount();
+  for (const name of ["Informes", "Gestión Administrativa", "Resoluciones", "Circulares"]) expect(screen.getByRole("button", { name })).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByRole("link", { name: "Inicio" })).toBeVisible();
+  const informes = screen.getByRole("button", { name: "Informes" });
+  const panel = document.getElementById(informes.getAttribute("aria-controls") as string) as HTMLElement;
+  expect(panel).not.toBeVisible();
+  fireEvent.click(informes);
+  expect(informes).toHaveAttribute("aria-expanded", "true");
+  for (const label of ["Facturas Detalladas", "Admisiones (Urgencias)", "Triaje (Urgencias)", "Signos Vitales"]) {
+    expect(within(panel).getByText(label)).toHaveAttribute("aria-disabled", "true");
+  }
+  expect(within(panel).queryByRole("link")).not.toBeInTheDocument();
+  fireEvent.click(informes);
+  expect(informes).toHaveAttribute("aria-expanded", "false");
+});
+
+it.each(["Gestión Administrativa", "Resoluciones", "Circulares"])("el grupo %s muestra «Sin opciones aún» al expandir", (name) => {
+  mount();
+  const button = screen.getByRole("button", { name });
+  fireEvent.click(button);
+  expect(button).toHaveAttribute("aria-expanded", "true");
+  const panel = document.getElementById(button.getAttribute("aria-controls") as string) as HTMLElement;
+  expect(within(panel).getByText("Sin opciones aún")).toBeVisible();
+});
+
+it("con el sidebar contraído muestra solo los iconos de los grupos", () => {
+  mount(false);
+  for (const name of ["Informes", "Resoluciones"]) {
+    const button = screen.getByRole("button", { name });
+    expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(button).toHaveAttribute("aria-expanded", "false");
   }
 });

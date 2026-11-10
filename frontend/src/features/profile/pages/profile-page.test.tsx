@@ -151,17 +151,18 @@ describe("presentación TailAdmin", () => {
     expect(screen.getByText("Sin roles asignados")).toBeInTheDocument();
   });
   it.each([
-    ["activo", "Activo", "success"], ["ACTIVO", "Activo", "success"],
-    ["inactivo", "Inactivo", "error"], ["INACTIVO", "Inactivo", "error"],
-    ["Pendiente REVISIÓN", "Pendiente REVISIÓN", "neutral"],
-  ])("muestra estado %s con texto %s y variante %s", async (estado, label, variant) => {
+    ["activo", "Activo"], ["ACTIVO", "Activo"],
+    ["inactivo", "Inactivo"], ["INACTIVO", "Inactivo"],
+    ["Pendiente REVISIÓN", "Pendiente REVISIÓN"],
+  ])("muestra estado %s como texto %s en el resumen, sin badge ni indicador en la cabecera", async (estado, label) => {
     vi.mocked(api.getProfile).mockResolvedValue({ ...profile, estado });
     await loaded();
     const header = screen.getByRole("heading", { name: "Ana Pérez" }).closest('[data-slot="card"]') as HTMLElement;
-    const badge = within(header).getByText(label, { exact: true });
-    expect(badge).toHaveAttribute("data-slot", "badge");
-    expect(badge).toHaveAttribute("data-variant", variant);
-    expect(badge).not.toHaveClass("capitalize");
+    expect(within(header).queryByText(label, { exact: true })).not.toBeInTheDocument();
+    const summary = screen.getByRole("heading", { name: "Resumen de cuenta" }).closest("section") as HTMLElement;
+    const value = within(summary).getByText(label, { exact: true });
+    expect(value.closest('[data-slot="badge"]')).toBeNull();
+    expect(value.closest("dd")).toHaveTextContent(label);
   });
 });
 

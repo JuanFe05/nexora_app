@@ -17,6 +17,10 @@ from nexora.identity_access.domain.value_objects.access_catalog import (
     SystemRole,
 )
 from nexora.identity_access.domain.value_objects.enums import UserStatus
+from nexora.identity_access.domain.value_objects.personal_data import (
+    normalize_email,
+    normalize_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +94,11 @@ class InitializeAccessUseCase:
             user = User(
                 id=uuid4(),
                 username=self._admin.username,
-                email=self._admin.email,
+                email=normalize_email(self._admin.email),
                 password_hash=self._hasher.hash(self._admin.password),
                 status=UserStatus.ACTIVE,
-                first_name=self._admin.first_name,
-                last_name=self._admin.last_name,
+                first_name=normalize_name(self._admin.first_name),
+                last_name=normalize_name(self._admin.last_name),
                 password_changed_at=self._clock.now(),
             )
             await self._seed.add_user(user)

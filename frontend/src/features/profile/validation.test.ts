@@ -13,11 +13,15 @@ describe("validación del perfil", () => {
   it.each(["primer_nombre", "primer_apellido", "correo"] as const)("exige %s", (field) => {
     expect(validateProfile({ ...values(), [field]: "   " }, original)[field]).toBeTruthy();
   });
-  it.each(["primer_nombre", "segundo_nombre", "primer_apellido", "segundo_apellido", "numero_telefono", "correo"] as const)("aplica límites exactos para %s", (field) => {
-    const max = field === "correo" ? 255 : field === "numero_telefono" ? 30 : 100;
+  it.each(["primer_nombre", "segundo_nombre", "primer_apellido", "segundo_apellido", "correo"] as const)("aplica límites exactos para %s", (field) => {
+    const max = field === "correo" ? 255 : 100;
     const boundary = field === "correo" ? `${"a".repeat(248)}@a.test` : "a".repeat(max);
     expect(validateProfile({ ...values(), [field]: boundary }, original)[field]).toBeUndefined();
     expect(validateProfile({ ...values(), [field]: `${boundary}a` }, original)[field]).toBeTruthy();
+  });
+  it("acepta teléfono de 10 dígitos y rechaza cualquier otro formato", () => {
+    expect(validateProfile({ ...values(), numero_telefono: "0301234567" }, original).numero_telefono).toBeUndefined();
+    for (const phone of ["123", "30012345678", "+573001234567", "300 123 456", "300-123-45", "30012345ab"]) expect(validateProfile({ ...values(), numero_telefono: phone }, original).numero_telefono).toBeTruthy();
   });
   it("rechaza correo inválido y no permite vaciar un opcional existente (PATCH no admite null ni vacío)", () => {
     expect(validateProfile({ ...values(), correo: "sin@dominio" }, original).correo).toBeTruthy();

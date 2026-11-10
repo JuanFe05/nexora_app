@@ -11,9 +11,20 @@ describe("user validation and payloads", () => {
     expect(validateUser({ ...values, contrasena: " ".repeat(12) }, null).contrasena).toBeTruthy();
     expect(createUserBody({ ...values, primer_nombre: " Ana ", contrasena: " Abc123!x " })).toEqual({ nombre_usuario: "ana", correo: "ana@example.org", primer_nombre: "Ana", primer_apellido: "Sol", contrasena: " Abc123!x " });
   });
-  it.each([["nombre_usuario", 50], ["correo", 255], ["primer_nombre", 100], ["primer_apellido", 100], ["segundo_nombre", 100], ["segundo_apellido", 100], ["numero_telefono", 30]] as const)("enforces %s length %s", (field, max) => {
+  it.each([["nombre_usuario", 50], ["correo", 255], ["primer_nombre", 100], ["primer_apellido", 100], ["segundo_nombre", 100], ["segundo_apellido", 100]] as const)("enforces %s length %s", (field, max) => {
     expect(validateUser({ ...values, [field]: "a".repeat(max) }, null)[field]).toBeUndefined();
     expect(validateUser({ ...values, [field]: "a".repeat(max + 1) }, null)[field]).toBeTruthy();
+  });
+  it.each(["3001234567", "0301234567"])("accepts a 10-digit phone %s and sends it as text", phone => {
+    expect(validateUser({ ...values, numero_telefono: phone }, null).numero_telefono).toBeUndefined();
+    expect(createUserBody({ ...values, numero_telefono: phone }).numero_telefono).toBe(phone);
+  });
+  it.each(["123", "30012345678", "+573001234567", "300 123 456", "300-123-45", "30012345ab"])("rejects phone %s", phone => {
+    expect(validateUser({ ...values, numero_telefono: phone }, null).numero_telefono).toBe("El teléfono debe tener exactamente 10 dígitos numéricos, sin espacios, signos ni prefijos.");
+  });
+  it("keeps an optional empty phone valid on creation", () => {
+    expect(validateUser({ ...values, numero_telefono: "" }, null).numero_telefono).toBeUndefined();
+    expect(createUserBody({ ...values, numero_telefono: "" })).not.toHaveProperty("numero_telefono");
   });
   it.each([5, 6, 24, 25])("enforces creation password boundary %s", length => {
     const password = `Ab1!${"x".repeat(length - 4)}`;
