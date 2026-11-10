@@ -68,8 +68,8 @@ a proposito.
 
 ## Desarrollo del backend sin contenedor
 
-El flujo con recarga en caliente vive en [`backend/README.md`](backend/README.md): PostgreSQL en
-Docker y la API local con `uv run python main.py`.
+El flujo de desarrollo local vive en [`backend/README.md`](backend/README.md): PostgreSQL en
+Docker y la API local con `uv run python main.py` (sin recarga automatica: reinicia la API tras cambiar codigo).
 
 ## Configuracion
 

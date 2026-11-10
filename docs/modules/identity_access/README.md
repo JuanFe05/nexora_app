@@ -32,7 +32,7 @@ asignaciones y sesiones. Implementa el flujo de autenticacion y la administracio
 | `require_permission` reutilizable | Implementado |
 | Limitacion de intentos de login | Implementado (en memoria del proceso) |
 | Siembra idempotente de roles, permisos y primer administrador | Implementado |
-| CRUD de usuarios, roles y permisos solo para `ADMINISTRADOR` | Implementado |
+| CRUD de usuarios, roles y permisos por permisos efectivos (`identity.*`), no por rol | Implementado |
 | Proteccion del ultimo administrador activo | Implementado |
 | Consulta y edicion del perfil propio para cualquier usuario autenticado | Implementado |
 | Cambio de contrasena actual con throttle y cierre de otras sesiones | Implementado |

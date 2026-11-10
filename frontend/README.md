@@ -3,7 +3,7 @@
 Shell React basado en [TailAdmin React v2.5.0](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard/tree/v2.5.0).
 Conserva su diseño, componentes y tema claro/oscuro. Licencia MIT original en `LICENSE.md`.
 Incluye autenticación conectada a la API de NEXORA: acceso, restauración de sesión y cierre de sesión.
-No contiene funcionalidades de negocio, registro público ni pantallas de administración.
+Incluye las pantallas de administración de Usuarios, Roles y Permisos, y el perfil de usuario, todas protegidas por permisos. No incluye registro público ni funcionalidades de negocio fuera de la administración de acceso.
 
 ## Inicio rápido
 
@@ -142,7 +142,7 @@ validación de datos en tiempo de ejecución.
 
 ## Tablas paginadas y confirmaciones
 
-Base compartida para Usuarios, Roles y Permisos (T4, S6/S8); todavía no conecta ni implementa sus páginas.
+Base compartida para Usuarios, Roles y Permisos (T4, S6/S8); esas tres páginas ya la usan con sus adaptadores de API.
 No se copió **Data Table 3 Pro**. La tarjeta, tabla, estado vacío y algoritmo de paginación se adaptaron
 con `curl` desde [TailAdmin Free (MIT)](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard):
 `src/pages/main/tables/basic-tables/table-three/{card-header,card-footer,empty-state,transaction-table}.tsx`,

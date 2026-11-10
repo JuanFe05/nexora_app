@@ -16,7 +16,7 @@ cp .env.development.template .env
 docker compose up -d --build   # postgres -> migrate -> api
 ```
 
-Desarrollo con recarga en caliente, con la base en Docker y la API local:
+Desarrollo local, con la base en Docker y la API local (sin recarga automatica: reinicia `main.py` tras cambiar codigo):
 
 ```bash
 cd backend
