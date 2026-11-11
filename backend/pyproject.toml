@@ -12,6 +12,7 @@ dependencies = [
     "pydantic>=2.12",
     "pydantic-settings>=2.12",
     "pyjwt>=2.10",
+    "pyodbc>=5.2",
     "sqlalchemy[asyncio]>=2.0.44",
     "uvicorn[standard]>=0.38",
 ]
@@ -48,6 +49,8 @@ select = ["E", "F", "I", "UP", "B", "S", "C4", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "S105", "S106"]
+# SQL original conservado tal cual (lineas largas): no se reformatea para no alterar la consulta.
+"src/nexora/statistics/infrastructure/queries/detailed_invoices.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.14"

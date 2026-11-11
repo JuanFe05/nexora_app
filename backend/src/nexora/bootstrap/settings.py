@@ -44,6 +44,18 @@ class Settings(BaseSettings):
     database_echo: bool = False
     allowed_origins: tuple[str, ...] = ("http://localhost:5173",)
 
+    #: SQL Server (fuente externa de solo lectura). Sin host/base/usuario/clave la integracion
+    #: queda desactivada y sus endpoints responden 503. Las credenciales jamas viven en el codigo.
+    mssql_host: str | None = None
+    mssql_port: int = Field(default=1433, gt=0, le=65535)
+    mssql_database: str | None = None
+    mssql_user: str | None = None
+    mssql_password: SecretStr | None = None
+    mssql_driver: str = "ODBC Driver 18 for SQL Server"
+    mssql_trust_server_certificate: bool = False
+    mssql_connect_timeout_seconds: int = Field(default=10, gt=0, le=120)
+    mssql_query_timeout_seconds: int = Field(default=120, gt=0, le=900)
+
     jwt_secret: SecretStr = SecretStr(DEVELOPMENT_JWT_SECRET)
     jwt_algorithm: str = "HS256"
     jwt_issuer: str = "nexora"
@@ -123,6 +135,17 @@ class Settings(BaseSettings):
         if len(secret) < 32:
             raise ValueError("NEXORA_JWT_SECRET debe tener al menos 32 caracteres en produccion")
         return self
+
+    @property
+    def mssql_configured(self) -> bool:
+        password = self.mssql_password
+        return bool(
+            self.mssql_host
+            and self.mssql_database
+            and self.mssql_user
+            and password
+            and password.get_secret_value()
+        )
 
     @property
     def has_bootstrap_admin(self) -> bool:

@@ -96,3 +96,4 @@ temp/
 # Seguimiento interno de trabajo (Organic Driven Development): no se versiona
 # ---------------------------------------------------------------------------
 odd/
+data_ips/
