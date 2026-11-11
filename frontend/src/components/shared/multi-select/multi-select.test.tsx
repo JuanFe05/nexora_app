@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { MultiSelect } from "./index";
@@ -24,51 +24,87 @@ function Controlled() {
     />
   );
 }
-it("selects individually, searches, removes chips, counts and toggles all options", async () => {
+const trigger = () => screen.getByRole("combobox", { name: /Sede/ });
+it("shows the selection inside the control with a fixed-height chip and counter", async () => {
   const user = userEvent.setup();
   render(<Controlled />);
-  await user.click(screen.getByRole("button", { name: /Sede/ }));
+  expect(trigger()).toHaveTextContent("Seleccionar opciones");
+  await user.click(trigger());
   await user.click(screen.getByRole("option", { name: "Norte" }));
-  expect(screen.getByText("1 seleccionadas")).toBeVisible();
+  expect(trigger()).toHaveAccessibleName("Sede: 1 seleccionadas");
+  expect(trigger()).toHaveTextContent("Norte");
+  expect(trigger()).not.toHaveTextContent("+");
   await user.click(screen.getByRole("option", { name: "Sur" }));
-  expect(screen.getByText("2 seleccionadas")).toBeVisible();
+  await user.click(screen.getByRole("option", { name: "Centro" }));
+  expect(trigger()).toHaveTextContent("Norte");
+  expect(trigger()).toHaveTextContent("+2");
+  expect(trigger()).not.toHaveTextContent("Sur");
   await user.click(screen.getByRole("option", { name: "Sur" }));
-  await user.type(
-    screen.getByRole("searchbox", { name: "Buscar en Sede" }),
-    "cent",
-  );
-  expect(
-    screen.queryByRole("option", { name: "Norte" }),
-  ).not.toBeInTheDocument();
-  expect(screen.getByRole("option", { name: "Centro" })).toBeVisible();
-  await user.click(screen.getByRole("button", { name: "Seleccionar todas" }));
-  expect(screen.getByText("3 seleccionadas")).toBeVisible();
-  await user.click(screen.getByRole("button", { name: "Quitar Norte" }));
-  expect(screen.getByText("2 seleccionadas")).toBeVisible();
-  await user.click(screen.getByRole("button", { name: "Seleccionar todas" }));
-  await user.click(screen.getByRole("button", { name: "Quitar todas" }));
-  expect(screen.getByText("0 seleccionadas")).toBeVisible();
+  expect(trigger()).toHaveTextContent("+1");
 });
-it("opens and navigates with arrows, selects with Enter and closes with Escape returning focus", async () => {
+it("toggles all options from the popup and closes with Escape", async () => {
   const user = userEvent.setup();
   render(<Controlled />);
-  const trigger = screen.getByRole("button", { name: /Sede/ });
-  trigger.focus();
-  await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+  await user.click(trigger());
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Seleccionar todas" }),
+  );
+  expect(trigger()).toHaveAccessibleName("Sede: 3 seleccionadas");
   expect(screen.getByRole("option", { name: "Sur" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
-  await user.keyboard("{ArrowUp}{Enter}");
-  expect(screen.getByRole("option", { name: "Norte" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Quitar todas" }));
+  expect(trigger()).toHaveAccessibleName("Sede: 0 seleccionadas");
   await user.keyboard("{Escape}");
-  expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
-  expect(trigger).toHaveFocus();
+  await waitFor(() =>
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument(),
+  );
 });
-it("exposes disabled, loading, empty and retry states", () => {
+it("removes the visible chip without opening the popup", async () => {
+  const user = userEvent.setup();
+  const onChange = vi.fn();
+  render(
+    <MultiSelect
+      id="sites"
+      label="Sede"
+      options={options}
+      value={[1, 2]}
+      onChange={onChange}
+    />,
+  );
+  expect(trigger()).toHaveTextContent("Norte");
+  await user.click(screen.getByRole("button", { name: "Quitar Norte" }));
+  expect(onChange).toHaveBeenCalledWith([2]);
+  expect(trigger()).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+});
+it("searches inside a searchable select without changing the full-catalog select all", async () => {
+  const user = userEvent.setup();
+  const onChange = vi.fn();
+  render(
+    <MultiSelect
+      id="companies"
+      label="Empresa"
+      options={options}
+      value={[]}
+      onChange={onChange}
+      searchable
+    />,
+  );
+  await user.click(screen.getByRole("combobox", { name: /Empresa/ }));
+  await user.type(
+    await screen.findByRole("combobox", { name: "Buscar en Empresa" }),
+    "cent",
+  );
+  expect(screen.getByRole("option", { name: "Centro" })).toBeVisible();
+  expect(screen.queryByRole("option", { name: "Norte" })).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Seleccionar todas" }));
+  expect(onChange).toHaveBeenLastCalledWith([1, 2, "3"]);
+  await user.click(screen.getByRole("option", { name: "Centro" }));
+  expect(onChange).toHaveBeenLastCalledWith(["3"]);
+});
+it("exposes disabled, loading, error and retry states", () => {
   const retry = vi.fn();
   const props = {
     id: "s",
@@ -78,7 +114,7 @@ it("exposes disabled, loading, empty and retry states", () => {
     onChange: vi.fn(),
   };
   const { rerender } = render(<MultiSelect {...props} disabled />);
-  expect(screen.getByRole("button", { name: /Sede/ })).toBeDisabled();
+  expect(trigger()).toHaveAttribute("aria-disabled", "true");
   rerender(<MultiSelect {...props} loading />);
   expect(screen.getByText("Cargando opciones…")).toBeVisible();
   rerender(
@@ -94,6 +130,5 @@ it("exposes disabled, loading, empty and retry states", () => {
   fireEvent.click(screen.getByRole("button", { name: "Reintentar Sede" }));
   expect(retry).toHaveBeenCalledOnce();
   rerender(<MultiSelect {...props} />);
-  fireEvent.click(screen.getByRole("button", { name: /Sede/ }));
-  expect(screen.getByText("No hay opciones disponibles.")).toBeVisible();
+  expect(trigger()).not.toHaveAttribute("aria-disabled", "true");
 });

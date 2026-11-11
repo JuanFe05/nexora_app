@@ -34,9 +34,15 @@ it("toggles available columns but keeps at least one visible and closes with Esc
   );
   fireEvent.click(screen.getByRole("checkbox", { name: "Empresa" }));
   expect(screen.getByRole("checkbox", { name: "Empresa" })).not.toBeChecked();
-  expect(screen.getByRole("checkbox", { name: "Sede" })).toBeDisabled();
+  expect(screen.getByRole("checkbox", { name: "Sede" })).toHaveAttribute(
+    "aria-disabled",
+    "true",
+  );
   fireEvent.click(screen.getByRole("checkbox", { name: "Empresa" }));
-  expect(screen.getByRole("checkbox", { name: "Sede" })).toBeEnabled();
+  expect(screen.getByRole("checkbox", { name: "Sede" })).not.toHaveAttribute(
+    "aria-disabled",
+    "true",
+  );
   await waitFor(() =>
     expect(
       screen.getByRole("dialog", { name: "Columnas visibles" }),

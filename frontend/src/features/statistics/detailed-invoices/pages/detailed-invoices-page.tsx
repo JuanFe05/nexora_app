@@ -13,6 +13,7 @@ import {
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { ChartBarIcon } from "@/icons";
 import { ApiError } from "@/lib/http/api-error";
 import {
@@ -81,18 +82,26 @@ function InvoiceResults({
   filters,
   visibleColumns,
   onVisibleColumnsChange,
+  onLoadingChange,
 }: {
   filters: InvoiceFilters;
   visibleColumns: string[];
   onVisibleColumnsChange: (value: string[]) => void;
+  onLoadingChange: (loading: boolean) => void;
 }) {
   const fetcher = useCallback(
     (params: PagedQueryParams) => fetchDetailedInvoices(filters, params),
     [filters],
   );
-  const query = usePagedQuery({ fetcher, initialPageSize: 50 });
+  const query = usePagedQuery({ fetcher, initialPageSize: 10 });
+  const { loading } = query;
+  useEffect(() => {
+    onLoadingChange(loading);
+    return () => onLoadingChange(false);
+  }, [loading, onLoadingChange]);
   return (
     <DataTable
+      compact
       title="Resultados"
       description={
         query.loading
@@ -162,10 +171,19 @@ export default function DetailedInvoicesPage() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>(
     defaultVisibleColumns,
   );
+  const [consulting, setConsulting] = useState(false);
   const catalogsUnavailable =
     sites.loading ||
     companies.loading ||
     Boolean(sites.error || companies.error);
+  const nothingToClear =
+    !startDate &&
+    !endDate &&
+    !selectedSites.length &&
+    !selectedCompanies.length &&
+    !errors.startDate &&
+    !errors.endDate &&
+    !applied;
 
   function consult() {
     const nextErrors = {
@@ -217,13 +235,14 @@ export default function DetailedInvoicesPage() {
           }}
           className="space-y-5"
         >
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
             <DateField
               id="invoice-start-date"
               label="Fecha inicial"
               value={startDate}
               onChange={setStartDate}
               required
+              maxDate="today"
               error={errors.startDate}
             />
             <DateField
@@ -232,13 +251,13 @@ export default function DetailedInvoicesPage() {
               value={endDate}
               onChange={setEndDate}
               required
+              maxDate="today"
               error={errors.endDate}
             />
-          </div>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <MultiSelect
               id="invoice-sites"
               label="Sede"
+              placeholder="Seleccionar sedes"
               options={sites.items.map((item) => ({
                 value: item.id,
                 label: item.nombre,
@@ -252,6 +271,8 @@ export default function DetailedInvoicesPage() {
             <MultiSelect
               id="invoice-companies"
               label="Empresa"
+              placeholder="Seleccionar empresas"
+              searchable
               options={companies.items.map((item) => ({
                 value: item.id,
                 label: item.nombre,
@@ -263,16 +284,23 @@ export default function DetailedInvoicesPage() {
               onRetry={companies.retry}
             />
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Sin selección o con todas las opciones seleccionadas, no se
-            restringe la sede o la empresa.
-          </p>
           <div className="flex flex-wrap justify-end gap-3">
-            <Button type="button" variant="outline" onClick={clear}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={clear}
+              disabled={nothingToClear}
+            >
               Limpiar
             </Button>
-            <Button type="submit" disabled={catalogsUnavailable}>
-              Consultar
+            <Button
+              type="submit"
+              className="min-w-36"
+              disabled={catalogsUnavailable || consulting}
+              aria-busy={consulting}
+            >
+              {consulting && <Spinner aria-hidden="true" role="presentation" />}
+              {consulting ? "Consultando…" : "Consultar"}
             </Button>
           </div>
         </form>
@@ -283,6 +311,7 @@ export default function DetailedInvoicesPage() {
           filters={applied.filters}
           visibleColumns={visibleColumns}
           onVisibleColumnsChange={setVisibleColumns}
+          onLoadingChange={setConsulting}
         />
       ) : (
         <Card>

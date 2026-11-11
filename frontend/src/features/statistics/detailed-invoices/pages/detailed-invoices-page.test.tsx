@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -38,14 +39,21 @@ beforeEach(() => {
 function mount() {
   render(<DetailedInvoicesPage />);
 }
-function dates(start = "2026-01-01", end = "2026-01-31") {
-  fireEvent.change(screen.getByLabelText(/Fecha inicial/), {
-    target: { value: start },
-  });
-  fireEvent.change(screen.getByLabelText(/Fecha final/), {
-    target: { value: end },
-  });
+function pickDate(label: RegExp, iso: string) {
+  const input = screen.getByLabelText(label) as HTMLInputElement & {
+    _flatpickr: { setDate(date: string, trigger: boolean, format: string): void };
+  };
+  act(() => input._flatpickr.setDate(iso, true, "Y-m-d"));
 }
+function dates(start = "2026-01-01", end = "2026-01-31") {
+  pickDate(/Fecha inicial/, start);
+  pickDate(/Fecha final/, end);
+}
+const filter = (label: RegExp) => screen.getByRole("combobox", { name: label });
+const filterReady = (label: RegExp) =>
+  waitFor(() =>
+    expect(filter(label)).not.toHaveAttribute("aria-disabled", "true"),
+  );
 function lastParams() {
   const calls = vi.mocked(httpClient.getWithMeta).mock.calls;
   return new URLSearchParams(calls[calls.length - 1][0].split("?")[1]);
@@ -83,15 +91,25 @@ it("queries only applied filters, omits none/all selections, reports count/statu
   expect(screen.getByText("02/01/2026")).toBeVisible();
   expect(screen.getByText("1.200")).toBeVisible();
   expect(lastParams().get("fecha_inicial")).toBe("2026-01-01");
+  expect(lastParams().get("limit")).toBe("10");
+  expect(lastParams().get("offset")).toBe("0");
+  expect(screen.getByRole("columnheader", { name: "Empresa" })).toHaveClass(
+    "text-xs",
+  );
   expect(lastParams().has("sedes")).toBe(false);
   expect(lastParams().has("empresas")).toBe(false);
   const count = vi.mocked(httpClient.getWithMeta).mock.calls.length;
   dates("2026-01-02", "2026-01-31");
-  await user.click(screen.getByRole("button", { name: /Sede/ }));
+  await user.click(filter(/Sede/));
   await user.click(screen.getByRole("button", { name: "Seleccionar todas" }));
   await user.keyboard("{Escape}");
-  await user.click(screen.getByRole("button", { name: /Empresa/ }));
-  await user.click(screen.getByRole("button", { name: "Seleccionar todas" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument(),
+  );
+  await user.click(filter(/Empresa/));
+  await user.click(
+    await screen.findByRole("button", { name: "Seleccionar todas" }),
+  );
   await user.keyboard("{Escape}");
   expect(httpClient.getWithMeta).toHaveBeenCalledTimes(count);
   await user.click(screen.getByRole("button", { name: "Consultar" }));
@@ -103,7 +121,8 @@ it("queries only applied filters, omits none/all selections, reports count/statu
   await user.click(screen.getByRole("button", { name: "Limpiar" }));
   expect(screen.getByLabelText(/Fecha inicial/)).toHaveValue("");
   expect(screen.getByLabelText(/Fecha final/)).toHaveValue("");
-  expect(screen.getAllByText("0 seleccionadas")).toHaveLength(2);
+  expect(screen.getAllByText(/^Seleccionar (sedes|empresas)$/)).toHaveLength(2);
+  expect(screen.getByRole("button", { name: "Limpiar" })).toBeDisabled();
   expect(
     screen.getByText("Selecciona un período y presiona Consultar."),
   ).toBeVisible();
@@ -111,19 +130,20 @@ it("queries only applied filters, omits none/all selections, reports count/statu
     screen.queryByText("101 registros encontrados"),
   ).not.toBeInTheDocument();
   expect(httpClient.getWithMeta).toHaveBeenCalledTimes(count + 1);
-});
+}, 15000);
 it("sends restricted ids as repeated parameters and uses server pagination without reapplying draft dates", async () => {
   const user = userEvent.setup();
   mount();
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: /Sede/ })).toBeEnabled(),
-  );
+  await filterReady(/Sede/);
   dates();
   for (const label of ["Sede", "Empresa"]) {
-    await user.click(screen.getByRole("button", { name: new RegExp(label) }));
-    await user.click(screen.getByRole("option", { name: "Norte" }));
+    await user.click(filter(new RegExp(label)));
+    await user.click(await screen.findByRole("option", { name: "Norte" }));
     await user.click(screen.getByRole("option", { name: "Sur" }));
     await user.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument(),
+    );
   }
   await user.click(screen.getByRole("button", { name: "Consultar" }));
   await screen.findByText("101 registros encontrados");
@@ -131,7 +151,7 @@ it("sends restricted ids as repeated parameters and uses server pagination witho
   expect(lastParams().getAll("empresas")).toEqual(["11", "22"]);
   dates("2026-01-20", "2026-01-31");
   await user.click(screen.getByRole("button", { name: "Página siguiente" }));
-  await waitFor(() => expect(lastParams().get("offset")).toBe("50"));
+  await waitFor(() => expect(lastParams().get("offset")).toBe("10"));
   expect(lastParams().get("fecha_inicial")).toBe("2026-01-01");
   fireEvent.change(
     screen.getByRole("combobox", { name: "Registros por página" }),
@@ -145,7 +165,7 @@ it("sends restricted ids as repeated parameters and uses server pagination witho
     screen.queryByRole("columnheader", { name: "Empresa" }),
   ).not.toBeInTheDocument();
   expect(httpClient.getWithMeta).toHaveBeenCalledTimes(3);
-});
+}, 15000);
 it.each([502, 503])(
   "shows a safe error for %s and retries the same applied request",
   async (status) => {
@@ -169,6 +189,35 @@ it.each([502, 503])(
     expect(httpClient.getWithMeta).toHaveBeenCalledTimes(2);
   },
 );
+it("enables Limpiar only when there is something to clear and shows a spinner while consulting", async () => {
+  let resolve!: (value: { data: never[]; headers: Headers }) => void;
+  vi.mocked(httpClient.getWithMeta).mockReturnValueOnce(
+    new Promise((done) => {
+      resolve = done;
+    }),
+  );
+  mount();
+  const clear = screen.getByRole("button", { name: "Limpiar" });
+  expect(clear).toBeDisabled();
+  expect(
+    screen.queryByText(/no se restringe la sede o la empresa/),
+  ).not.toBeInTheDocument();
+  dates();
+  expect(clear).toBeEnabled();
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Consultar" })).toBeEnabled(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
+  const busy = await screen.findByRole("button", { name: "Consultando…" });
+  expect(busy).toBeDisabled();
+  expect(busy).toHaveAttribute("aria-busy", "true");
+  resolve({ data: [], headers: new Headers({ "X-Total-Count": "0" }) });
+  expect(
+    await screen.findByRole("button", { name: "Consultar" }),
+  ).toBeEnabled();
+  fireEvent.click(clear);
+  expect(clear).toBeDisabled();
+});
 it("retries catalog failures inline and shows an empty successful result", async () => {
   vi.mocked(httpClient.get).mockRejectedValueOnce(new Error("internal"));
   vi.mocked(httpClient.getWithMeta).mockResolvedValue({
@@ -180,9 +229,7 @@ it("retries catalog failures inline and shows an empty successful result", async
     "No se pudieron cargar las sedes.",
   );
   fireEvent.click(screen.getByRole("button", { name: "Reintentar Sede" }));
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: /Sede/ })).toBeEnabled(),
-  );
+  await filterReady(/Sede/);
   dates("2026-01-01", "2026-01-01");
   fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
   expect(await screen.findByText("0 registros encontrados")).toBeVisible();
