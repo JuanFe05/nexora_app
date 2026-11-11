@@ -25,6 +25,12 @@ from nexora.identity_access.domain.exceptions.identity import (
     SessionNotActive,
 )
 from nexora.identity_access.presentation.http.v1.router import identity_access_router
+from nexora.integration_management.application.ports import (
+    ExternalQueryFailed,
+    ExternalSourceUnavailable,
+)
+from nexora.statistics.domain.filters import InvalidReportFilter
+from nexora.statistics.presentation.http.v1.router import statistics_router
 
 #: Mensaje unico para cualquier fallo de credenciales: no revela si el usuario existe.
 GENERIC_CREDENTIALS_MESSAGE = "Credenciales invalidas"
@@ -37,6 +43,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await initialize_access(container)
         yield
     finally:
+        container.sqlserver.dispose()
         await container.database.dispose()
 
 
@@ -80,6 +87,27 @@ def _register_error_handlers(app: FastAPI) -> None:
     async def current_password_handler(_: Request, exc: Exception) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": str(exc)})
 
+    async def external_unavailable_handler(_: Request, __: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": "Fuente de datos externa no disponible"},
+        )
+
+    async def external_query_handler(_: Request, __: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"detail": "No se pudo consultar la fuente de datos externa"},
+        )
+
+    async def report_filter_handler(_: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"detail": str(exc)},
+        )
+
+    app.add_exception_handler(ExternalSourceUnavailable, external_unavailable_handler)
+    app.add_exception_handler(ExternalQueryFailed, external_query_handler)
+    app.add_exception_handler(InvalidReportFilter, report_filter_handler)
     app.add_exception_handler(IncorrectCurrentPassword, current_password_handler)
     app.add_exception_handler(RequestValidationError, validation_handler)
     app.add_exception_handler(ResourceNotFound, not_found_handler)
@@ -112,6 +140,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     _register_error_handlers(app)
     app.include_router(identity_access_router, prefix=settings.api_prefix)
+    app.include_router(statistics_router, prefix=settings.api_prefix)
 
     @app.get("/health", tags=["operacion"], summary="Estado del servicio")
     async def health() -> dict[str, str]:

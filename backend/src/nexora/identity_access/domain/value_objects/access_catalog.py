@@ -41,6 +41,10 @@ def _identity(code: str, name: str) -> PermissionSpec:
     return PermissionSpec(f"identity.{code}", name, "identity", name)
 
 
+def _statistics(code: str, name: str) -> PermissionSpec:
+    return PermissionSpec(f"statistics.{code}", name, "statistics", name)
+
+
 PERMISSION_CATALOG: tuple[PermissionSpec, ...] = (
     _identity("users.view", "Consultar usuarios"),
     _identity("users.create", "Crear usuarios"),
@@ -58,4 +62,5 @@ PERMISSION_CATALOG: tuple[PermissionSpec, ...] = (
     _identity("permissions.create", "Crear permisos"),
     _identity("permissions.update", "Editar permisos"),
     _identity("permissions.delete", "Eliminar permisos"),
+    _statistics("reports.detailed_invoices.view", "Consultar informe Facturas Detalladas"),
 )
