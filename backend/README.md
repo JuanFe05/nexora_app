@@ -6,6 +6,9 @@ Monolito modular en Python 3.14 con FastAPI, SQLAlchemy 2.x asincrono, PostgreSQ
 
 - `identity_access`: identidad y acceso (IAM). Documentacion en
   [`docs/modules/identity_access/`](../docs/modules/identity_access/README.md).
+- `statistics`: informes (Facturas Detalladas). Documentacion en
+  [`docs/modules/statistics/`](../docs/modules/statistics/README.md).
+- `integration_management`: capacidad reutilizable de lectura de SQL Server.
 
 ## Puesta en marcha
 
@@ -100,6 +103,25 @@ Todas usan el prefijo `NEXORA_`.
 | `NEXORA_LOGIN_MAX_ATTEMPTS` | `5` | Intentos antes del bloqueo |
 | `NEXORA_LOGIN_ATTEMPT_WINDOW_SECONDS` | `300` | Ventana de conteo |
 | `NEXORA_LOGIN_BLOCK_SECONDS` | `900` | Duracion del bloqueo |
+
+### SQL Server (fuente externa de solo lectura)
+
+Todas usan el prefijo `NEXORA_MSSQL_`. Sin host, base, usuario y clave la integracion queda
+desactivada y sus endpoints responden 503. Usar un usuario con permisos de solo lectura; nunca se
+incluyen en la imagen Docker.
+
+| Variable | Valor por defecto | Descripcion |
+| --- | --- | --- |
+| `NEXORA_MSSQL_HOST` | — | Servidor SQL Server |
+| `NEXORA_MSSQL_PORT` | `1433` | Puerto |
+| `NEXORA_MSSQL_DATABASE` | — | Base de datos de origen |
+| `NEXORA_MSSQL_USER` / `NEXORA_MSSQL_PASSWORD` | — | Credenciales de solo lectura |
+| `NEXORA_MSSQL_DRIVER` | `ODBC Driver 18 for SQL Server` | Driver ODBC (la imagen Docker instala `msodbcsql18`; en Windows hay que instalarlo) |
+| `NEXORA_MSSQL_TRUST_SERVER_CERTIFICATE` | `false` | Aceptar certificado no confiable (solo si la red lo exige) |
+| `NEXORA_MSSQL_CONNECT_TIMEOUT_SECONDS` | `10` | Tiempo de conexion |
+| `NEXORA_MSSQL_QUERY_TIMEOUT_SECONDS` | `120` | Tiempo maximo por consulta |
+
+Ver [modulo statistics](../docs/modules/statistics/README.md).
 
 ### Sesiones y cierre global
 

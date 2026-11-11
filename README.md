@@ -83,3 +83,5 @@ Las variables se cargan con Pydantic Settings y se documentan en
 
 - [`docs/modules/identity_access/`](docs/modules/identity_access/README.md): modulo de identidad
   y acceso (IAM).
+- [`docs/modules/statistics/`](docs/modules/statistics/README.md): informes de estadistica sobre
+  SQL Server (Facturas Detalladas).
