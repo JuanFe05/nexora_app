@@ -3,6 +3,7 @@
  * La autorización real la aplica el backend; el frontend solo los usa para mostrar u ocultar opciones.
  */
 export const PERMISSIONS = {
+  detailedInvoicesView: "statistics.reports.detailed_invoices.view",
   usersView: "identity.users.view",
   usersCreate: "identity.users.create",
   usersUpdate: "identity.users.update",

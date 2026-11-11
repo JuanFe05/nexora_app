@@ -82,12 +82,23 @@ it("organiza ESTADÍSTICA en cuatro grupos desplegables colapsados con sus opcio
   expect(panel).not.toBeVisible();
   fireEvent.click(informes);
   expect(informes).toHaveAttribute("aria-expanded", "true");
-  for (const label of ["Facturas Detalladas", "Admisiones (Urgencias)", "Triaje (Urgencias)", "Signos Vitales"]) {
+  expect(within(panel).queryByText("Facturas Detalladas")).not.toBeInTheDocument();
+  for (const label of ["Admisiones (Urgencias)", "Triaje (Urgencias)", "Signos Vitales"]) {
     expect(within(panel).getByText(label)).toHaveAttribute("aria-disabled", "true");
   }
   expect(within(panel).queryByRole("link")).not.toBeInTheDocument();
   fireEvent.click(informes);
   expect(informes).toHaveAttribute("aria-expanded", "false");
+});
+
+it("muestra Facturas Detalladas como enlace solo con su permiso efectivo", () => {
+  auth.permissions = ["statistics.reports.detailed_invoices.view"];
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "Informes" }));
+  expect(screen.getByRole("link", { name: "Facturas Detalladas" })).toHaveAttribute("href", "/estadistica/informes/facturas-detalladas");
+  for (const label of ["Admisiones (Urgencias)", "Triaje (Urgencias)", "Signos Vitales"]) {
+    expect(screen.getByText(label)).toHaveAttribute("aria-disabled", "true");
+  }
 });
 
 it.each(["Gestión Administrativa", "Resoluciones", "Circulares"])("el grupo %s muestra «Sin opciones aún» al expandir", (name) => {

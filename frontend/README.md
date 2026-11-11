@@ -41,7 +41,7 @@ src/
 ├── routes/index.tsx         # Único registro; páginas con React.lazy
 ├── config/
 │   ├── env.ts               # Variables públicas, valores por defecto y validación
-│   └── navigation.ts        # Secciones INFORMES y CONFIGURACIONES, iconos y permisos
+│   └── navigation.ts        # Secciones ESTADÍSTICA y CONFIGURACIONES, grupos, iconos y permisos
 ├── lib/http/                # Cliente fetch y ApiError
 ├── features/auth/
 │   ├── api/auth-api.ts      # Login, refresh, logout y me mediante httpClient
@@ -69,12 +69,13 @@ src/
 Rutas actuales: `/` y `/configuracion/perfil` requieren sesión; `/signin` solo admite visitantes anónimos.
 `RequirePermission`, anidado bajo `ProtectedRoute`, exige el permiso efectivo de consulta de cada módulo:
 
-| Ruta / entrada del sidebar | Permiso requerido |
-| --- | --- |
-| `/` (Inicio / Dashboard), `/configuracion/perfil` (Perfil de usuario) | Cualquier usuario autenticado |
-| `/configuracion/usuarios` (Usuarios) | `identity.users.view` |
-| `/configuracion/permisos` (Permisos) | `identity.permissions.view` |
-| `/configuracion/roles` (Roles) | `identity.roles.view` |
+| Ruta / entrada del sidebar                                                   | Permiso requerido                           |
+| ---------------------------------------------------------------------------- | ------------------------------------------- |
+| `/` (Inicio / Dashboard), `/configuracion/perfil` (Perfil de usuario)        | Cualquier usuario autenticado               |
+| `/configuracion/usuarios` (Usuarios)                                         | `identity.users.view`                       |
+| `/configuracion/permisos` (Permisos)                                         | `identity.permissions.view`                 |
+| `/configuracion/roles` (Roles)                                               | `identity.roles.view`                       |
+| `/estadistica/informes/facturas-detalladas` (Informes → Facturas Detalladas) | `statistics.reports.detailed_invoices.view` |
 
 Los códigos se reutilizan desde `features/auth/permissions.ts`; ningún nombre de rol concede acceso por sí solo.
 Las páginas conservan sus cargas con `React.lazy`. El menú «Configuración de la cuenta» lleva a
@@ -82,9 +83,13 @@ Las páginas conservan sus cargas con `React.lazy`. El menú «Configuración de
 un destino de retorno. **Después de un login correcto siempre se abre `/`**, incluso si se intentó abrir otra
 ruta antes o existía un antiguo `location.state.from`. Una visita autenticada a `/signin` también vuelve a `/`.
 
-El sidebar conserva el diseño TailAdmin: **INFORMES** contiene Inicio y **CONFIGURACIONES** contiene
-Perfil de usuario, Usuarios, Permisos y Roles. Cada entrada puede declarar `requiredPermission`;
-el sidebar filtra con `useAuth().hasPermission` y oculta secciones sin entradas visibles.
+El sidebar conserva el diseño TailAdmin: la sección **ESTADÍSTICA** contiene Inicio y los grupos
+Informes, Gestión Administrativa, Resoluciones y Circulares. **Informes** contiene Facturas Detalladas
+(con ruta y permiso), Admisiones (Urgencias), Triaje (Urgencias) y Signos Vitales; estas últimas tres
+opciones aún no tienen ruta y permanecen deshabilitadas. Los otros grupos aún no tienen opciones.
+**CONFIGURACIONES** contiene Perfil de usuario, Usuarios, Permisos y Roles.
+Cada entrada puede declarar `requiredPermission`; el sidebar filtra con `useAuth().hasPermission`
+y oculta secciones sin entradas visibles. Facturas Detalladas se oculta sin su permiso efectivo.
 Contraído muestra iconos y puntos en los títulos. Perfil no requiere un permiso adicional.
 Solo `view` abre un módulo: tener `delete`, `create` o `update` no implica consulta ni ninguna otra acción.
 Cada página evalúa sus botones y catálogos auxiliares con `hasPermission` de forma independiente.
@@ -94,6 +99,27 @@ No hay registro público, recuperador de contraseña,
 «mantener la sesión iniciada», login social, perfiles, buscador ni notificaciones de demostración.
 Textos en español, sin i18n. Se usó `es.json` de TailAdmin donde hay traducción; la vista de acceso original
 contiene texto inglés sin claves equivalentes, traducido directamente aquí.
+
+## Facturas Detalladas
+
+En **ESTADÍSTICA → Informes → Facturas Detalladas**, selecciona las fechas inicial y final (ambas
+obligatorias e inclusivas), y presiona **Consultar**. La fecha inicial no puede ser posterior a la final.
+Sede y Empresa permiten selección múltiple, búsqueda, seleccionar/quitar todas, chips removibles y contador;
+sus opciones se cargan desde los catálogos de la API. Sin selección o con todas seleccionadas, el parámetro
+se omite: no se restringe ese filtro. Los ids restringidos se envían como parámetros repetidos.
+Cambiar los filtros no consulta automáticamente; **Limpiar** restablece los filtros y retira los resultados.
+
+La tabla ofrece las 71 columnas del contrato, 15 visibles inicialmente, selector de columnas (con al menos
+una visible), scroll horizontal y paginación del servidor de 10/25/50/100 filas. Presenta conteo, fechas
+`dd/MM/yyyy` sin conversión de zona horaria, números `es-CO`, importes sin decimales, estados de pago con
+indicadores semánticos y textos largos truncados con su contenido completo en `title`. Incluye estados de
+carga, vacío y error con reintento; los fallos de catálogos se pueden reintentar junto a cada selector.
+No incluye exportación ni filtros de punto de atención o tipo de documento.
+
+La ruta requiere sesión y `statistics.reports.detailed_invoices.view`, independientemente del rol.
+El backend mantiene la autorización; los administradores asignan el permiso manualmente, sin otorgarlo
+por defecto al rol ESTADISTICA. Las pruebas usan HTTP simulado: no acreditan conexión real con SQL Server
+ni verificación visual responsive o de temas en navegador.
 
 ## Variables públicas
 
