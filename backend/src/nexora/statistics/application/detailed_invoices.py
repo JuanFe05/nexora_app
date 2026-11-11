@@ -1,4 +1,4 @@
-"""Read-only detailed invoices use case."""
+"""Caso de uso de facturas detalladas de solo lectura."""
 
 from nexora.statistics.application.ports import CatalogOption, DetailedInvoicesSource, ReportPage
 from nexora.statistics.domain.filters import DetailedInvoicesFilter, InvalidReportFilter

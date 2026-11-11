@@ -1,4 +1,4 @@
-"""Authenticated detailed invoice reporting; never logs filters or patient data."""
+"""Informes detallados y contrastados de facturas; nunca registra filtros ni datos de pacientes."""
 
 from datetime import date
 from typing import Annotated, Any
@@ -38,7 +38,7 @@ async def sites(report: ReportDep) -> list[CatalogOption]:
 @statistics_router.get(
     "/filters/companies",
     summary="Empresas disponibles para el informe",
-    description="Catálogo provisional derivado de transacciones de los últimos 365 días.",
+    description="Catálogo de empresas (tbEmpresas).",
 )
 async def companies(report: ReportDep) -> list[CatalogOption]:
     return await report.companies()

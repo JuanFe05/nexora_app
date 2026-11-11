@@ -1,11 +1,11 @@
-"""Validated filters for the detailed invoices report."""
+"""Filtros validados para el informe detallado de facturas."""
 
 from dataclasses import dataclass
 from datetime import date
 
 
 class InvalidReportFilter(ValueError):
-    """The requested report filters are not valid."""
+    """Los filtros solicitados para el informe no son válidos."""
 
 
 @dataclass(frozen=True, slots=True)

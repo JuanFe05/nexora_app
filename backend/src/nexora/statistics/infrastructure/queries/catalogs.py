@@ -1,4 +1,4 @@
-"""Named, fixed SQL queries for report filter options."""
+"""Se han definido consultas SQL fijas para las opciones de filtro de los informes."""
 
 from nexora.integration_management.application.ports import ReadOnlyQuery
 
@@ -11,18 +11,13 @@ ORDER BY nombre
 """,
 )
 
-# PROVISIONAL: derived from proven report columns, NOT the real company catalog.
-# Replace with the real catalog table once verified against SQL Server. This limits
-# options to companies with transactions in the last 365 days; it is not exhaustive.
+# tbEmpresas is the target of the FK tbAfiliadosEmpresas.unco_emprsa. It is not filtered by
+# estdo so historical invoices of inactive companies can still be queried.
 COMPANIES = ReadOnlyQuery(
     name="statistics.detailed_invoices.companies",
     sql="""SET NOCOUNT ON;
-SELECT ae.unco_emprsa AS id, MAX(LTRIM(RTRIM(t.dscrpcn_emprsa_crta))) AS nombre
-FROM tbTransacciones t WITH (NOLOCK)
-JOIN tbAfiliadosEmpresas ae WITH (NOLOCK) ON ae.unco = t.Unco_afldo_emprsa
-WHERE ae.unco_emprsa IS NOT NULL
-  AND t.fcha_dcto >= DATEADD(DAY, -365, CAST(GETDATE() AS DATE))
-GROUP BY ae.unco_emprsa
+SELECT e.unco AS id, LTRIM(RTRIM(e.dscrpcn_crta)) AS nombre
+FROM tbEmpresas e WITH (NOLOCK)
 ORDER BY nombre
 """,
 )

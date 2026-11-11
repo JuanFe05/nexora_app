@@ -1,4 +1,4 @@
-"""Explicit report source contract, independent of transport and storage."""
+"""Contrato de origen del informe explícito, independiente del transporte y el almacenamiento."""
 
 from dataclasses import dataclass
 from typing import Any, Protocol

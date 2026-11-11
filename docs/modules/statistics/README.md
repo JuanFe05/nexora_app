@@ -16,7 +16,7 @@ almacena los datos consultados.
 | Endpoint (prefijo `/api/v1/statistics/reports/detailed-invoices`) | Uso |
 | --- | --- |
 | `GET /filters/sites` | Catalogo de sedes (`tbSedes`) |
-| `GET /filters/companies` | Catalogo de empresas (**provisional**, ver abajo) |
+| `GET /filters/companies` | Catalogo de empresas (`tbEmpresas`) |
 | `GET /` | Informe: `fecha_inicial`, `fecha_final` (obligatorias, inclusivas), `sedes`, `empresas` (opcionales y repetibles; omitidas = sin restriccion), `limit` (1-100), `offset`. Cabecera `X-Total-Count` |
 
 Errores: 422 filtros invalidos, 503 fuente externa no configurada, 502 fallo al consultar.
@@ -42,7 +42,5 @@ escribe en una variable de tabla (`@def`), nunca en tablas permanentes.
 Nada de lo siguiente se ha ejecutado contra el servidor:
 
 - Conexion, driver ODBC 18 y VPN.
-- El catalogo de empresas es una derivacion provisional (`tbTransacciones` + `tbAfiliadosEmpresas`,
-  ultimos 365 dias); reemplazarlo por la tabla real de empresas.
 - Que `tbTransaccionesServicios.unco` y `tbTransaccionesSuministros.unco` existan (desempate).
 - Rendimiento: cada pagina vuelve a ejecutar la consulta completa; valorar acotar el rango de fechas.
