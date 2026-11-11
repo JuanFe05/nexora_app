@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import type { DataTableColumn } from "@/components/shared/data-table";
+import type { ExportColumn } from "@/lib/table-export";
 import type { DetailedInvoice, InvoiceCell, InvoiceColumnKey } from "./types";
 
 type ColumnType = "text" | "date" | "money" | "number" | "longtext" | "status";
@@ -182,3 +183,15 @@ export const invoiceColumns: (DataTableColumn<DetailedInvoice> & {
         : undefined,
   cell: (row) => renderCell(row[id], type),
 }));
+
+export const invoiceExportColumns: ExportColumn[] = invoiceColumns.map(
+  ({ id, type }) => ({
+    id,
+    type:
+      type === "money" || type === "number"
+        ? "number"
+        : type === "date"
+          ? "date"
+          : "text",
+  }),
+);

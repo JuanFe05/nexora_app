@@ -41,6 +41,29 @@ export function ColumnVisibilityMenu({
             <Popover.Title className="px-3 py-1.5 text-xs font-medium text-gray-400 dark:text-gray-400">
               Columnas visibles
             </Popover.Title>
+            <div className="flex flex-col gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start"
+                disabled={value.length === columns.length}
+                onClick={() => onChange(columns.map((column) => column.id))}
+              >
+                Seleccionar todas las columnas
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start"
+                disabled={value.length <= 1}
+                onClick={() => onChange(columns.slice(0, 1).map((column) => column.id))}
+              >
+                Quitar todas las columnas
+              </Button>
+            </div>
+            <div className="-mx-3 my-1.5 h-px bg-gray-100 dark:bg-gray-700" />
             <fieldset className="flex flex-col gap-1">
               <legend className="sr-only">Seleccionar columnas</legend>
               {columns.map((column) => {

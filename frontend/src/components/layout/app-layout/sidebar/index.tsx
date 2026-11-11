@@ -33,7 +33,7 @@ export default function AppSidebar() {
                 </svg>
               )}
             </h2>
-            <ul className="flex flex-col gap-4">
+            <ul className="flex flex-col gap-2">
               {section.items.map((item) => {
                 const active = pathname === item.path;
                 return (

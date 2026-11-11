@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ColumnVisibilityMenu,
   DataTable,
+  ExportMenu,
   usePagedQuery,
   type PagedQueryParams,
 } from "@/components/shared/data-table";
@@ -17,11 +18,16 @@ import { Spinner } from "@/components/ui/spinner";
 import { ChartBarIcon } from "@/icons";
 import { ApiError } from "@/lib/http/api-error";
 import {
+  fetchAllDetailedInvoices,
   fetchCompanies,
   fetchDetailedInvoices,
   fetchSites,
 } from "../api/detailed-invoices-api";
-import { defaultVisibleColumns, invoiceColumns } from "../columns";
+import {
+  defaultVisibleColumns,
+  invoiceColumns,
+  invoiceExportColumns,
+} from "../columns";
 import type { CatalogOption, InvoiceFilters } from "../types";
 
 function useCatalog(
@@ -134,11 +140,20 @@ function InvoiceResults({
       onSearchChange={ignoreSearch}
       showSearch={false}
       headerAction={
-        <ColumnVisibilityMenu
-          columns={invoiceColumns}
-          value={visibleColumns}
-          onChange={onVisibleColumnsChange}
-        />
+        <>
+          <ColumnVisibilityMenu
+            columns={invoiceColumns}
+            value={visibleColumns}
+            onChange={onVisibleColumnsChange}
+          />
+          <ExportMenu
+            columns={invoiceExportColumns}
+            visibleIds={visibleColumns}
+            loadRows={(signal) => fetchAllDetailedInvoices(filters, signal)}
+            fileName={`facturas-detalladas_${filters.startDate}_${filters.endDate}`}
+            disabled={query.loading || Boolean(query.error) || query.total === 0}
+          />
+        </>
       }
       emptyState={{
         title: "No hay facturas para este período.",

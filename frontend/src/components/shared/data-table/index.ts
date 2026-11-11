@@ -1,5 +1,6 @@
 export { DataTable } from "./data-table";
 export { ColumnVisibilityMenu } from "./column-visibility-menu";
+export { ExportMenu } from "./export-menu";
 export type { VisibilityColumn } from "./column-visibility-menu";
 export { CardHeader } from "./card-header";
 export type { DataTableHeaderProps } from "./card-header";

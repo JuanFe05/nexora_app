@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { httpClient } from "@/lib/http/http-client";
 import {
+  fetchAllDetailedInvoices,
   fetchSites,
   fetchCompanies,
   fetchDetailedInvoices,
@@ -49,6 +50,32 @@ it("passes inclusive dates, repeated restricted ids, pagination, signal and read
   expect(params.get("limit")).toBe("25");
   expect(params.get("offset")).toBe("50");
   expect(options).toEqual({ signal });
+});
+it("exports every page of the applied query and refuses results above the limit", async () => {
+  const filters = { startDate: "2026-01-01", endDate: "2026-01-31", sites: [2], companies: [] };
+  const signal = new AbortController().signal;
+  const page = (n: number, total: number) => ({
+    data: Array.from({ length: n }, (_, i) => ({ nmro_dcto: i })),
+    headers: new Headers({ "X-Total-Count": String(total) }),
+  });
+  vi.mocked(httpClient.getWithMeta)
+    .mockResolvedValueOnce(page(100, 230))
+    .mockResolvedValueOnce(page(100, 230))
+    .mockResolvedValueOnce(page(30, 230));
+  expect(await fetchAllDetailedInvoices(filters, signal)).toHaveLength(230);
+  const calls = vi.mocked(httpClient.getWithMeta).mock.calls.map(
+    ([url]) => new URLSearchParams(url.split("?")[1]),
+  );
+  expect(calls.map((p) => [p.get("limit"), p.get("offset")])).toEqual([
+    ["100", "0"],
+    ["100", "100"],
+    ["100", "200"],
+  ]);
+  expect(calls[2].getAll("sedes")).toEqual(["2"]);
+  vi.mocked(httpClient.getWithMeta).mockClear();
+  vi.mocked(httpClient.getWithMeta).mockResolvedValueOnce(page(100, 20001));
+  await expect(fetchAllDetailedInvoices(filters, signal)).rejects.toThrow(/límite/);
+  expect(httpClient.getWithMeta).toHaveBeenCalledTimes(1);
 });
 it("omits unrestricted parameters entirely", async () => {
   vi.mocked(httpClient.getWithMeta).mockResolvedValue({

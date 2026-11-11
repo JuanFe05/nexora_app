@@ -85,3 +85,12 @@ it("truncates descriptions with full title, aligns numbers and leaves empty stat
 it("formats the SQL Server remission timestamp instead of hiding it", () => {
   expect(formatDate("2026-01-31 13:45:00")).toBe("31/01/2026");
 });
+
+it("exports with the original SQL aliases as headers, never the UI labels", async () => {
+  const { invoiceExportColumns, invoiceColumns } = await import("./columns");
+  expect(invoiceExportColumns.map((column) => column.id)).toEqual(
+    invoiceColumns.map((column) => column.id),
+  );
+  expect(invoiceExportColumns.map((column) => column.id)).toContain("emprs");
+  expect(invoiceExportColumns.some((column) => "label" in column)).toBe(false);
+});

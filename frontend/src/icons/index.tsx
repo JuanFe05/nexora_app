@@ -13,6 +13,7 @@ export { CheckIcon } from "./check";
 export { ChevronDownIcon } from "./chevron-down";
 export { CalendarIcon } from "./calendar";
 export { ChevronUpIcon } from "./chevron-up";
+export { ChevronRightIcon } from "./chevron-right";
 export { LoaderCircleIcon } from "./loader-circle";
 export { GearIcon } from "./gear";
 export { LogOutIcon } from "./log-out";

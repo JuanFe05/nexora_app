@@ -56,6 +56,34 @@ it("toggles available columns but keeps at least one visible and closes with Esc
   );
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });
+it("selects or clears every column while keeping the first one visible", async () => {
+  const user = userEvent.setup();
+  function Controlled() {
+    const [value, onChange] = useState(["b"]);
+    return (
+      <ColumnVisibilityMenu
+        columns={[
+          { id: "a", label: "Sede" },
+          { id: "b", label: "Empresa" },
+          { id: "c", label: "Valor" },
+        ]}
+        value={value}
+        onChange={onChange}
+      />
+    );
+  }
+  render(<Controlled />);
+  await user.click(screen.getByRole("button", { name: "Columnas visibles (1/3)" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Seleccionar todas las columnas" }),
+  );
+  expect(screen.getByRole("checkbox", { name: "Valor" })).toBeChecked();
+  expect(screen.getByRole("button", { name: "Seleccionar todas las columnas" })).toBeDisabled();
+  await user.click(screen.getByRole("button", { name: "Quitar todas las columnas" }));
+  expect(screen.getByRole("checkbox", { name: "Sede" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Empresa" })).not.toBeChecked();
+  expect(screen.getByRole("button", { name: "Quitar todas las columnas" })).toBeDisabled();
+});
 it("can opt out of search while preserving the previous default search and pagination behavior", () => {
   const onSearchChange = vi.fn();
   const props = {
