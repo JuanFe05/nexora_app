@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Combobox,
   ComboboxContent,
@@ -40,6 +41,8 @@ export type MultiSelectProps = {
 };
 
 const triggerClassName = "cursor-pointer py-1 ps-3 pe-3.5";
+const itemClassName =
+  "gap-3 pe-3 [&_[data-slot=select-item-indicator]]:hidden [&_[data-slot=combobox-item-indicator]]:hidden";
 const popupClassName = "custom-scrollbar max-w-[min(90vw,28rem)]";
 
 /**
@@ -65,6 +68,19 @@ export function MultiSelect({
     options.length > 0 &&
     options.every((option) => value.includes(option.value));
   const labels = new Map(options.map((option) => [option.value, option.label]));
+  function optionContent(option: MultiSelectOption): ReactNode {
+    return (
+      <>
+        <Checkbox
+          aria-hidden="true"
+          tabIndex={-1}
+          checked={value.includes(option.value)}
+          className="pointer-events-none"
+        />
+        <span className="truncate">{option.label}</span>
+      </>
+    );
+  }
   const nameOf = (item: MultiSelectValue) => labels.get(item) ?? String(item);
   const ariaLabel = `${label}: ${value.length} seleccionadas`;
 
@@ -171,8 +187,9 @@ export function MultiSelect({
                 <ComboboxItem
                   key={`${typeof option.value}-${option.value}`}
                   value={option}
+                  className={itemClassName}
                 >
-                  {option.label}
+                  {optionContent(option)}
                 </ComboboxItem>
               )}
             </ComboboxList>
@@ -200,8 +217,9 @@ export function MultiSelect({
               <SelectItem
                 key={`${typeof option.value}-${option.value}`}
                 value={option.value}
+                className={itemClassName}
               >
-                {option.label}
+                {optionContent(option)}
               </SelectItem>
             ))}
           </SelectContent>
