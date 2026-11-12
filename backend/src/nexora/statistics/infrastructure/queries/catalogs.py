@@ -11,6 +11,15 @@ ORDER BY nombre
 """,
 )
 
+PRODUCT_LINES = ReadOnlyQuery(
+    name="statistics.product_lines",
+    sql="""SET NOCOUNT ON;
+SELECT lp.unco AS id, LTRIM(RTRIM(lp.dscrpcn)) AS nombre
+FROM tbLineasProductos lp WITH (NOLOCK)
+ORDER BY nombre
+""",
+)
+
 # tbEmpresas is the target of the FK tbAfiliadosEmpresas.unco_emprsa. It is not filtered by
 # estdo so historical invoices of inactive companies can still be queried.
 COMPANIES = ReadOnlyQuery(

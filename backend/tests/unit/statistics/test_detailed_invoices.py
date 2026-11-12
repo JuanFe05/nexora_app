@@ -95,6 +95,8 @@ async def test_page_parameters_and_total(
                 "fecha_final": END,
                 "filtrar_sedes": int(bool(sites)),
                 "filtrar_empresas": int(bool(companies)),
+                "filtrar_lineas": 0,
+                "lineas": [-1],
                 "sedes": list(dict.fromkeys(sites)) or [-1],
                 "empresas": list(dict.fromkeys(companies)) or [-1],
                 "limit": 2,
@@ -167,12 +169,14 @@ def test_sql_bindings_original_markers_and_read_only_statements() -> None:
         "fecha_final",
         "filtrar_sedes",
         "filtrar_empresas",
+        "filtrar_lineas",
+        "lineas",
         "sedes",
         "empresas",
         "offset",
         "limit",
     }
-    assert DETAILED_INVOICES_QUERY.list_params == frozenset({"sedes", "empresas"})
+    assert DETAILED_INVOICES_QUERY.list_params == frozenset({"sedes", "empresas", "lineas"})
     for marker in ("OUTER APPLY", "WITH (NOLOCK)", "cte_doc_x", "COUNT(*) OVER ()"):
         assert marker in DETAILED_INVOICES_SQL
     sql = re.sub(r"--[^\n]*", "", DETAILED_INVOICES_SQL)

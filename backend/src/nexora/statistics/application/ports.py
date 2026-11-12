@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from nexora.statistics.domain.filters import DetailedInvoicesFilter
+from nexora.statistics.domain.filters import ReportFilter
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,13 +19,18 @@ class ReportPage:
     total: int
 
 
-class DetailedInvoicesSource(Protocol):
+class ReportSource(Protocol):
     async def sites(self) -> list[CatalogOption]: ...
 
     async def companies(self) -> list[CatalogOption]: ...
 
-    async def page(self, filter: DetailedInvoicesFilter, limit: int, offset: int) -> ReportPage: ...
+    async def product_lines(self) -> list[CatalogOption]: ...
 
-    def stream(self, filter: DetailedInvoicesFilter) -> AsyncIterator[list[dict[str, Any]]]:
+    async def page(self, filter: ReportFilter, limit: int, offset: int) -> ReportPage: ...
+
+    def stream(self, filter: ReportFilter) -> AsyncIterator[list[dict[str, Any]]]:
         """Todas las filas del filtro, por bloques y en el mismo orden que la tabla."""
         ...
+
+
+DetailedInvoicesSource = ReportSource

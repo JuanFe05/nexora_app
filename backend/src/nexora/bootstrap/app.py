@@ -30,7 +30,7 @@ from nexora.integration_management.application.ports import (
     ExternalSourceUnavailable,
 )
 from nexora.statistics.domain.filters import InvalidReportFilter
-from nexora.statistics.presentation.http.v1.router import statistics_router
+from nexora.statistics.presentation.http.v1.router import statistics_router, vital_signs_router
 
 #: Mensaje unico para cualquier fallo de credenciales: no revela si el usuario existe.
 GENERIC_CREDENTIALS_MESSAGE = "Credenciales invalidas"
@@ -141,6 +141,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     _register_error_handlers(app)
     app.include_router(identity_access_router, prefix=settings.api_prefix)
     app.include_router(statistics_router, prefix=settings.api_prefix)
+    app.include_router(vital_signs_router, prefix=settings.api_prefix)
 
     @app.get("/health", tags=["operacion"], summary="Estado del servicio")
     async def health() -> dict[str, str]:

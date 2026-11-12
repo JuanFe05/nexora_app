@@ -63,4 +63,5 @@ PERMISSION_CATALOG: tuple[PermissionSpec, ...] = (
     _identity("permissions.update", "Editar permisos"),
     _identity("permissions.delete", "Eliminar permisos"),
     _statistics("reports.detailed_invoices.view", "Consultar informe Facturas Detalladas"),
+    _statistics("reports.vital_signs.view", "Consultar informe Signos Vitales"),
 )

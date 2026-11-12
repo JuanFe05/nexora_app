@@ -1,14 +1,13 @@
 """Consulta Facturas Detalladas (derivada de FacturasDetalladas_V11.sql).
 
-Cambios respecto al original, todos verificables por diff: fechas, sedes, empresas, offset y
+Cambios respecto al original, todos verificables por diff: fechas, sedes, empresas, lineas, offset y
 limit llegan como parametros enlazados; `SET NOCOUNT ON`; `unco_dtlle` (solo para desempatar el
 orden) y `total_registros` (COUNT(*) OVER ()); paginacion OFFSET/FETCH. Calculos, CTE, OUTER APPLY
 y reglas de negocio se conservan sin cambios.
 """
 
-import re
-
 from nexora.integration_management.application.ports import ReadOnlyQuery
+from nexora.statistics.infrastructure.queries.export_sql import derive_export_sql
 
 DETAILED_INVOICES_SQL = r"""
 SET NOCOUNT ON;
@@ -387,6 +386,7 @@ LEFT JOIN tbDiagnosticos dg3 WITH (NOLOCK)
 WHERE REPLACE(REPLACE(REPLACE(ISNULL(d.cdgo_raw, ''), CHAR(9), ''), CHAR(13), ''), CHAR(10), '') NOT IN ('2', '3')
   AND (:filtrar_sedes = 0 OR s.unco IN :sedes)
   AND (:filtrar_empresas = 0 OR ae.unco_emprsa IN :empresas)
+  AND (:filtrar_lineas = 0 OR lp.unco IN :lineas)
 ORDER BY doc.fcha_dcto, doc.prfjo_dcto, doc.cnsctvo_dcto, doc.tpo, doc.unco_trnsccn, d.tpo_dtlle, d.unco_dtlle
 OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
 OPTION (RECOMPILE);
@@ -395,25 +395,16 @@ OPTION (RECOMPILE);
 # Exportacion: la misma consulta y el mismo orden, sin paginacion y sin el COUNT(*) OVER () (que
 # obliga a materializar todo el conjunto solo para contar). Se deriva del SQL paginado para que
 # ambas consultas no puedan divergir.
-_PAGING = "OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY\n"
-_TOTAL_COLUMN = re.compile(r",\s*COUNT\(\*\) OVER \(\)\s+AS total_registros")
-_export_sql = _TOTAL_COLUMN.sub("", DETAILED_INVOICES_SQL).replace(_PAGING, "")
-if (
-    _export_sql == DETAILED_INVOICES_SQL
-    or "OFFSET" in _export_sql
-    or "total_registros" in _export_sql
-):
-    raise RuntimeError("No se pudo derivar la consulta de exportacion de Facturas Detalladas")
-DETAILED_INVOICES_EXPORT_SQL = _export_sql
+DETAILED_INVOICES_EXPORT_SQL = derive_export_sql(DETAILED_INVOICES_SQL, "Facturas Detalladas")
 
 DETAILED_INVOICES_QUERY = ReadOnlyQuery(
     name="statistics.detailed_invoices",
     sql=DETAILED_INVOICES_SQL,
-    list_params=frozenset({"sedes", "empresas"}),
+    list_params=frozenset({"sedes", "empresas", "lineas"}),
 )
 
 DETAILED_INVOICES_EXPORT_QUERY = ReadOnlyQuery(
     name="statistics.detailed_invoices_export",
     sql=DETAILED_INVOICES_EXPORT_SQL,
-    list_params=frozenset({"sedes", "empresas"}),
+    list_params=frozenset({"sedes", "empresas", "lineas"}),
 )
