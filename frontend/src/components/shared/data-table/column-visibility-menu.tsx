@@ -24,7 +24,7 @@ export function ColumnVisibilityMenu({
       <Popover.Trigger
         render={<Button type="button" variant="outline" className="group/columns" />}
       >
-        Columnas visibles ({value.length}/{columns.length})
+        Columnas visibles
         <ChevronDownIcon
           aria-hidden="true"
           className="size-4 text-gray-500 transition-transform duration-200 group-data-popup-open/columns:rotate-180 dark:text-gray-400"

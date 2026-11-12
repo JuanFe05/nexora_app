@@ -127,6 +127,16 @@ it("exposes disabled, loading, error and retry states", () => {
   expect(screen.getByRole("alert")).toHaveTextContent(
     "No se pudieron cargar las sedes.",
   );
+  const retryButton = screen.getByRole("button", { name: "Reintentar Sede" });
+  expect(retryButton).toHaveAttribute("title", "Reintentar Sede");
+  expect(retryButton.textContent).toBe("");
+  expect(screen.queryByText("Reintentar")).not.toBeInTheDocument();
+  expect(retryButton.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  expect(screen.getByRole("alert")).toHaveClass("flex", "justify-between", "items-center");
+  fireEvent.click(retryButton);
+  expect(retry).toHaveBeenCalledOnce();
+  rerender(<MultiSelect {...props} error="Error" onRetry={retry} loading />);
+  expect(screen.getByRole("button", { name: "Reintentar Sede" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Reintentar Sede" }));
   expect(retry).toHaveBeenCalledOnce();
   rerender(<MultiSelect {...props} />);

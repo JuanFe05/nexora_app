@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import type { DataTableColumn } from "@/components/shared/data-table";
 import type { ExportColumn } from "@/lib/table-export";
 import type { DetailedInvoice, InvoiceCell, InvoiceColumnKey } from "./types";
@@ -141,20 +140,7 @@ export const defaultVisibleColumns: InvoiceColumnKey[] = [
 function renderCell(value: InvoiceCell | undefined, type: ColumnType) {
   if (type === "status") {
     if (isEmpty(value)) return null;
-    const status = String(value);
-    const variant =
-      status === "PAGADO"
-        ? "success"
-        : status.startsWith("PAGO PARCIAL")
-          ? "warning"
-          : status.startsWith("SIN PAGO") || status === "SIN FORMA DE PAGO"
-            ? "error"
-            : "neutral";
-    return (
-      <Badge variant={variant} className="max-w-72 whitespace-normal">
-        {status}
-      </Badge>
-    );
+    return <span className="block max-w-72 whitespace-normal">{String(value)}</span>;
   }
   if (type === "date") return formatDate(value);
   if (type === "money") return formatMoney(value);

@@ -110,13 +110,7 @@ function InvoiceResults({
     <DataTable
       compact
       title="Resultados"
-      description={
-        query.loading
-          ? "Consultando registros…"
-          : query.error
-            ? undefined
-            : `${query.total} registros encontrados`
-      }
+      description={query.loading ? "Consultando registros…" : undefined}
       columns={invoiceColumns.filter((column) =>
         visibleColumns.includes(column.id),
       )}

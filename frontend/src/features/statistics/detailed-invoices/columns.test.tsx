@@ -45,17 +45,19 @@ it("formats calendar dates without timezone conversion and numeric strings witho
   expect(formatNumber("")).toBe("—");
 });
 it.each([
-  ["PAGADO", "success"],
-  ["PAGO PARCIAL", "warning"],
-  ["PAGO PARCIAL CON DESCUENTO", "warning"],
-  ["SIN PAGO (SOLO DESCUENTO/CREDITO)", "error"],
-  ["SIN FORMA DE PAGO", "error"],
-])("renders %s with semantic badge %s", (status, variant) => {
+  "PAGADO",
+  "PAGO PARCIAL",
+  "PAGO PARCIAL CON DESCUENTO",
+  "SIN PAGO (SOLO DESCUENTO/CREDITO)",
+  "SIN FORMA DE PAGO",
+])("renders %s as plain text without a badge", (status) => {
   const column = invoiceColumns.find(
     (column) => column.id === "estdo_pgo_pcnte",
   )!;
   render(<>{column.cell({ estdo_pgo_pcnte: status } as DetailedInvoice)}</>);
-  expect(screen.getByText(status)).toHaveAttribute("data-variant", variant);
+  expect(screen.getByText(status)).toBeVisible();
+  expect(screen.getByText(status)).not.toHaveAttribute("data-variant");
+  expect(screen.getByText(status).closest("[data-slot=badge]")).toBeNull();
 });
 it("truncates descriptions with full title, aligns numbers and leaves empty statuses blank", () => {
   const description = invoiceColumns.find(

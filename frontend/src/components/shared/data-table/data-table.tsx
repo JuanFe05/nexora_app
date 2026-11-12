@@ -3,6 +3,7 @@ import type { Key, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/utils";
+import { RefreshCwIcon } from "@/icons";
 import { CardHeader, type DataTableHeaderProps } from "./card-header";
 import { CardFooter } from "./card-footer";
 import { EmptyState, type EmptyStateText } from "./empty-state";
@@ -45,7 +46,7 @@ export function DataTable<TRow>({ columns, rows, loading, error, total, page, on
           </TableHeader>
           <TableBody className="divide-y divide-gray-100 dark:divide-gray-800">
             {loading ? <TableRow><TableCell colSpan={colSpan} className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400"><span className="animate-pulse">Cargando registros…</span></TableCell></TableRow>
-              : error ? <TableRow><TableCell colSpan={colSpan} className="px-6 py-12 text-center"><div role="alert" className="mb-3 text-sm text-red-500 dark:text-red-400">{error.message}</div><Button type="button" variant="outline" onClick={error.onRetry}>Reintentar</Button></TableCell></TableRow>
+              : error ? <TableRow><TableCell colSpan={colSpan} className="px-6 py-12 text-center"><div role="alert" className="flex items-center justify-between gap-3 text-sm text-red-500 dark:text-red-400"><span>{error.message}</span><Button type="button" variant="outline" size="icon-sm" aria-label="Reintentar" title="Reintentar" onClick={error.onRetry}><RefreshCwIcon aria-hidden="true" className="size-4" /></Button></div></TableCell></TableRow>
               : rows.length === 0 ? <EmptyState colSpan={colSpan} {...(header.search.trim() ? { title: "No se encontraron resultados", description: "Prueba con otra búsqueda." } : emptyState)} />
               : rows.map(row => <TableRow key={getRowId(row)}>
                 {columns.map(column => <TableCell key={column.id} className={cn("px-5 sm:px-6 text-gray-700 dark:text-gray-300", compact ? "py-3 text-xs" : "py-4 text-sm", column.className)}>{column.cell(row)}</TableCell>)}

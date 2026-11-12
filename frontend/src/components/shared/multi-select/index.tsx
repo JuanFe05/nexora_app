@@ -19,7 +19,7 @@ import {
   selectTriggerChevronClassName,
   selectTriggerClassName,
 } from "@/components/ui/select";
-import { ChevronDownIcon, XIcon } from "@/icons";
+import { ChevronDownIcon, RefreshCwIcon, XIcon } from "@/icons";
 import { cn } from "@/utils";
 
 export type MultiSelectValue = string | number;
@@ -208,18 +208,19 @@ export function MultiSelect({
         </Select>
       )}
       {error && (
-        <div role="alert" className="text-sm text-red-500 dark:text-red-400">
-          {error}
+        <div role="alert" className="flex items-center justify-between gap-3 text-sm text-red-500 dark:text-red-400">
+          <span>{error}</span>
           {onRetry && (
             <Button
               type="button"
               variant="outline"
-              className="mt-2"
+              size="icon-sm"
               disabled={disabled || loading}
               aria-label={`Reintentar ${label}`}
+              title={`Reintentar ${label}`}
               onClick={onRetry}
             >
-              Reintentar
+              <RefreshCwIcon aria-hidden="true" className="size-4" />
             </Button>
           )}
         </div>

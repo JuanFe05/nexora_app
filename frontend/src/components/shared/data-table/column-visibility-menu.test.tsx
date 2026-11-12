@@ -30,7 +30,7 @@ it("toggles available columns but keeps at least one visible and closes with Esc
   }
   render(<Controlled />);
   await user.click(
-    screen.getByRole("button", { name: "Columnas visibles (2/2)" }),
+    screen.getByRole("button", { name: "Columnas visibles" }),
   );
   fireEvent.click(screen.getByRole("checkbox", { name: "Empresa" }));
   expect(screen.getByRole("checkbox", { name: "Empresa" })).not.toBeChecked();
@@ -51,7 +51,7 @@ it("toggles available columns but keeps at least one visible and closes with Esc
   await user.keyboard("{Escape}");
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: "Columnas visibles (2/2)" }),
+      screen.getByRole("button", { name: "Columnas visibles" }),
     ).toHaveFocus(),
   );
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -73,7 +73,7 @@ it("selects or clears every column while keeping the first one visible", async (
     );
   }
   render(<Controlled />);
-  await user.click(screen.getByRole("button", { name: "Columnas visibles (1/3)" }));
+  await user.click(screen.getByRole("button", { name: "Columnas visibles" }));
   await user.click(
     await screen.findByRole("button", { name: "Seleccionar todas las columnas" }),
   );

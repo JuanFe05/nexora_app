@@ -15,6 +15,7 @@ export { CalendarIcon } from "./calendar";
 export { ChevronUpIcon } from "./chevron-up";
 export { ChevronRightIcon } from "./chevron-right";
 export { LoaderCircleIcon } from "./loader-circle";
+export { RefreshCwIcon } from "./refresh-cw";
 export { GearIcon } from "./gear";
 export { LogOutIcon } from "./log-out";
 export { UserIcon } from "./user";

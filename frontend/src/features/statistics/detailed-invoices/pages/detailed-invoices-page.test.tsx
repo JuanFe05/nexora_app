@@ -86,8 +86,10 @@ it("queries only applied filters, omits none/all selections, reports count/statu
   await waitFor(() => expect(httpClient.get).toHaveBeenCalledTimes(2));
   dates();
   await user.click(screen.getByRole("button", { name: "Consultar" }));
-  expect(await screen.findByText("101 registros encontrados")).toBeVisible();
-  expect(screen.getByText("PAGADO")).toHaveAttribute("data-variant", "success");
+  expect(await screen.findByText("PAGADO")).toBeVisible();
+  expect(screen.queryByText(/registros encontrados/)).not.toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("Mostrando 1 a 10 de 101 registros");
+  expect(screen.getByText("PAGADO")).not.toHaveAttribute("data-variant");
   expect(screen.getByText("02/01/2026")).toBeVisible();
   expect(screen.getByText("1.200")).toBeVisible();
   expect(lastParams().get("fecha_inicial")).toBe("2026-01-01");
@@ -146,7 +148,7 @@ it("sends restricted ids as repeated parameters and uses server pagination witho
     );
   }
   await user.click(screen.getByRole("button", { name: "Consultar" }));
-  await screen.findByText("101 registros encontrados");
+  await screen.findByText("PAGADO");
   expect(lastParams().getAll("sedes")).toEqual(["11", "22"]);
   expect(lastParams().getAll("empresas")).toEqual(["11", "22"]);
   dates("2026-01-20", "2026-01-31");
@@ -185,7 +187,7 @@ it.each([502, 503])(
       screen.queryByText(/private infrastructure/),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
-    expect(await screen.findByText("101 registros encontrados")).toBeVisible();
+    expect(await screen.findByText("PAGADO")).toBeVisible();
     expect(httpClient.getWithMeta).toHaveBeenCalledTimes(2);
   },
 );
@@ -232,6 +234,8 @@ it("retries catalog failures inline and shows an empty successful result", async
   await filterReady(/Sede/);
   dates("2026-01-01", "2026-01-01");
   fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
-  expect(await screen.findByText("0 registros encontrados")).toBeVisible();
+  expect(await screen.findByText("No hay facturas para este período.")).toBeVisible();
+  expect(screen.queryByText(/registros encontrados/)).not.toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("Mostrando 0 a 0 de 0 registros");
   expect(screen.getByText("No hay facturas para este período.")).toBeVisible();
 });

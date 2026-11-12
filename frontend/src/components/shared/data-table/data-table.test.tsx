@@ -72,7 +72,13 @@ describe("DataTable", () => {
     const onRetry = vi.fn();
     render(<DataTable {...props({ rows: [], error: { message: "No se pudo cargar", onRetry } })} />);
     expect(screen.getByRole("alert")).toHaveTextContent("No se pudo cargar");
-    fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+    const retry = screen.getByRole("button", { name: "Reintentar" });
+    expect(retry).toHaveAttribute("title", "Reintentar");
+    expect(retry.textContent).toBe("");
+    expect(screen.queryByText("Reintentar")).not.toBeInTheDocument();
+    expect(retry.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByRole("alert")).toHaveClass("flex", "justify-between", "items-center");
+    fireEvent.click(retry);
     expect(onRetry).toHaveBeenCalledOnce();
     expect(screen.queryByText("No hay registros")).not.toBeInTheDocument();
   });
