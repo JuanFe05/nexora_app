@@ -436,3 +436,17 @@ describe("HTTP client", () => {
     }
   });
 });
+
+it("returns the raw file for blob requests and still reads JSON errors", async () => {
+  const fetchImpl = vi
+    .fn()
+    .mockResolvedValueOnce(new Response("a;b", { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Columna inválida." }), { status: 422 }));
+  const client = createHttpClient({ baseUrl: "http://api.test", fetchImpl });
+
+  const file = await client.getBlob("/x");
+
+  expect(await file.text()).toBe("a;b");
+  expect(fetchImpl.mock.calls[0][1].headers.get("Accept")).toBe("*/*");
+  await expect(client.getBlob("/x")).rejects.toMatchObject({ status: 422, message: "Columna inválida." });
+});

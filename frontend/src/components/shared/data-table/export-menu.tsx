@@ -13,32 +13,27 @@ import {
 } from "@/components/ui/dropdown";
 import { Spinner } from "@/components/ui/spinner";
 import { ChevronDownIcon } from "@/icons";
-import {
-  ExportError,
-  exportRows,
-  type ExportColumn,
-  type ExportFormat,
-  type ExportRow,
-} from "@/lib/table-export";
+import { ExportError, type ExportColumn, type ExportFormat } from "@/lib/table-export";
 
 const formats: { format: ExportFormat; label: string }[] = [
   { format: "csv", label: "CSV" },
   { format: "xlsx", label: "Excel (.xlsx)" },
-  { format: "both", label: "CSV y Excel" },
 ];
 
-/** Optional composition for DataTable.headerAction: exports every row of the query, not just the visible page. */
+/** Optional composition for DataTable.headerAction: exports every row of the query, not just the visible page, in exactly one format per operation. */
 export function ExportMenu({
   columns,
   visibleIds,
-  loadRows,
-  fileName,
+  exportFile,
   disabled = false,
 }: {
   columns: readonly ExportColumn[];
   visibleIds: readonly string[];
-  loadRows: (signal: AbortSignal) => Promise<readonly ExportRow[]>;
-  fileName: string;
+  exportFile: (
+    columns: readonly ExportColumn[],
+    format: ExportFormat,
+    signal: AbortSignal,
+  ) => Promise<void>;
   disabled?: boolean;
 }) {
   const [exporting, setExporting] = useState(false);
@@ -54,9 +49,7 @@ export function ExportMenu({
     setError(null);
     setExporting(true);
     try {
-      const rows = await loadRows(abort.signal);
-      if (abort.signal.aborted) return;
-      await exportRows({ columns: scope, rows, format, fileName });
+      await exportFile(scope, format, abort.signal);
     } catch (failure) {
       if (abort.signal.aborted) return;
       setError(

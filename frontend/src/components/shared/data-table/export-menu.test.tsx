@@ -3,13 +3,9 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { ExportError, exportRows, type ExportColumn } from "@/lib/table-export";
+import { ExportError, type ExportColumn } from "@/lib/table-export";
 import { ExportMenu } from "./export-menu";
 
-vi.mock("@/lib/table-export", async (original) => ({
-  ...(await original<typeof import("@/lib/table-export")>()),
-  exportRows: vi.fn().mockResolvedValue(undefined),
-}));
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -27,34 +23,29 @@ async function choose(scope: RegExp, format: string) {
   fireEvent.click(await screen.findByRole("menuitem", { name: format }));
 }
 
-it("exports the visible or all columns in the chosen format with every loaded row", async () => {
-  const loadRows = vi.fn().mockResolvedValue([{ a: "Norte" }]);
-  render(
-    <ExportMenu columns={columns} visibleIds={["c", "a"]} loadRows={loadRows} fileName="informe" />,
-  );
-  await choose(/Columnas visibles \(2\)/, "CSV y Excel");
-  await waitFor(() => expect(exportRows).toHaveBeenCalledTimes(1));
-  expect(exportRows).toHaveBeenCalledWith({
-    columns: [columns[0], columns[2]],
-    rows: [{ a: "Norte" }],
-    format: "both",
-    fileName: "informe",
-  });
+it("offers exactly one format per operation and exports the chosen columns in it", async () => {
+  const exportFile = vi.fn().mockResolvedValue(undefined);
+  render(<ExportMenu columns={columns} visibleIds={["c", "a"]} exportFile={exportFile} />);
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  await user.click(screen.getByRole("button", { name: "Exportar" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /Columnas visibles \(2\)/ }));
+  expect(await screen.findAllByRole("menuitem", { name: /CSV|Excel/ })).toHaveLength(2);
+  expect(screen.queryByRole("menuitem", { name: /CSV y Excel/ })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("menuitem", { name: "CSV" }));
+  await waitFor(() => expect(exportFile).toHaveBeenCalledTimes(1));
+  expect(exportFile).toHaveBeenCalledWith([columns[0], columns[2]], "csv", expect.any(AbortSignal));
   await choose(/Todas las columnas \(3\)/, "Excel (.xlsx)");
-  await waitFor(() => expect(exportRows).toHaveBeenCalledTimes(2));
-  expect(vi.mocked(exportRows).mock.calls[1][0]).toMatchObject({
-    columns,
-    format: "xlsx",
-  });
+  await waitFor(() => expect(exportFile).toHaveBeenCalledTimes(2));
+  expect(exportFile).toHaveBeenLastCalledWith(columns, "xlsx", expect.any(AbortSignal));
 });
 
 it("shows safe errors, keeps the button usable and supports being disabled", async () => {
-  const loadRows = vi
+  const exportFile = vi
     .fn()
     .mockRejectedValueOnce(new ExportError("Demasiados registros."))
     .mockRejectedValueOnce(new Error("internal detail"));
   const { rerender } = render(
-    <ExportMenu columns={columns} visibleIds={["a"]} loadRows={loadRows} fileName="x" />,
+    <ExportMenu columns={columns} visibleIds={["a"]} exportFile={exportFile} />,
   );
   await choose(/Todas las columnas/, "CSV");
   expect(await screen.findByRole("alert")).toHaveTextContent("Demasiados registros.");
@@ -65,9 +56,8 @@ it("shows safe errors, keeps the button usable and supports being disabled", asy
     ),
   );
   expect(screen.queryByText(/internal detail/)).not.toBeInTheDocument();
-  expect(exportRows).not.toHaveBeenCalled();
   rerender(
-    <ExportMenu columns={columns} visibleIds={["a"]} loadRows={loadRows} fileName="x" disabled />,
+    <ExportMenu columns={columns} visibleIds={["a"]} exportFile={exportFile} disabled />,
   );
   expect(screen.getByRole("button", { name: "Exportar" })).toBeDisabled();
 });

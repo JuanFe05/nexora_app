@@ -1,11 +1,9 @@
 import { pagedResult } from "@/components/shared/data-table";
 import { httpClient } from "@/lib/http/http-client";
-import { ExportError } from "@/lib/table-export";
+import type { ExportColumn, ExportFormat } from "@/lib/table-export";
 import type { CatalogOption, DetailedInvoice, InvoiceFilters } from "../types";
 
 const reportPath = "/statistics/reports/detailed-invoices";
-const EXPORT_PAGE_SIZE = 100;
-export const EXPORT_MAX_ROWS = 20000;
 export function fetchSites(signal?: AbortSignal) {
   return httpClient.get<CatalogOption[]>(`${reportPath}/filters/sites`, {
     signal,
@@ -39,23 +37,23 @@ export async function fetchDetailedInvoices(
   );
 }
 
-/** Reads every page of the applied query (the API caps a page at 100 rows) to export the full result. */
-export async function fetchAllDetailedInvoices(
+/**
+ * Downloads every row of the applied query as one file. The backend streams it in blocks, so the
+ * table's 100-row page limit and any row cap do not apply.
+ */
+export function downloadDetailedInvoices(
   filters: InvoiceFilters,
+  columns: readonly ExportColumn[],
+  format: ExportFormat,
   signal: AbortSignal,
 ) {
-  const rows: DetailedInvoice[] = [];
-  for (let offset = 0; ; offset += EXPORT_PAGE_SIZE) {
-    const page = await fetchDetailedInvoices(filters, {
-      limit: EXPORT_PAGE_SIZE,
-      offset,
-      signal,
-    });
-    if (page.total > EXPORT_MAX_ROWS)
-      throw new ExportError(
-        `El resultado supera el límite de ${EXPORT_MAX_ROWS.toLocaleString("es-CO")} registros para exportar. Acota el período o los filtros.`,
-      );
-    rows.push(...page.items);
-    if (!page.items.length || rows.length >= page.total) return rows;
-  }
+  const params = new URLSearchParams({
+    fecha_inicial: filters.startDate,
+    fecha_final: filters.endDate,
+    formato: format,
+  });
+  for (const id of filters.sites) params.append("sedes", String(id));
+  for (const id of filters.companies) params.append("empresas", String(id));
+  for (const column of columns) params.append("columnas", `${column.id}:${column.type}`);
+  return httpClient.getBlob(`${reportPath}/export?${params}`, { signal });
 }

@@ -17,8 +17,9 @@ import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { ChartBarIcon } from "@/icons";
 import { ApiError } from "@/lib/http/api-error";
+import { downloadBlob } from "@/lib/table-export";
 import {
-  fetchAllDetailedInvoices,
+  downloadDetailedInvoices,
   fetchCompanies,
   fetchDetailedInvoices,
   fetchSites,
@@ -149,8 +150,14 @@ function InvoiceResults({
           <ExportMenu
             columns={invoiceExportColumns}
             visibleIds={visibleColumns}
-            loadRows={(signal) => fetchAllDetailedInvoices(filters, signal)}
-            fileName={`facturas-detalladas_${filters.startDate}_${filters.endDate}`}
+            exportFile={async (columns, format, signal) => {
+              const file = await downloadDetailedInvoices(filters, columns, format, signal);
+              if (signal.aborted) return;
+              downloadBlob(
+                file,
+                `facturas-detalladas_${filters.startDate}_${filters.endDate}.${format}`,
+              );
+            }}
             disabled={query.loading || Boolean(query.error) || query.total === 0}
           />
         </>

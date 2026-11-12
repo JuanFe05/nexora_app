@@ -6,6 +6,8 @@ const NETWORK_ERROR = "No se pudo conectar con el servidor.";
 
 export type HttpOptions = Omit<RequestInit, "method" | "body" | "credentials"> & {
   body?: unknown;
+  /** `blob` returns the raw file (downloads); errors are still read as JSON. */
+  responseType?: "json" | "blob";
 };
 
 export type HttpResult<T> = { data: T; headers: Headers };
@@ -48,9 +50,9 @@ export function createHttpClient({ baseUrl, getAccessToken, refreshSession, onFo
   async function request<T>(method: string, path: string, options: HttpOptions = {}, retried = false): Promise<HttpResult<T>> {
     const isAuthEndpoint = /^auth(?:\/|\?|$)/.test(path.replace(/^\/+/, ""));
     if (!isAuthEndpoint && !retried) auth.onActivity?.();
-    const { body, headers: extraHeaders, ...rest } = options;
+    const { body, headers: extraHeaders, responseType = "json", ...rest } = options;
     const headers = new Headers(extraHeaders);
-    headers.set("Accept", "application/json");
+    headers.set("Accept", responseType === "blob" ? "*/*" : "application/json");
     if (body !== undefined) headers.set("Content-Type", "application/json");
     const token = auth.getAccessToken?.();
     if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -95,6 +97,17 @@ export function createHttpClient({ baseUrl, getAccessToken, refreshSession, onFo
       return { data: undefined as T, headers: response.headers };
     }
 
+    if (responseType === "blob" && response.ok) {
+      let file: Blob;
+      try {
+        file = await response.blob();
+      } catch {
+        throw new ApiError(0, NETWORK_ERROR, null);
+      }
+      notifyServerActivity();
+      return { data: file as T, headers: response.headers };
+    }
+
     let result: unknown;
     try {
       result = await response.json();
@@ -112,6 +125,8 @@ export function createHttpClient({ baseUrl, getAccessToken, refreshSession, onFo
 
   return {
     configureAuth: (handlers: AuthHandlers) => { auth = handlers; },
+    getBlob: (path: string, options?: HttpOptions) =>
+      requestData<Blob>("GET", path, { ...options, responseType: "blob" }),
     getWithMeta: <T>(path: string, options?: HttpOptions) => request<T>("GET", path, options),
     get: <T>(path: string, options?: HttpOptions) => requestData<T>("GET", path, options),
     post: <T>(path: string, options?: HttpOptions) => requestData<T>("POST", path, options),

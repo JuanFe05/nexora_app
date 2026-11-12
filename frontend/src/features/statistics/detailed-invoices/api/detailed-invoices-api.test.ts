@@ -1,13 +1,13 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { httpClient } from "@/lib/http/http-client";
 import {
-  fetchAllDetailedInvoices,
+  downloadDetailedInvoices,
   fetchSites,
   fetchCompanies,
   fetchDetailedInvoices,
 } from "./detailed-invoices-api";
 vi.mock("@/lib/http/http-client", () => ({
-  httpClient: { get: vi.fn(), getWithMeta: vi.fn() },
+  httpClient: { get: vi.fn(), getWithMeta: vi.fn(), getBlob: vi.fn() },
 }));
 beforeEach(() => vi.clearAllMocks());
 it("loads real catalog ids from the dedicated endpoints with cancellation", async () => {
@@ -51,31 +51,32 @@ it("passes inclusive dates, repeated restricted ids, pagination, signal and read
   expect(params.get("offset")).toBe("50");
   expect(options).toEqual({ signal });
 });
-it("exports every page of the applied query and refuses results above the limit", async () => {
+it("requests one streamed file with filters, columns and a single format, without page limits", async () => {
   const filters = { startDate: "2026-01-01", endDate: "2026-01-31", sites: [2], companies: [] };
   const signal = new AbortController().signal;
-  const page = (n: number, total: number) => ({
-    data: Array.from({ length: n }, (_, i) => ({ nmro_dcto: i })),
-    headers: new Headers({ "X-Total-Count": String(total) }),
-  });
-  vi.mocked(httpClient.getWithMeta)
-    .mockResolvedValueOnce(page(100, 230))
-    .mockResolvedValueOnce(page(100, 230))
-    .mockResolvedValueOnce(page(30, 230));
-  expect(await fetchAllDetailedInvoices(filters, signal)).toHaveLength(230);
-  const calls = vi.mocked(httpClient.getWithMeta).mock.calls.map(
-    ([url]) => new URLSearchParams(url.split("?")[1]),
-  );
-  expect(calls.map((p) => [p.get("limit"), p.get("offset")])).toEqual([
-    ["100", "0"],
-    ["100", "100"],
-    ["100", "200"],
-  ]);
-  expect(calls[2].getAll("sedes")).toEqual(["2"]);
-  vi.mocked(httpClient.getWithMeta).mockClear();
-  vi.mocked(httpClient.getWithMeta).mockResolvedValueOnce(page(100, 20001));
-  await expect(fetchAllDetailedInvoices(filters, signal)).rejects.toThrow(/límite/);
-  expect(httpClient.getWithMeta).toHaveBeenCalledTimes(1);
+  const file = new Blob(["x"]);
+  vi.mocked(httpClient.getBlob).mockResolvedValue(file);
+  expect(
+    await downloadDetailedInvoices(
+      filters,
+      [
+        { id: "nmro_dcto", type: "text" },
+        { id: "vlr_factrdo", type: "number" },
+      ],
+      "xlsx",
+      signal,
+    ),
+  ).toBe(file);
+  const [url, options] = vi.mocked(httpClient.getBlob).mock.calls[0];
+  const params = new URLSearchParams(url.split("?")[1]);
+  expect(url.startsWith("/statistics/reports/detailed-invoices/export?")).toBe(true);
+  expect(params.getAll("formato")).toEqual(["xlsx"]);
+  expect(params.getAll("columnas")).toEqual(["nmro_dcto:text", "vlr_factrdo:number"]);
+  expect(params.getAll("sedes")).toEqual(["2"]);
+  expect(params.has("empresas")).toBe(false);
+  expect(params.has("limit")).toBe(false);
+  expect(params.has("offset")).toBe(false);
+  expect(options).toEqual({ signal });
 });
 it("omits unrestricted parameters entirely", async () => {
   vi.mocked(httpClient.getWithMeta).mockResolvedValue({
