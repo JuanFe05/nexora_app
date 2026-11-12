@@ -1,7 +1,7 @@
 """Report contracts exercised without a database or network."""
 
 import re
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import FrozenInstanceError
 from datetime import date
 from typing import Any
@@ -43,6 +43,15 @@ class FakeReader:
         if self.error:
             raise self.error
         return [dict(row) for row in self.rows]
+
+    async def stream(
+        self, query: ReadOnlyQuery, params: Mapping[str, Any] | None = None, *, chunk_size: int = 2
+    ) -> AsyncIterator[list[dict[str, Any]]]:
+        self.calls.append((query, params))
+        if self.error:
+            raise self.error
+        for start in range(0, len(self.rows), 2):
+            yield [dict(row) for row in self.rows[start : start + 2]]
 
 
 def test_filter_dates_deduplication_and_immutability() -> None:

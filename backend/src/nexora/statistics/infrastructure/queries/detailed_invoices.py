@@ -6,6 +6,8 @@ orden) y `total_registros` (COUNT(*) OVER ()); paginacion OFFSET/FETCH. Calculos
 y reglas de negocio se conservan sin cambios.
 """
 
+import re
+
 from nexora.integration_management.application.ports import ReadOnlyQuery
 
 DETAILED_INVOICES_SQL = r"""
@@ -390,8 +392,28 @@ OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
 OPTION (RECOMPILE);
 """
 
+# Exportacion: la misma consulta y el mismo orden, sin paginacion y sin el COUNT(*) OVER () (que
+# obliga a materializar todo el conjunto solo para contar). Se deriva del SQL paginado para que
+# ambas consultas no puedan divergir.
+_PAGING = "OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY\n"
+_TOTAL_COLUMN = re.compile(r",\s*COUNT\(\*\) OVER \(\)\s+AS total_registros")
+_export_sql = _TOTAL_COLUMN.sub("", DETAILED_INVOICES_SQL).replace(_PAGING, "")
+if (
+    _export_sql == DETAILED_INVOICES_SQL
+    or "OFFSET" in _export_sql
+    or "total_registros" in _export_sql
+):
+    raise RuntimeError("No se pudo derivar la consulta de exportacion de Facturas Detalladas")
+DETAILED_INVOICES_EXPORT_SQL = _export_sql
+
 DETAILED_INVOICES_QUERY = ReadOnlyQuery(
     name="statistics.detailed_invoices",
     sql=DETAILED_INVOICES_SQL,
+    list_params=frozenset({"sedes", "empresas"}),
+)
+
+DETAILED_INVOICES_EXPORT_QUERY = ReadOnlyQuery(
+    name="statistics.detailed_invoices_export",
+    sql=DETAILED_INVOICES_EXPORT_SQL,
     list_params=frozenset({"sedes", "empresas"}),
 )

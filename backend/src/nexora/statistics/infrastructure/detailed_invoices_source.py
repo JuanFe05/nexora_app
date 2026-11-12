@@ -1,12 +1,16 @@
 """SQL Server adapter for the fixed, read-only statistics queries."""
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 from nexora.integration_management.application.ports import ReadOnlyQuery, SqlServerReader
 from nexora.statistics.application.ports import CatalogOption, ReportPage
 from nexora.statistics.domain.filters import DetailedInvoicesFilter
 from nexora.statistics.infrastructure.queries.catalogs import COMPANIES, SITES
-from nexora.statistics.infrastructure.queries.detailed_invoices import DETAILED_INVOICES_QUERY
+from nexora.statistics.infrastructure.queries.detailed_invoices import (
+    DETAILED_INVOICES_EXPORT_QUERY,
+    DETAILED_INVOICES_QUERY,
+)
 
 
 class SqlServerDetailedInvoicesSource:
@@ -40,6 +44,18 @@ class SqlServerDetailedInvoicesSource:
         for row in rows:
             row.pop("total_registros")
         return ReportPage(rows, total)
+
+    async def stream(self, filter: DetailedInvoicesFilter) -> AsyncIterator[list[dict[str, Any]]]:
+        params = {
+            "fecha_inicial": filter.fecha_inicial,
+            "fecha_final": filter.fecha_final,
+            "filtrar_sedes": int(bool(filter.sedes)),
+            "filtrar_empresas": int(bool(filter.empresas)),
+            "sedes": list(filter.sedes) or [-1],
+            "empresas": list(filter.empresas) or [-1],
+        }
+        async for chunk in self._reader.stream(DETAILED_INVOICES_EXPORT_QUERY, params):
+            yield chunk
 
     async def _fetch_page(
         self, filter: DetailedInvoicesFilter, limit: int, offset: int

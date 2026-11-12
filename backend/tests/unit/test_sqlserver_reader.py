@@ -74,3 +74,31 @@ async def test_driver_error_is_translated_without_leaking_detail() -> None:
         await reader.fetch_all(ReadOnlyQuery("rota", "SELECT * FROM no_existe"))
 
     assert "no_existe" not in str(error.value)
+
+
+async def test_stream_returns_chunks_and_matches_fetch_all() -> None:
+    reader = SqlServerReadOnlyReader(None, engine=_engine())
+    query = ReadOnlyQuery("n", "SELECT unco FROM sede ORDER BY unco")
+
+    chunks = [chunk async for chunk in reader.stream(query, chunk_size=2)]
+
+    assert [len(chunk) for chunk in chunks] == [2, 1]
+    assert [row for chunk in chunks for row in chunk] == await reader.fetch_all(query)
+
+
+async def test_stream_closes_connection_on_early_exit_and_on_error() -> None:
+    engine = _engine()
+    closed: list[int] = []
+    from sqlalchemy import event
+
+    event.listen(engine, "checkin", lambda *_: closed.append(1))
+    reader = SqlServerReadOnlyReader(None, engine=engine)
+    stream = reader.stream(ReadOnlyQuery("n", "SELECT unco FROM sede"), chunk_size=1)
+    await anext(stream)
+    await stream.aclose()
+    assert closed == [1]
+
+    with pytest.raises(ExternalQueryFailed):
+        async for _ in reader.stream(ReadOnlyQuery("rota", "SELECT * FROM no_existe")):
+            pass
+    assert closed == [1, 1]

@@ -7,7 +7,7 @@ se acepta SQL proveniente de una peticion HTTP.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -37,3 +37,13 @@ class SqlServerReader(Protocol):
     async def fetch_all(
         self, query: ReadOnlyQuery, params: Mapping[str, Any] | None = None
     ) -> list[dict[str, Any]]: ...
+
+    def stream(
+        self,
+        query: ReadOnlyQuery,
+        params: Mapping[str, Any] | None = None,
+        *,
+        chunk_size: int = 2000,
+    ) -> AsyncIterator[list[dict[str, Any]]]:
+        """Bloques de filas; libera la conexion al terminar, fallar o cancelarse."""
+        ...

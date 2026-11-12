@@ -1,5 +1,6 @@
 """Contrato de origen del informe explícito, independiente del transporte y el almacenamiento."""
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -24,3 +25,7 @@ class DetailedInvoicesSource(Protocol):
     async def companies(self) -> list[CatalogOption]: ...
 
     async def page(self, filter: DetailedInvoicesFilter, limit: int, offset: int) -> ReportPage: ...
+
+    def stream(self, filter: DetailedInvoicesFilter) -> AsyncIterator[list[dict[str, Any]]]:
+        """Todas las filas del filtro, por bloques y en el mismo orden que la tabla."""
+        ...
