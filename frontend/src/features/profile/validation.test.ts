@@ -10,6 +10,12 @@ describe("validación del perfil", () => {
     expect(changedProfileFields(original, { ...values(), correo: " nuevo@example.test ", nombre_usuario: "prohibido" } as ReturnType<typeof values>)).toEqual({ correo: "nuevo@example.test" });
     expect(changedProfileFields(original, { ...values(), primer_nombre: " Ana " })).toEqual({});
   });
+  it("normaliza nombres con tildes y correo sin generar PATCH por diferencias de mayúsculas legacy", () => {
+    const normalized = { correo: "usuario@example.com", primer_nombre: "MARÍA JOSÉ", segundo_nombre: "ÁNGELA", primer_apellido: "PÉREZ DÍAZ", segundo_apellido: "MUÑOZ" };
+    expect(changedProfileFields(original, { ...values(), correo: " Usuario@Example.COM ", primer_nombre: "  maría   josé  ", segundo_nombre: " ángela ", primer_apellido: " pérez   díaz ", segundo_apellido: " muñoz " })).toEqual(normalized);
+    const legacy = { ...original, correo: "Usuario@Example.COM", primer_nombre: "María José", segundo_nombre: "Ángela", primer_apellido: "Pérez Díaz", segundo_apellido: "Muñoz" };
+    expect(changedProfileFields(legacy, { ...toProfileValues(legacy), ...normalized })).toEqual({});
+  });
   it.each(["primer_nombre", "primer_apellido", "correo"] as const)("exige %s", (field) => {
     expect(validateProfile({ ...values(), [field]: "   " }, original)[field]).toBeTruthy();
   });

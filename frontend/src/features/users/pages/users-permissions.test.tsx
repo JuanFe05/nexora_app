@@ -82,7 +82,7 @@ describe("independent user permissions", () => {
     if (has(P.usersUpdate) || has(P.usersDeactivate) || canRoles) {
       await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-      const body = { ...(has(P.usersUpdate) ? { primer_nombre: "Luz" } : {}), ...(has(P.usersDeactivate) ? { estado: "inactivo" } : {}) };
+      const body = { ...(has(P.usersUpdate) ? { primer_nombre: "LUZ" } : {}), ...(has(P.usersDeactivate) ? { estado: "inactivo" } : {}) };
       if (Object.keys(body).length) expect(api.updateUser).toHaveBeenCalledExactlyOnceWith("u", body);
       else expect(api.updateUser).not.toHaveBeenCalled();
       if (canRoles) expect(api.assignUserRole).toHaveBeenCalledExactlyOnceWith("u", "billing");
@@ -109,7 +109,7 @@ describe("independent user permissions", () => {
     }
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(api.createUser).toHaveBeenCalledExactlyOnceWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "Nueva", primer_apellido: "Sol", contrasena: "Abc123!x" });
+    expect(api.createUser).toHaveBeenCalledExactlyOnceWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "NUEVA", primer_apellido: "SOL", contrasena: "Abc123!x" });
     if (canRoles) expect(api.assignUserRole).toHaveBeenCalledExactlyOnceWith("u", "billing");
     else { expect(loadRoleOptions).not.toHaveBeenCalled(); expect(api.assignUserRole).not.toHaveBeenCalled(); }
     expect(api.updateUser).not.toHaveBeenCalled();

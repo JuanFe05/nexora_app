@@ -110,11 +110,12 @@ se omite: no se restringe ese filtro. Los ids restringidos se envían como pará
 Cambiar los filtros no consulta automáticamente; **Limpiar** restablece los filtros y retira los resultados.
 
 La tabla ofrece las 71 columnas del contrato, 15 visibles inicialmente, selector de columnas (con al menos
-una visible), scroll horizontal y paginación del servidor de 10/25/50/100 filas. Presenta conteo, fechas
-`dd/MM/yyyy` sin conversión de zona horaria, números `es-CO`, importes sin decimales, estados de pago con
-indicadores semánticos y textos largos truncados con su contenido completo en `title`. Incluye estados de
-carga, vacío y error con reintento; los fallos de catálogos se pueden reintentar junto a cada selector.
-No incluye exportación ni filtros de punto de atención o tipo de documento.
+una visible), scroll horizontal y paginación del servidor de 10/25/50/100 filas. Presenta fechas
+`dd/MM/yyyy` sin conversión de zona horaria, números `es-CO`, importes sin decimales, estados de pago como
+texto y textos largos truncados con su contenido completo en `title`. Incluye estados de
+carga, vacío y error con reintento (icono de actualización); los fallos de catálogos se reintentan junto a cada selector.
+**Exportar** descarga todo el resultado (sin tope de filas ni de paginación) en un único formato por operación,
+CSV o Excel, transmitido por el backend. No incluye filtros de punto de atención o tipo de documento.
 
 La ruta requiere sesión y `statistics.reports.detailed_invoices.view`, independientemente del rol.
 El backend mantiene la autorización; los administradores asignan el permiso manualmente, sin otorgarlo

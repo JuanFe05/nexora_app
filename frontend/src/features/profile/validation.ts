@@ -1,4 +1,5 @@
 import { passwordMeetsPolicy, PASSWORD_VALIDATION_MESSAGE } from "@/lib/password-policy";
+import { normalizeField } from "@/lib/personal-data";
 import { PHONE_VALIDATION_MESSAGE, phoneIsValid } from "@/lib/phone";
 import { profileFields, type FieldErrors, type PasswordValues, type ProfileChanges, type ProfileData, type ProfileField, type ProfileValues } from "./types";
 
@@ -17,8 +18,8 @@ export function toProfileValues(profile: ProfileData): ProfileValues {
 export function changedProfileFields(original: ProfileData, values: ProfileValues): ProfileChanges {
   const changes: ProfileChanges = {};
   for (const field of profileFields) {
-    const value = values[field].trim();
-    if (value !== (original[field] ?? "")) changes[field] = value;
+    const value = normalizeField(field, values[field]);
+    if (value !== normalizeField(field, original[field] ?? "")) changes[field] = value;
   }
   return changes;
 }

@@ -165,7 +165,7 @@ describe("Usuarios", () => {
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
     expect(screen.getByLabelText(/^Contraseña/)).toHaveValue("");
     expect(screen.getByLabelText(/^Confirmar contraseña/)).toHaveValue("");
-    expect(api.createUser).toHaveBeenCalledExactlyOnceWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "Nueva", primer_apellido: "Sol", contrasena: "Abc123!x" });
+    expect(api.createUser).toHaveBeenCalledExactlyOnceWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "NUEVA", primer_apellido: "SOL", contrasena: "Abc123!x" });
     await act(async () => resolve(ana));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.assignUserRole).toHaveBeenCalledExactlyOnceWith("u", "billing");
@@ -286,7 +286,7 @@ describe("Usuarios", () => {
     render(<ToastProvider><UsersPage /></ToastProvider>);
     await fillCreate();
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
-    await waitFor(() => expect(api.createUser).toHaveBeenCalledWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "Nueva", primer_apellido: "Sol", contrasena: "Abc123!x" }));
+    await waitFor(() => expect(api.createUser).toHaveBeenCalledWith({ nombre_usuario: "nueva", correo: "nueva@example.org", primer_nombre: "NUEVA", primer_apellido: "SOL", contrasena: "Abc123!x" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(within(screen.getByRole("region", { name: "Notificaciones" })).getByText("Usuario creado correctamente.").closest("[data-toast]")).toHaveAttribute("role", "status");
     expect(api.listUsers).toHaveBeenCalledTimes(2);
@@ -312,7 +312,7 @@ describe("Usuarios", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: /^Administrador/ }));
     await userEvent.click(screen.getByRole("button", { name: "Guardar" }));
     await waitFor(() => expect(api.revokeUserRole).toHaveBeenCalledWith("u", "admin"));
-    expect(api.updateUser).toHaveBeenCalledExactlyOnceWith("u", { primer_nombre: "Luz" });
+    expect(api.updateUser).toHaveBeenCalledExactlyOnceWith("u", { primer_nombre: "LUZ" });
     expect(api.assignUserRole).toHaveBeenCalledExactlyOnceWith("u", "billing");
     expect(vi.mocked(api.updateUser).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(api.assignUserRole).mock.invocationCallOrder[0]);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());

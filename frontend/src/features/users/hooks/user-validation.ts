@@ -1,4 +1,5 @@
 import { passwordMeetsPolicy, PASSWORD_VALIDATION_MESSAGE } from "@/lib/password-policy";
+import { normalizeField } from "@/lib/personal-data";
 import { PHONE_VALIDATION_MESSAGE, phoneIsValid } from "@/lib/phone";
 import type { User, UserCreate, UserFieldErrors, UserPatch, UserValues } from "../types";
 
@@ -36,17 +37,17 @@ export function validateUser(values: UserValues, original: User | null): UserFie
 export function changedUserFields(user: User, values: UserValues): UserPatch {
   const body: UserPatch = {};
   for (const { name } of userTextFields) {
-    const value = values[name].trim();
-    if (value && value !== (user[name] ?? "")) body[name] = value;
+    const value = normalizeField(name, values[name]);
+    if (value && value !== normalizeField(name, user[name] ?? "")) body[name] = value;
   }
   if (values.estado !== user.estado) body.estado = values.estado;
   return body;
 }
 
 export function createUserBody(values: UserValues): UserCreate {
-  const body: UserCreate = { nombre_usuario: values.nombre_usuario.trim(), correo: values.correo.trim(), primer_nombre: values.primer_nombre.trim(), primer_apellido: values.primer_apellido.trim(), contrasena: values.contrasena };
+  const body: UserCreate = { nombre_usuario: normalizeField("nombre_usuario", values.nombre_usuario), correo: normalizeField("correo", values.correo), primer_nombre: normalizeField("primer_nombre", values.primer_nombre), primer_apellido: normalizeField("primer_apellido", values.primer_apellido), contrasena: values.contrasena };
   for (const name of ["segundo_nombre", "segundo_apellido", "numero_telefono"] as const) {
-    const value = values[name].trim();
+    const value = normalizeField(name, values[name]);
     if (value) body[name] = value;
   }
   return body;

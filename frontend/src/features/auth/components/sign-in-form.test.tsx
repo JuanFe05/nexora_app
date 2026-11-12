@@ -49,6 +49,15 @@ describe("formulario de acceso", () => {
     expect(login).toHaveBeenCalledExactlyOnceWith({ identificador: "usuario@example.com", contrasena: " secreto " });
   });
 
+  it("normaliza el correo a minúsculas sin alterar la contraseña", async () => {
+    const user = userEvent.setup();
+    render(<ToastProvider><SignInForm /></ToastProvider>);
+    await user.type(identifier(), " Usuario@Example.COM ");
+    await user.type(password(), " SeCreTo! ");
+    await user.click(screen.getByRole("button", { name: "Iniciar sesión" }));
+    expect(login).toHaveBeenCalledExactlyOnceWith({ identificador: "usuario@example.com", contrasena: " SeCreTo! " });
+  });
+
   it("preserva bloqueo mientras espera y limpia la contraseña tras un error sin revelar el campo", async () => {
     let rejectLogin!: (failure: unknown) => void;
     login.mockImplementation(() => new Promise((_resolve, reject) => { rejectLogin = reject; }));

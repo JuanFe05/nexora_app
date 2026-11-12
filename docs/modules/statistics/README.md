@@ -18,6 +18,7 @@ almacena los datos consultados.
 | `GET /filters/sites` | Catalogo de sedes (`tbSedes`) |
 | `GET /filters/companies` | Catalogo de empresas (`tbEmpresas`) |
 | `GET /` | Informe: `fecha_inicial`, `fecha_final` (obligatorias, inclusivas), `sedes`, `empresas` (opcionales y repetibles; omitidas = sin restriccion), `limit` (1-100), `offset`. Cabecera `X-Total-Count` |
+| `GET /export` | Exportacion en streaming de **todos** los registros del filtro (sin `limit`/`offset`): `formato` (`csv` o `xlsx`, uno por solicitud), `columnas` repetible como `id:tipo` (`text`, `number`, `date`) y los mismos filtros. Misma consulta y orden, sin `COUNT(*) OVER ()` ni paginacion |
 
 Errores: 422 filtros invalidos, 503 fuente externa no configurada, 502 fallo al consultar.
 
@@ -44,3 +45,11 @@ Nada de lo siguiente se ha ejecutado contra el servidor:
 - Conexion, driver ODBC 18 y VPN.
 - Que `tbTransaccionesServicios.unco` y `tbTransaccionesSuministros.unco` existan (desempate).
 - Rendimiento: cada pagina vuelve a ejecutar la consulta completa; valorar acotar el rango de fechas.
+
+
+### Lectura por bloques y conexiones
+
+`SqlServerReadOnlyReader.stream` lee con `fetchmany` (bloques de 2000 filas): la conexion se abre al
+iniciar la operacion y se cierra al terminar, fallar o cancelarse; el motor no usa pool (`NullPool`).
+CSV se emite bloque a bloque; XLSX se escribe en un archivo temporal en disco (sin dependencias nuevas).
+No existe tope artificial de registros.

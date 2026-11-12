@@ -30,7 +30,7 @@ export default function SignInForm() {
     const identifier = data.get("identificador");
     const passwordValue = data.get("contrasena");
     const input = {
-      identificador: typeof identifier === "string" ? identifier.trim() : "",
+      identificador: typeof identifier === "string" ? identifier.trim().toLowerCase() : "",
       contrasena: typeof passwordValue === "string" ? passwordValue : "",
     };
     const errors = validateSignIn(input);

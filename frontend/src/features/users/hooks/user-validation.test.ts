@@ -9,7 +9,15 @@ describe("user validation and payloads", () => {
     expect(validateUser({ ...values, nombre_usuario: "  ", correo: "", primer_nombre: "", primer_apellido: "", contrasena: "" }, null)).toEqual({ nombre_usuario: "Este campo es obligatorio.", correo: "Este campo es obligatorio.", primer_nombre: "Este campo es obligatorio.", primer_apellido: "Este campo es obligatorio.", contrasena: "La contraseña debe tener entre 6 y 24 caracteres, al menos una letra mayúscula, una minúscula, un número y un carácter especial." });
     expect(validateUser({ ...values, contrasena: " Ab1! " }, null)).toEqual({});
     expect(validateUser({ ...values, contrasena: " ".repeat(12) }, null).contrasena).toBeTruthy();
-    expect(createUserBody({ ...values, primer_nombre: " Ana ", contrasena: " Abc123!x " })).toEqual({ nombre_usuario: "ana", correo: "ana@example.org", primer_nombre: "Ana", primer_apellido: "Sol", contrasena: " Abc123!x " });
+    expect(createUserBody({ ...values, primer_nombre: " Ana ", contrasena: " Abc123!x " })).toEqual({ nombre_usuario: "ana", correo: "ana@example.org", primer_nombre: "ANA", primer_apellido: "SOL", contrasena: " Abc123!x " });
+  });
+  it("normalizes accented names and account fields for create and PATCH without patching case-only legacy differences", () => {
+    const input = { ...values, nombre_usuario: " USUARIO ", correo: " Usuario@Example.COM ", primer_nombre: "  maría   josé  ", segundo_nombre: " ángela ", primer_apellido: " pérez   díaz ", segundo_apellido: " muñoz " };
+    const normalized = { nombre_usuario: "usuario", correo: "usuario@example.com", primer_nombre: "MARÍA JOSÉ", segundo_nombre: "ÁNGELA", primer_apellido: "PÉREZ DÍAZ", segundo_apellido: "MUÑOZ" };
+    expect(createUserBody(input)).toEqual({ ...normalized, contrasena: values.contrasena });
+    expect(changedUserFields(user, input)).toEqual(normalized);
+    const legacy = { ...user, nombre_usuario: "Usuario", correo: "Usuario@Example.COM", primer_nombre: "María José", segundo_nombre: "Ángela", primer_apellido: "Pérez Díaz", segundo_apellido: "Muñoz" };
+    expect(changedUserFields(legacy, { ...userValues(legacy), ...normalized })).toEqual({});
   });
   it.each([["nombre_usuario", 50], ["correo", 255], ["primer_nombre", 100], ["primer_apellido", 100], ["segundo_nombre", 100], ["segundo_apellido", 100]] as const)("enforces %s length %s", (field, max) => {
     expect(validateUser({ ...values, [field]: "a".repeat(max) }, null)[field]).toBeUndefined();
@@ -42,6 +50,6 @@ describe("user validation and payloads", () => {
     expect(changedUserFields(user, { ...values, primer_nombre: " Ana ", estado: "inactivo", correo: "new" })).toEqual({ estado: "inactivo", correo: "new" });
     expect(changedUserFields(user, values)).toEqual({});
     expect(validateUser({ ...values, numero_telefono: "" }, { ...user, numero_telefono: "123" }).numero_telefono).toBe("El backend no permite vaciar este campo; conserva su valor o escribe uno nuevo.");
-    expect(createUserBody({ ...values, segundo_nombre: " Luz " }).segundo_nombre).toBe("Luz");
+    expect(createUserBody({ ...values, segundo_nombre: " Luz " }).segundo_nombre).toBe("LUZ");
   });
 });
