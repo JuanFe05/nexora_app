@@ -81,7 +81,7 @@ it("retries a product-line catalog failure via an icon and enables Consultar", a
     return [];
   });
   render(<VitalSignsPage />);
-  expect(await screen.findByRole("alert")).toHaveTextContent("No se pudieron cargar las líneas de producto.");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Error al cargar opciones");
   expect(consult()).toBeDisabled();
   const retry = screen.getByRole("button", { name: "Reintentar Línea de Producto" });
   expect(retry.querySelector("svg")).not.toBeNull();

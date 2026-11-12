@@ -10,6 +10,9 @@ import { useCatalog } from "./use-catalog";
 import type { createReportApi } from "./report-api";
 
 type CatalogApi = Pick<ReturnType<typeof createReportApi>, "fetchSites" | "fetchCompanies" | "fetchProductLines">;
+/** One short, uniform message for every filter catalog; the retry icon sits beside it. */
+const CATALOG_ERROR = "Error al cargar opciones";
+
 export function ReportFilters({ idPrefix, api, consulting, hasResults, onConsult, onClear }: {
   idPrefix: string;
   api: CatalogApi;
@@ -18,9 +21,9 @@ export function ReportFilters({ idPrefix, api, consulting, hasResults, onConsult
   onConsult: (filters: Filters) => void;
   onClear: () => void;
 }) {
-  const sites = useCatalog(api.fetchSites, "No se pudieron cargar las sedes.");
-  const companies = useCatalog(api.fetchCompanies, "No se pudieron cargar las empresas.");
-  const productLines = useCatalog(api.fetchProductLines, "No se pudieron cargar las líneas de producto.");
+  const sites = useCatalog(api.fetchSites, CATALOG_ERROR);
+  const companies = useCatalog(api.fetchCompanies, CATALOG_ERROR);
+  const productLines = useCatalog(api.fetchProductLines, CATALOG_ERROR);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [selectedSites, setSelectedSites] = useState<MultiSelectValue[]>([]);

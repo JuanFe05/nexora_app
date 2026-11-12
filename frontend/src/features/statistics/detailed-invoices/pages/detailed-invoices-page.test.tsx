@@ -53,7 +53,7 @@ it("retries product-line catalog failures with an accessible icon button", async
     return [{ id: 11, nombre: "Norte" }];
   });
   mount();
-  expect(await screen.findByRole("alert")).toHaveTextContent("No se pudieron cargar las líneas de producto.");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Error al cargar opciones");
   expect(screen.getByRole("button", { name: "Consultar" })).toBeDisabled();
   const retry = screen.getByRole("button", { name: "Reintentar Línea de Producto" });
   expect(retry.querySelector("svg")).not.toBeNull();
@@ -259,7 +259,7 @@ it("retries catalog failures inline and shows an empty successful result", async
   });
   mount();
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "No se pudieron cargar las sedes.",
+    "Error al cargar opciones",
   );
   fireEvent.click(screen.getByRole("button", { name: "Reintentar Sede" }));
   await filterReady(/Sede/);
