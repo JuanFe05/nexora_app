@@ -4,6 +4,7 @@
  */
 export const PERMISSIONS = {
   detailedInvoicesView: "statistics.reports.detailed_invoices.view",
+  vitalSignsView: "statistics.reports.vital_signs.view",
   usersView: "identity.users.view",
   usersCreate: "identity.users.create",
   usersUpdate: "identity.users.update",

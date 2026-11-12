@@ -37,6 +37,7 @@ vi.mock(
   "@/features/statistics/detailed-invoices/pages/detailed-invoices-page",
   () => ({ default: () => <h1>Facturas Detalladas</h1> }),
 );
+vi.mock("@/features/statistics/vital-signs/pages/vital-signs-page", () => ({ default: () => <h1>Signos Vitales</h1> }));
 afterEach(cleanup);
 beforeEach(() => {
   auth.status = "authenticated";
@@ -64,6 +65,25 @@ const settings = [
   ["roles", "Roles"],
 ];
 describe("páginas protegidas", () => {
+  it("permite Signos Vitales con su permiso independiente", async () => {
+    auth.permissions = ["statistics.reports.vital_signs.view"];
+    mount("/estadistica/informes/signos-vitales");
+    expect(await screen.findByRole("heading", { name: "Signos Vitales" })).toBeVisible();
+  });
+  it.each([{ permissions: [] }, { permissions: ["statistics.reports.detailed_invoices.view"] }])("redirige Signos Vitales sin su permiso: $permissions", async ({ permissions }) => {
+    auth.permissions = permissions;
+    const router = mount("/estadistica/informes/signos-vitales");
+    expect(await screen.findByRole("heading", { name: "Inicio" })).toBeVisible();
+    expect(router.state.location.pathname).toBe("/");
+    expect(router.state.historyAction).toBe("REPLACE");
+  });
+  it("exige sesión antes del permiso de Signos Vitales", async () => {
+    auth.status = "anonymous";
+    auth.permissions = ["statistics.reports.vital_signs.view"];
+    const router = mount("/estadistica/informes/signos-vitales");
+    expect(await screen.findByRole("button", { name: "Iniciar sesión" })).toBeVisible();
+    expect(router.state.location.pathname).toBe("/signin");
+  });
   it("permite Facturas Detalladas únicamente con su permiso efectivo", async () => {
     auth.permissions = ["statistics.reports.detailed_invoices.view"];
     mount("/estadistica/informes/facturas-detalladas");

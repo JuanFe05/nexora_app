@@ -23,6 +23,10 @@ const DetailedInvoicesPage = lazy(
     import("@/features/statistics/detailed-invoices/pages/detailed-invoices-page"),
 );
 
+const VitalSignsPage = lazy(
+  () => import("@/features/statistics/vital-signs/pages/vital-signs-page"),
+);
+
 export const routes: RouteObject[] = [
   {
     element: <ProtectedRoute />,
@@ -42,6 +46,15 @@ export const routes: RouteObject[] = [
               {
                 path: "/estadistica/informes/facturas-detalladas",
                 element: <DetailedInvoicesPage />,
+              },
+            ],
+          },
+          {
+            element: <RequirePermission permission={PERMISSIONS.vitalSignsView} />,
+            children: [
+              {
+                path: "/estadistica/informes/signos-vitales",
+                element: <VitalSignsPage />,
               },
             ],
           },

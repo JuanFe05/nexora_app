@@ -3,7 +3,7 @@
 Shell React basado en [TailAdmin React v2.5.0](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard/tree/v2.5.0).
 Conserva su diseño, componentes y tema claro/oscuro. Licencia MIT original en `LICENSE.md`.
 Incluye autenticación conectada a la API de NEXORA: acceso, restauración de sesión y cierre de sesión.
-Incluye las pantallas de administración de Usuarios, Roles y Permisos, y el perfil de usuario, todas protegidas por permisos. No incluye registro público ni funcionalidades de negocio fuera de la administración de acceso.
+Incluye las pantallas de administración de Usuarios, Roles y Permisos, y el perfil de usuario, todas protegidas por permisos. Incluye los informes de Facturas Detalladas y Signos Vitales. No incluye registro público.
 
 ## Inicio rápido
 
@@ -76,6 +76,7 @@ Rutas actuales: `/` y `/configuracion/perfil` requieren sesión; `/signin` solo 
 | `/configuracion/permisos` (Permisos)                                         | `identity.permissions.view`                 |
 | `/configuracion/roles` (Roles)                                               | `identity.roles.view`                       |
 | `/estadistica/informes/facturas-detalladas` (Informes → Facturas Detalladas) | `statistics.reports.detailed_invoices.view` |
+| `/estadistica/informes/signos-vitales` (Informes → Signos Vitales) | `statistics.reports.vital_signs.view` |
 
 Los códigos se reutilizan desde `features/auth/permissions.ts`; ningún nombre de rol concede acceso por sí solo.
 Las páginas conservan sus cargas con `React.lazy`. El menú «Configuración de la cuenta» lleva a
@@ -85,11 +86,11 @@ ruta antes o existía un antiguo `location.state.from`. Una visita autenticada a
 
 El sidebar conserva el diseño TailAdmin: la sección **ESTADÍSTICA** contiene Inicio y los grupos
 Informes, Gestión Administrativa, Resoluciones y Circulares. **Informes** contiene Facturas Detalladas
-(con ruta y permiso), Admisiones (Urgencias), Triaje (Urgencias) y Signos Vitales; estas últimas tres
-opciones aún no tienen ruta y permanecen deshabilitadas. Los otros grupos aún no tienen opciones.
+y Signos Vitales (cada uno con ruta y permiso independiente), Admisiones (Urgencias) y Triaje (Urgencias);
+estas últimas dos opciones aún no tienen ruta y permanecen deshabilitadas. Los otros grupos aún no tienen opciones.
 **CONFIGURACIONES** contiene Perfil de usuario, Usuarios, Permisos y Roles.
 Cada entrada puede declarar `requiredPermission`; el sidebar filtra con `useAuth().hasPermission`
-y oculta secciones sin entradas visibles. Facturas Detalladas se oculta sin su permiso efectivo.
+y oculta secciones sin entradas visibles. Cada informe se oculta sin su propio permiso efectivo.
 Contraído muestra iconos y puntos en los títulos. Perfil no requiere un permiso adicional.
 Solo `view` abre un módulo: tener `delete`, `create` o `update` no implica consulta ni ninguna otra acción.
 Cada página evalúa sus botones y catálogos auxiliares con `hasPermission` de forma independiente.
@@ -104,9 +105,13 @@ contiene texto inglés sin claves equivalentes, traducido directamente aquí.
 
 En **ESTADÍSTICA → Informes → Facturas Detalladas**, selecciona las fechas inicial y final (ambas
 obligatorias e inclusivas), y presiona **Consultar**. La fecha inicial no puede ser posterior a la final.
-Sede y Empresa permiten selección múltiple, búsqueda, seleccionar/quitar todas, chips removibles y contador;
-sus opciones se cargan desde los catálogos de la API. Sin selección o con todas seleccionadas, el parámetro
-se omite: no se restringe ese filtro. Los ids restringidos se envían como parámetros repetidos.
+Los filtros aparecen en orden **Sede → Empresa → Línea de Producto** después de las fechas, en una
+cuadrícula responsive de 1/2/3/5 columnas. Permiten selección individual o múltiple,
+seleccionar/quitar todas, chips removibles y contador; Empresa y Línea de Producto incluyen búsqueda.
+Sus opciones se cargan desde los catálogos de la API. Línea de Producto usa
+`GET /statistics/reports/detailed-invoices/filters/product-lines` (`[{id,nombre}]`). Sin selección o con todas seleccionadas, el parámetro
+se omite: no se restringe ese filtro. Los ids restringidos se envían como parámetros repetidos (`sedes`, `empresas`, `lineas`),
+tanto en consultas como en exportaciones.
 Cambiar los filtros no consulta automáticamente; **Limpiar** restablece los filtros y retira los resultados.
 
 La tabla ofrece las 71 columnas del contrato, 15 visibles inicialmente, selector de columnas (con al menos
@@ -121,6 +126,34 @@ La ruta requiere sesión y `statistics.reports.detailed_invoices.view`, independ
 El backend mantiene la autorización; los administradores asignan el permiso manualmente, sin otorgarlo
 por defecto al rol ESTADISTICA. Las pruebas usan HTTP simulado: no acreditan conexión real con SQL Server
 ni verificación visual responsive o de temas en navegador.
+
+## Signos Vitales
+
+En **ESTADÍSTICA → Informes → Signos Vitales**, selecciona un período y presiona **Consultar**.
+Usa las mismas validaciones, filtros Sede → Empresa → Línea de Producto, reintentos, temas TailAdmin,
+columnas seleccionables y paginación del servidor 10/25/50/100 que Facturas Detalladas.
+Sin selección o con el catálogo completo seleccionado no se restringe el filtro; una selección parcial
+envía los ids repetidos. Los cambios de filtros no alteran la consulta aplicada hasta presionar Consultar.
+**Limpiar** restablece el formulario y retira los resultados.
+
+Ofrece las **36 columnas** del contrato en orden de origen, **19 visibles inicialmente**.
+Las fechas se presentan como `dd/MM/yyyy`, los números con formato `es-CO`, y la identificación
+(`nmro_idntfccn`) y el teléfono (`teléfono`) permanecen texto, conservando ceros iniciales.
+No hay badges ni contadores adicionales de resultados. **Exportar** descarga todas las filas de la
+consulta aplicada con las columnas visibles o todas, en un único formato CSV o Excel por operación.
+
+La ruta `/estadistica/informes/signos-vitales` requiere sesión y el permiso independiente
+`statistics.reports.vital_signs.view` (`PERMISSIONS.vitalSignsView`). Tener acceso a Facturas Detalladas
+no concede acceso a Signos Vitales ni viceversa. El backend es responsable de autorizar cada solicitud.
+La API usa `/statistics/reports/vital-signs`, sus catálogos `/filters/sites`, `/filters/companies`,
+`/filters/product-lines`, y `/export` con los mismos filtros más `formato` y `columnas=id:tipo`.
+
+`features/statistics/shared/` reúne el hook de catálogos con aborto/reintento, normalización de ids,
+serialización HTTP, tarjeta de filtros, resultados paginados y formato de celdas. Cada informe mantiene
+sus tipos, aliases, etiquetas y adaptador de API independientes. Las pruebas simulan HTTP y usan datos
+ficticios: no consultan el backend ni leen el CSV de pacientes. La cuadrícula y las primitivas con
+`min-w-0`, truncado y scroll horizontal tienen cobertura estructural; falta comprobar visualmente
+el comportamiento responsive y ambos temas en un navegador.
 
 ## Variables públicas
 

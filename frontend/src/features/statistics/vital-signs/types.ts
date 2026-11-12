@@ -1,0 +1,42 @@
+import type { ReportFilters, ReportCell } from "../shared/types";
+export type { CatalogOption } from "../shared/types";
+export type VitalSignsFilters = ReportFilters;
+export type VitalSignColumnKey =
+  | "sede"
+  | "linea_servicio"
+  | "tipo_documento"
+  | "nmro_idntfccn"
+  | "empresa"
+  | "emprsa_rgmen"
+  | "rgmen"
+  | "gener"
+  | "prmr_nmbre"
+  | "sgndo_nmbre"
+  | "prmr_aplldo"
+  | "sgndo_aplldo"
+  | "fcha_ncmnto"
+  | "fcha_atncn"
+  | "edad"
+  | "tipo_edad"
+  | "direccion"
+  | "mncpo_rsdncia"
+  | "teléfono"
+  | "tnsn_artrl_alta"
+  | "tnsn_artrl_bja"
+  | "frcnca_crdca"
+  | "frcnca_rsprtra"
+  | "tmprtra"
+  | "pso"
+  | "tlla"
+  | "imc"
+  | "prmtro_crnl"
+  | "cdgo_dgnstco"
+  | "diagnostico"
+  | "cdgo_dgnstco_rl_1"
+  | "diagnostico_rl_1"
+  | "cdgo_dgnstco_rl_2"
+  | "diagnostico_rl_2"
+  | "profesional_salud"
+  | "especialidad";
+// Source aliases remain independent from presentation. Text ids and phone numbers must not be coerced.
+export type VitalSign = Record<VitalSignColumnKey, ReportCell>;

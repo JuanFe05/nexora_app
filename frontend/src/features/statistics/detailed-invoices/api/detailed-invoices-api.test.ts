@@ -4,6 +4,7 @@ import {
   downloadDetailedInvoices,
   fetchSites,
   fetchCompanies,
+  fetchProductLines,
   fetchDetailedInvoices,
 } from "./detailed-invoices-api";
 vi.mock("@/lib/http/http-client", () => ({
@@ -15,6 +16,10 @@ it("loads real catalog ids from the dedicated endpoints with cancellation", asyn
   vi.mocked(httpClient.get).mockResolvedValue([{ id: 17, nombre: "Sede" }]);
   expect(await fetchSites(signal)).toEqual([{ id: 17, nombre: "Sede" }]);
   await fetchCompanies(signal);
+  await fetchProductLines(signal);
+  expect(httpClient.get).toHaveBeenCalledWith(
+    "/statistics/reports/detailed-invoices/filters/product-lines", { signal },
+  );
   expect(httpClient.get).toHaveBeenCalledWith(
     "/statistics/reports/detailed-invoices/filters/sites",
     { signal },
@@ -37,6 +42,7 @@ it("passes inclusive dates, repeated restricted ids, pagination, signal and read
         endDate: "2026-01-31",
         sites: [2, 4],
         companies: [9, 10],
+        productLines: [5, 7],
       },
       { limit: 25, offset: 50, signal },
     ),
@@ -47,12 +53,13 @@ it("passes inclusive dates, repeated restricted ids, pagination, signal and read
   expect(params.get("fecha_final")).toBe("2026-01-31");
   expect(params.getAll("sedes")).toEqual(["2", "4"]);
   expect(params.getAll("empresas")).toEqual(["9", "10"]);
+  expect(params.getAll("lineas")).toEqual(["5", "7"]);
   expect(params.get("limit")).toBe("25");
   expect(params.get("offset")).toBe("50");
   expect(options).toEqual({ signal });
 });
 it("requests one streamed file with filters, columns and a single format, without page limits", async () => {
-  const filters = { startDate: "2026-01-01", endDate: "2026-01-31", sites: [2], companies: [] };
+  const filters = { startDate: "2026-01-01", endDate: "2026-01-31", sites: [2], companies: [], productLines: [5, 7] };
   const signal = new AbortController().signal;
   const file = new Blob(["x"]);
   vi.mocked(httpClient.getBlob).mockResolvedValue(file);
@@ -74,6 +81,7 @@ it("requests one streamed file with filters, columns and a single format, withou
   expect(params.getAll("columnas")).toEqual(["nmro_dcto:text", "vlr_factrdo:number"]);
   expect(params.getAll("sedes")).toEqual(["2"]);
   expect(params.has("empresas")).toBe(false);
+  expect(params.getAll("lineas")).toEqual(["5", "7"]);
   expect(params.has("limit")).toBe(false);
   expect(params.has("offset")).toBe(false);
   expect(options).toEqual({ signal });
@@ -89,6 +97,7 @@ it("omits unrestricted parameters entirely", async () => {
       endDate: "2026-01-01",
       sites: [],
       companies: [],
+      productLines: [],
     },
     { limit: 50, offset: 0, signal: new AbortController().signal },
   );
@@ -97,4 +106,5 @@ it("omits unrestricted parameters entirely", async () => {
   );
   expect(params.has("sedes")).toBe(false);
   expect(params.has("empresas")).toBe(false);
+  expect(params.has("lineas")).toBe(false);
 });

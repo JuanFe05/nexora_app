@@ -83,9 +83,10 @@ it("organiza ESTADÍSTICA en cuatro grupos desplegables colapsados con sus opcio
   fireEvent.click(informes);
   expect(informes).toHaveAttribute("aria-expanded", "true");
   expect(within(panel).queryByText("Facturas Detalladas")).not.toBeInTheDocument();
-  for (const label of ["Admisiones (Urgencias)", "Triaje (Urgencias)", "Signos Vitales"]) {
+  for (const label of ["Admisiones (Urgencias)", "Triaje (Urgencias)"]) {
     expect(within(panel).getByText(label)).toHaveAttribute("aria-disabled", "true");
   }
+  expect(within(panel).queryByText("Signos Vitales")).not.toBeInTheDocument();
   expect(within(panel).queryByRole("link")).not.toBeInTheDocument();
   fireEvent.click(informes);
   expect(informes).toHaveAttribute("aria-expanded", "false");
@@ -96,9 +97,19 @@ it("muestra Facturas Detalladas como enlace solo con su permiso efectivo", () =>
   mount();
   fireEvent.click(screen.getByRole("button", { name: "Informes" }));
   expect(screen.getByRole("link", { name: "Facturas Detalladas" })).toHaveAttribute("href", "/estadistica/informes/facturas-detalladas");
-  for (const label of ["Admisiones (Urgencias)", "Triaje (Urgencias)", "Signos Vitales"]) {
+  for (const label of ["Admisiones (Urgencias)", "Triaje (Urgencias)"]) {
     expect(screen.getByText(label)).toHaveAttribute("aria-disabled", "true");
   }
+  expect(screen.queryByText("Signos Vitales")).not.toBeInTheDocument();
+});
+
+it("muestra Signos Vitales solo con su permiso independiente", () => {
+  auth.permissions = ["statistics.reports.vital_signs.view"];
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "Informes" }));
+  expect(screen.getByRole("link", { name: "Signos Vitales" })).toHaveAttribute("href", "/estadistica/informes/signos-vitales");
+  expect(screen.queryByText("Facturas Detalladas")).not.toBeInTheDocument();
+  expect(navigation[0].groups?.[0].items.find((item) => item.label === "Signos Vitales")?.requiredPermission).toBe("statistics.reports.vital_signs.view");
 });
 
 it.each(["Gestión Administrativa", "Resoluciones", "Circulares"])("el grupo %s muestra «Sin opciones aún» al expandir", (name) => {

@@ -53,7 +53,11 @@ export const navigation: NavigationSection[] = [
           },
           { label: "Admisiones (Urgencias)" },
           { label: "Triaje (Urgencias)" },
-          { label: "Signos Vitales" },
+          {
+            label: "Signos Vitales",
+            path: "/estadistica/informes/signos-vitales",
+            requiredPermission: PERMISSIONS.vitalSignsView,
+          },
         ],
       },
       { label: "Gestión Administrativa", icon: BriefcaseIcon, items: [] },

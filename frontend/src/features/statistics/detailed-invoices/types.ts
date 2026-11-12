@@ -1,11 +1,7 @@
-export type CatalogOption = { id: number; nombre: string };
-export type InvoiceFilters = {
-  startDate: string;
-  endDate: string;
-  sites: number[];
-  companies: number[];
-};
-export type InvoiceCell = string | number | null;
+import type { ReportFilters, ReportCell } from "../shared/types";
+export type { CatalogOption } from "../shared/types";
+export type InvoiceFilters = ReportFilters;
+export type InvoiceCell = ReportCell;
 
 // Kept independently from presentation so adding a column cannot silently widen the API contract.
 export type InvoiceColumnKey =

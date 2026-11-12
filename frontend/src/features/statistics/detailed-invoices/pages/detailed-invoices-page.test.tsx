@@ -39,6 +39,31 @@ beforeEach(() => {
 function mount() {
   render(<DetailedInvoicesPage />);
 }
+it("orders filters and uses a responsive five-filter grid", async () => {
+  mount();
+  await filterReady(/Línea de Producto/);
+  expect(screen.getAllByRole("combobox", { name: /seleccionadas/ }).map((element) => element.getAttribute("aria-label"))).toEqual([
+    "Sede: 0 seleccionadas", "Empresa: 0 seleccionadas", "Línea de Producto: 0 seleccionadas",
+  ]);
+  expect(screen.getByLabelText(/Fecha inicial/).closest(".grid")).toHaveClass("grid-cols-1", "sm:grid-cols-2", "lg:grid-cols-3", "2xl:grid-cols-5");
+});
+it("retries product-line catalog failures with an accessible icon button", async () => {
+  vi.mocked(httpClient.get).mockImplementation(async (url) => {
+    if (url.endsWith("product-lines")) throw new Error("private detail");
+    return [{ id: 11, nombre: "Norte" }];
+  });
+  mount();
+  expect(await screen.findByRole("alert")).toHaveTextContent("No se pudieron cargar las líneas de producto.");
+  expect(screen.getByRole("button", { name: "Consultar" })).toBeDisabled();
+  const retry = screen.getByRole("button", { name: "Reintentar Línea de Producto" });
+  expect(retry.querySelector("svg")).not.toBeNull();
+  expect(retry).not.toHaveTextContent("Reintentar");
+  vi.mocked(httpClient.get).mockResolvedValue([{ id: 11, nombre: "Norte" }]);
+  fireEvent.click(retry);
+  await filterReady(/Línea de Producto/);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Consultar" })).toBeEnabled();
+});
 function pickDate(label: RegExp, iso: string) {
   const input = screen.getByLabelText(label) as HTMLInputElement & {
     _flatpickr: { setDate(date: string, trigger: boolean, format: string): void };
@@ -83,7 +108,7 @@ it("does not query before Consultar and blocks missing or reversed dates without
 it("queries only applied filters, omits none/all selections, reports count/status and resets with Limpiar", async () => {
   const user = userEvent.setup();
   mount();
-  await waitFor(() => expect(httpClient.get).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(httpClient.get).toHaveBeenCalledTimes(3));
   dates();
   await user.click(screen.getByRole("button", { name: "Consultar" }));
   expect(await screen.findByText("PAGADO")).toBeVisible();
@@ -100,6 +125,7 @@ it("queries only applied filters, omits none/all selections, reports count/statu
   );
   expect(lastParams().has("sedes")).toBe(false);
   expect(lastParams().has("empresas")).toBe(false);
+  expect(lastParams().has("lineas")).toBe(false);
   const count = vi.mocked(httpClient.getWithMeta).mock.calls.length;
   dates("2026-01-02", "2026-01-31");
   await user.click(filter(/Sede/));
@@ -113,6 +139,9 @@ it("queries only applied filters, omits none/all selections, reports count/statu
     await screen.findByRole("button", { name: "Seleccionar todas" }),
   );
   await user.keyboard("{Escape}");
+  await user.click(filter(/Línea de Producto/));
+  await user.click(await screen.findByRole("button", { name: "Seleccionar todas" }));
+  await user.keyboard("{Escape}");
   expect(httpClient.getWithMeta).toHaveBeenCalledTimes(count);
   await user.click(screen.getByRole("button", { name: "Consultar" }));
   await waitFor(() =>
@@ -120,10 +149,11 @@ it("queries only applied filters, omits none/all selections, reports count/statu
   );
   expect(lastParams().has("sedes")).toBe(false);
   expect(lastParams().has("empresas")).toBe(false);
+  expect(lastParams().has("lineas")).toBe(false);
   await user.click(screen.getByRole("button", { name: "Limpiar" }));
   expect(screen.getByLabelText(/Fecha inicial/)).toHaveValue("");
   expect(screen.getByLabelText(/Fecha final/)).toHaveValue("");
-  expect(screen.getAllByText(/^Seleccionar (sedes|empresas)$/)).toHaveLength(2);
+  expect(screen.getAllByText(/^Seleccionar (sedes|empresas|líneas de producto)$/)).toHaveLength(3);
   expect(screen.getByRole("button", { name: "Limpiar" })).toBeDisabled();
   expect(
     screen.getByText("Selecciona un período y presiona Consultar."),
@@ -138,7 +168,7 @@ it("sends restricted ids as repeated parameters and uses server pagination witho
   mount();
   await filterReady(/Sede/);
   dates();
-  for (const label of ["Sede", "Empresa"]) {
+  for (const label of ["Sede", "Empresa", "Línea de Producto"]) {
     await user.click(filter(new RegExp(label)));
     await user.click(await screen.findByRole("option", { name: "Norte" }));
     await user.click(screen.getByRole("option", { name: "Sur" }));
@@ -151,6 +181,7 @@ it("sends restricted ids as repeated parameters and uses server pagination witho
   await screen.findByText("PAGADO");
   expect(lastParams().getAll("sedes")).toEqual(["11", "22"]);
   expect(lastParams().getAll("empresas")).toEqual(["11", "22"]);
+  expect(lastParams().getAll("lineas")).toEqual(["11", "22"]);
   dates("2026-01-20", "2026-01-31");
   await user.click(screen.getByRole("button", { name: "Página siguiente" }));
   await waitFor(() => expect(lastParams().get("offset")).toBe("10"));

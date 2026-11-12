@@ -1,36 +1,6 @@
-import type { DataTableColumn } from "@/components/shared/data-table";
-import type { ExportColumn } from "@/lib/table-export";
-import type { DetailedInvoice, InvoiceCell, InvoiceColumnKey } from "./types";
-
-type ColumnType = "text" | "date" | "money" | "number" | "longtext" | "status";
-const moneyFormatter = new Intl.NumberFormat("es-CO", {
-  maximumFractionDigits: 0,
-});
-const numberFormatter = new Intl.NumberFormat("es-CO", {
-  maximumFractionDigits: 6,
-});
-function isEmpty(value: InvoiceCell | undefined) {
-  return value == null || value === "";
-}
-export function formatDate(value: InvoiceCell | undefined) {
-  if (isEmpty(value)) return "—";
-  const match = /^(\d{4})-(\d{2})-(\d{2})(?:[ T]\d{2}:\d{2}:\d{2})?$/.exec(String(value));
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : "—";
-}
-function numericValue(
-  value: InvoiceCell | undefined,
-  formatter: Intl.NumberFormat,
-) {
-  if (isEmpty(value)) return "—";
-  const number = Number(value);
-  return Number.isFinite(number) ? formatter.format(number) : "—";
-}
-export function formatMoney(value: InvoiceCell | undefined) {
-  return numericValue(value, moneyFormatter);
-}
-export function formatNumber(value: InvoiceCell | undefined) {
-  return numericValue(value, numberFormatter);
-}
+import { createReportColumns, reportExportColumns, type ColumnType } from "../shared/report-columns";
+import type { InvoiceColumnKey } from "./types";
+export { formatDate, formatMoney, formatNumber } from "../shared/report-columns";
 
 /** All 71 keys in the API contract, in source order. No patient data is persisted locally. */
 const definitions = [
@@ -137,47 +107,5 @@ export const defaultVisibleColumns: InvoiceColumnKey[] = [
   "frma_pgo",
 ];
 
-function renderCell(value: InvoiceCell | undefined, type: ColumnType) {
-  if (type === "status") {
-    if (isEmpty(value)) return null;
-    return <span className="block max-w-72 whitespace-normal">{String(value)}</span>;
-  }
-  if (type === "date") return formatDate(value);
-  if (type === "money") return formatMoney(value);
-  if (type === "number") return formatNumber(value);
-  const text = isEmpty(value) ? "—" : String(value);
-  return (
-    <span className="block max-w-72 truncate" title={text}>
-      {text}
-    </span>
-  );
-}
-export const invoiceColumns: (DataTableColumn<DetailedInvoice> & {
-  id: InvoiceColumnKey;
-  label: string;
-  type: ColumnType;
-})[] = definitions.map(([id, label, type]) => ({
-  id,
-  label,
-  header: label,
-  type,
-  className:
-    type === "money" || type === "number"
-      ? "text-right! tabular-nums whitespace-nowrap"
-      : type === "date"
-        ? "whitespace-nowrap"
-        : undefined,
-  cell: (row) => renderCell(row[id], type),
-}));
-
-export const invoiceExportColumns: ExportColumn[] = invoiceColumns.map(
-  ({ id, type }) => ({
-    id,
-    type:
-      type === "money" || type === "number"
-        ? "number"
-        : type === "date"
-          ? "date"
-          : "text",
-  }),
-);
+export const invoiceColumns = createReportColumns<InvoiceColumnKey>(definitions);
+export const invoiceExportColumns = reportExportColumns(invoiceColumns);
