@@ -156,7 +156,7 @@ class XlsxWriter:
     def _cell(self, index: int, column: ExportColumn, value: Any) -> str:
         if _is_empty(value):
             return ""
-        ref = f"{_column_letter(index)}{self._rows + 1}"
+        ref = f"{_column_letter(index)}{self._rows}"
         if column.type == "number":
             number = _number(value)
             if number is not None:

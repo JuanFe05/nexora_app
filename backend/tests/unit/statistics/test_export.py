@@ -1,6 +1,7 @@
 """Streaming export: one format per request, all rows, no pagination, exact values."""
 
 import io
+import re
 import zipfile
 from collections.abc import Iterator
 from types import SimpleNamespace
@@ -95,6 +96,8 @@ def test_xlsx_is_a_valid_workbook_with_all_rows(http) -> None:
         assert book.testzip() is None
     assert sheet.count("<row ") == 6
     assert "<v>1250.5</v>" in sheet and "05/01/2026" in sheet
+    for row in re.findall(r'<row r="(\d+)">(.*?)</row>', sheet):
+        assert all(ref == row[0] for ref in re.findall(r'<c r="[A-Z]+(\d+)"', row[1]))
 
 
 @pytest.mark.parametrize("formato", ["both", "csv,xlsx", ""])
