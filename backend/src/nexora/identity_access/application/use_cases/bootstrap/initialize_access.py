@@ -20,6 +20,7 @@ from nexora.identity_access.domain.value_objects.enums import UserStatus
 from nexora.identity_access.domain.value_objects.personal_data import (
     normalize_email,
     normalize_name,
+    normalize_username,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,12 +89,15 @@ class InitializeAccessUseCase:
             )
             return InitializationResult(admin_created=False, admin_present=False)
 
-        user = await self._seed.find_user(username=self._admin.username, email=self._admin.email)
+        user = await self._seed.find_user(
+            username=normalize_username(self._admin.username),
+            email=normalize_email(self._admin.email),
+        )
         created = user is None
         if user is None:
             user = User(
                 id=uuid4(),
-                username=self._admin.username,
+                username=normalize_username(self._admin.username),
                 email=normalize_email(self._admin.email),
                 password_hash=self._hasher.hash(self._admin.password),
                 status=UserStatus.ACTIVE,

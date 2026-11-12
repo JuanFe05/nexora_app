@@ -21,8 +21,8 @@ class LoginRequest(BaseModel):
     @field_validator("identificador")
     @classmethod
     def _identificador_no_vacio(cls, value: str) -> str:
-        """Un identificador de solo espacios es una entrada invalida, no una credencial."""
-        normalized = value.strip()
+        """Un identificador de solo espacios es invalido; usuario o correo viajan en minusculas."""
+        normalized = value.strip().lower()
         if not normalized:
             raise ValueError("El identificador no puede estar vacio")
         return normalized

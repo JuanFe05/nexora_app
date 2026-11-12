@@ -86,7 +86,7 @@ async def test_get_and_update_only_caller_without_roles(parts):
         principal, ProfileChanges(email="own@example.test", first_name="Ana")
     )
     assert updated.user.email == "own@example.test"
-    assert updated.user.first_name == "Ana"
+    assert updated.user.first_name == "ANA"
     assert updated.user.username == "jperez"
     assert users.users[1] == before_other
     admin.lock_access_changes.assert_awaited_once()

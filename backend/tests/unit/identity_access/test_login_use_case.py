@@ -76,7 +76,7 @@ async def test_login_con_nombre_de_usuario_emite_tokens_y_crea_sesion() -> None:
     assert stored.user_agent == "pytest"
     assert stored.revoked_at is None
     assert result.user.username == "jperez"
-    assert result.user.full_name == "Juan Perez"
+    assert result.user.full_name == "JUAN PEREZ"
     assert parts["transaction"].commits == 1
     assert parts["throttle"].failures == []
 

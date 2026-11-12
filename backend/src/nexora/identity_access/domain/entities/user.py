@@ -7,6 +7,7 @@ from datetime import datetime
 from uuid import UUID
 
 from nexora.identity_access.domain.value_objects.enums import UserStatus
+from nexora.identity_access.domain.value_objects.personal_data import normalize_personal_data
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +23,10 @@ class User:
     second_last_name: str | None = None
     phone_number: str | None = None
     password_changed_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        # Invariante de dominio: ninguna ruta persiste datos personales sin normalizar.
+        normalize_personal_data(self)
 
     @property
     def is_active(self) -> bool:
