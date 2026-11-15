@@ -3,6 +3,8 @@ export type AuthUser = {
   nombre_usuario: string;
   correo: string;
   nombre_completo: string;
+  primer_nombre?: string;
+  primer_apellido?: string;
 };
 
 export type LoginInput = { identificador: string; contrasena: string };

@@ -32,6 +32,23 @@ def csrf_headers(client: AsyncClient) -> dict[str, str]:
     }
 
 
+async def test_login_y_me_exponen_primer_nombre_y_primer_apellido(
+    client: AsyncClient, seeder: Seeder
+) -> None:
+    await seeder.create_user()
+
+    login = await do_login(client)
+    me = await client.get(
+        ME_URL, headers={"Authorization": f"Bearer {login.json()['access_token']}"}
+    )
+
+    assert me.status_code == 200
+    for usuario in (login.json()["usuario"], me.json()["usuario"]):
+        assert usuario["primer_nombre"].upper() == "JUAN"
+        assert usuario["primer_apellido"].upper() == "PEREZ"
+        assert usuario["nombre_completo"].upper() == "JUAN PEREZ"
+
+
 async def test_login_con_nombre_de_usuario_devuelve_access_token_y_cookie_httponly(
     client: AsyncClient, seeder: Seeder
 ) -> None:

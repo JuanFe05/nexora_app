@@ -33,6 +33,8 @@ class UsuarioResponse(BaseModel):
     nombre_usuario: str
     correo: str
     nombre_completo: str
+    primer_nombre: str
+    primer_apellido: str
 
 
 class TokenResponse(BaseModel):

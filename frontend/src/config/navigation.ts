@@ -18,6 +18,8 @@ export type NavigationItem = {
   path: string;
   icon: ComponentType<IconProps>;
   requiredPermission?: PermissionCode;
+  /** Denegación por defecto: sin `requiredPermission` la entrada solo se muestra si es `public`. */
+  public?: boolean;
 };
 
 /** Opción de un grupo; sin `path` aún no tiene ruta definida y se muestra deshabilitada. */
@@ -35,12 +37,15 @@ export type NavigationSection = {
   title: string;
   items: NavigationItem[];
   groups?: NavigationGroup[];
+  /** La sección (y sus entradas públicas) solo se muestra si algún grupo tiene opciones visibles. */
+  requiresVisibleGroup?: boolean;
 };
 
 export const navigation: NavigationSection[] = [
   {
     title: "ESTADÍSTICA",
-    items: [{ label: "Inicio", path: "/", icon: LayoutGridIcon }],
+    requiresVisibleGroup: true,
+    items: [{ label: "Inicio", path: "/", icon: LayoutGridIcon, public: true }],
     groups: [
       {
         label: "Informes",
@@ -51,8 +56,8 @@ export const navigation: NavigationSection[] = [
             path: "/estadistica/informes/facturas-detalladas",
             requiredPermission: PERMISSIONS.detailedInvoicesView,
           },
-          { label: "Admisiones (Urgencias)" },
-          { label: "Triaje (Urgencias)" },
+          { label: "Admisiones (Urgencias)", requiredPermission: PERMISSIONS.admissionsView },
+          { label: "Triaje (Urgencias)", requiredPermission: PERMISSIONS.triageView },
           {
             label: "Signos Vitales",
             path: "/estadistica/informes/signos-vitales",
@@ -60,9 +65,37 @@ export const navigation: NavigationSection[] = [
           },
         ],
       },
-      { label: "Gestión Administrativa", icon: BriefcaseIcon, items: [] },
-      { label: "Resoluciones", icon: DocumentTextIcon, items: [] },
-      { label: "Circulares", icon: MegaphoneIcon, items: [] },
+      {
+        label: "Gestión Administrativa",
+        icon: BriefcaseIcon,
+        items: [
+          { label: "Consumo General", requiredPermission: PERMISSIONS.generalConsumptionView },
+          { label: "Facturación General", requiredPermission: PERMISSIONS.generalBillingView },
+          { label: "Consumo de Laboratorio", requiredPermission: PERMISSIONS.labConsumptionView },
+          { label: "Gestión de Incapacidades", requiredPermission: PERMISSIONS.disabilityManagementView },
+          { label: "Encuestas de Calidad", requiredPermission: PERMISSIONS.qualitySurveysView },
+          { label: "Secretaría Gerencia", requiredPermission: PERMISSIONS.managementSecretariatView },
+        ],
+      },
+      {
+        label: "Resoluciones",
+        icon: DocumentTextIcon,
+        items: [
+          { label: "Resolución 202 de 2021", requiredPermission: PERMISSIONS.res2022021View },
+          { label: "Resolución 373 de 2026", requiredPermission: PERMISSIONS.res3732026View },
+          { label: "Resolución 1552 de 2013", requiredPermission: PERMISSIONS.res15522013View },
+          { label: "Resolución 256 de 2016", requiredPermission: PERMISSIONS.res2562016View },
+          { label: "Resolución 2175 de 2015", requiredPermission: PERMISSIONS.res21752015View },
+        ],
+      },
+      {
+        label: "Circulares",
+        icon: MegaphoneIcon,
+        items: [
+          { label: "Circular 06 de 2018", requiredPermission: PERMISSIONS.circular062018View },
+          { label: "Circular 21 de 2026", requiredPermission: PERMISSIONS.circular212026View },
+        ],
+      },
     ],
   },
   {
@@ -72,6 +105,7 @@ export const navigation: NavigationSection[] = [
         label: "Perfil de usuario",
         path: "/configuracion/perfil",
         icon: UserCircleIcon,
+        public: true,
       },
       {
         label: "Usuarios",

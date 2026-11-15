@@ -112,6 +112,24 @@ describe("formulario de acceso", () => {
     expect(footer).not.toHaveClass("fixed", "absolute");
   });
 
+  it("coloca el isotipo oficial encima de la palabra NEXORA en ambas marcas, sin alterar el texto", () => {
+    render(<HelmetProvider><MemoryRouter><ThemeProvider><ToastProvider><Routes>
+      <Route element={<AuthLayout />}><Route index element={<SignInPage />} /></Route>
+    </Routes></ToastProvider></ThemeProvider></MemoryRouter></HelmetProvider>);
+    const logos = document.querySelectorAll('img[src="/images/logo/Nexora_Logo.svg"]');
+    expect(logos).toHaveLength(2);
+    for (const logo of Array.from(logos)) {
+      expect(logo).toHaveAttribute("alt", "");
+      expect(logo).toHaveAttribute("aria-hidden", "true");
+      const word = logo.parentElement?.querySelector("a") as HTMLElement;
+      expect(word).toHaveTextContent("NEXORA");
+      expect(logo.compareDocumentPosition(word) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(word).toHaveClass("inline-block", "font-semibold", "tracking-wide");
+    }
+    expect(screen.getAllByRole("link", { name: "NEXORA" })[0]).toHaveClass("text-3xl");
+    expect(screen.getAllByRole("link", { name: "NEXORA" })[1]).toHaveClass("text-5xl", "xl:text-6xl");
+  });
+
   it("presenta fotografía decorativa, marca y slogan también en móvil, sin enlace de regreso", () => {
     render(<HelmetProvider><MemoryRouter><ThemeProvider><ToastProvider><Routes>
       <Route element={<AuthLayout />}><Route index element={<SignInPage />} /></Route>

@@ -66,6 +66,20 @@ Se les aplica inmediatamente la politica de inactividad; su primer refresh inici
 Nuevos logins usan el limite absoluto configurado. Antes de downgrade, detener la version de
 la API que requiere estas columnas.
 
+### Migracion 0003
+
+`src/nexora/migrations/versions/0003_fix_statistics_perms.py` sigue a `0002_session_refresh_grace`.
+Corrige datos ya sembrados, sin cambiar el esquema:
+
+- Quita ` (Medicamentos)` del nombre y la descripcion de `statistics.circulars.circular_06_2018.view`
+  y `statistics.circulars.circular_21_2026.view`, solo si conservan exactamente el texto sembrado
+  antes (un nombre editado por un administrador no se pisa).
+- Elimina `statistics.resolutions.res_1552_2013_256_2016.view` y sus enlaces en `rol_permiso`.
+  Los permisos independientes `res_1552_2013` y `res_256_2016` los siembra la inicializacion.
+
+No crea permisos, no asigna permisos nuevos y no toca otras asignaciones. Es idempotente; el
+downgrade no revierte datos.
+
 ## Permisos efectivos
 
 ```sql

@@ -1,5 +1,6 @@
 import { Sidebar, SidebarContent, useSidebar } from "@/components/ui/sidebar";
 import { navigation } from "@/config/navigation";
+import type { PermissionCode } from "@/features/auth/permissions";
 import { useAuth } from "@/features/auth/use-auth";
 import { cn } from "@/utils";
 import { Link, useLocation } from "react-router";
@@ -11,14 +12,16 @@ export default function AppSidebar() {
   const { hasPermission } = useAuth();
   const { pathname } = useLocation();
   const showContent = open || isHovered || isMobile;
-  const sections = navigation.map((section) => ({
-    ...section,
-    items: section.items.filter((item) => !item.requiredPermission || hasPermission(item.requiredPermission)),
-    groups: section.groups?.map((group) => ({
-      ...group,
-      items: group.items.filter((item) => !item.requiredPermission || hasPermission(item.requiredPermission)),
-    })),
-  })).filter((section) => section.items.length > 0 || (section.groups?.length ?? 0) > 0);
+  // Denegación por defecto: solo se muestra lo que el usuario autenticado tiene permitido de forma explícita.
+  const allowed = (item: { requiredPermission?: PermissionCode; public?: boolean }) =>
+    item.requiredPermission ? hasPermission(item.requiredPermission) : item.public === true;
+  const sections = navigation.map((section) => {
+    const groups = (section.groups ?? [])
+      .map((group) => ({ ...group, items: group.items.filter(allowed) }))
+      .filter((group) => group.items.length > 0);
+    const gated = section.requiresVisibleGroup && groups.length === 0;
+    return { ...section, items: gated ? [] : section.items.filter(allowed), groups: gated ? [] : groups };
+  }).filter((section) => section.items.length > 0 || section.groups.length > 0);
 
   return (
     <Sidebar side="left">

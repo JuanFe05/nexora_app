@@ -21,6 +21,8 @@ class UserView:
     username: str
     email: str
     full_name: str
+    first_name: str = ""
+    last_name: str = ""
 
 
 @dataclass(frozen=True, slots=True)

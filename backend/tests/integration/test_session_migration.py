@@ -42,7 +42,7 @@ def test_session_migration_upgrade_downgrade_upgrade(
     expected_columns = {"refresh_token_jti_anterior", "fecha_rotacion_refresh"}
     try:
         command.upgrade(config, "head")
-        command.downgrade(config, "-1")
+        command.downgrade(config, "0001_iam_schema")
         columns = {column["name"] for column in inspect(engine).get_columns("sesion", schema="iam")}
         assert not expected_columns & columns
         command.upgrade(config, "head")

@@ -49,6 +49,8 @@ def _usuario(user: UserView) -> UsuarioResponse:
         nombre_usuario=user.username,
         correo=user.email,
         nombre_completo=user.full_name,
+        primer_nombre=user.first_name,
+        primer_apellido=user.last_name,
     )
 
 

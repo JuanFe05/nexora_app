@@ -11,6 +11,27 @@ almacena los datos consultados.
 | Facturas Detalladas | `/estadistica/informes/facturas-detalladas` | `/api/v1/statistics/reports/detailed-invoices` | `statistics.reports.detailed_invoices.view` |
 | Signos Vitales | `/estadistica/informes/signos-vitales` | `/api/v1/statistics/reports/vital-signs` | `statistics.reports.vital_signs.view` |
 
+Permisos sembrados sin informe ni vista todavia (reservados): `statistics.reports.admissions.view`
+(Admisiones) y `statistics.reports.triage.view` (Triaje). Aun no protegen ningun endpoint ni ruta.
+
+Menus del sidebar sin vistas todavia, cada opcion con su permiso reservado (deshabilitada hasta tener ruta):
+
+| Menu | Opcion | Permiso |
+| --- | --- | --- |
+| Resoluciones | Resolución 202 de 2021 | `statistics.resolutions.res_202_2021.view` |
+| Resoluciones | Resolución 373 de 2026 | `statistics.resolutions.res_373_2026.view` |
+| Resoluciones | Resolución 1552 de 2013 | `statistics.resolutions.res_1552_2013.view` |
+| Resoluciones | Resolución 256 de 2016 | `statistics.resolutions.res_256_2016.view` |
+| Resoluciones | Resolución 2175 de 2015 | `statistics.resolutions.res_2175_2015.view` |
+| Circulares | Circular 06 de 2018 | `statistics.circulars.circular_06_2018.view` |
+| Circulares | Circular 21 de 2026 | `statistics.circulars.circular_21_2026.view` |
+| Gestion Administrativa | Consumo General | `statistics.administrative.general_consumption.view` |
+| Gestion Administrativa | Facturación General | `statistics.administrative.general_billing.view` |
+| Gestion Administrativa | Consumo de Laboratorio | `statistics.administrative.lab_consumption.view` |
+| Gestion Administrativa | Gestión de Incapacidades | `statistics.administrative.disability_management.view` |
+| Gestion Administrativa | Encuestas de Calidad | `statistics.administrative.quality_surveys.view` |
+| Gestion Administrativa | Secretaría Gerencia | `statistics.administrative.management_secretariat.view` |
+
 - Cada permiso se comprueba en backend en los cinco endpoints de su informe. Tener uno no
   permite consultar ni exportar el otro. Se siembra en el catalogo y solo se otorga a `ADMINISTRADOR`; los administradores lo
   asignan manualmente a roles. Pertenecer a `ESTADISTICA` no lo concede.

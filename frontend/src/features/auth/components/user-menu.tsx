@@ -1,5 +1,6 @@
 import { Link } from "react-router";
-import { ChevronDownIcon, GearIcon, LogOutIcon, UserIcon } from "@/icons";
+import { ChevronDownIcon, GearIcon, LogOutIcon } from "@/icons";
+import { UserAvatar } from "@/components/shared/user-avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLinkItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "../use-auth";
 
@@ -9,10 +10,10 @@ export function UserMenu() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger aria-label={`Menú de usuario: ${user.nombre_usuario}`} className="group flex min-h-11 min-w-0 items-center gap-2 rounded-[10px] px-2 text-sm text-gray-700 outline-none hover:bg-gray-100 focus-visible:ring-3 focus-visible:ring-brand-400 dark:text-gray-300 dark:hover:bg-gray-800">
-        <UserIcon aria-hidden="true" className="size-6 shrink-0 sm:hidden" />
-        <span className="hidden max-w-40 truncate sm:block">{user.nombre_usuario}</span>
-        <ChevronDownIcon aria-hidden="true" data-menu-chevron className="size-5 shrink-0 transition-transform group-data-popup-open:rotate-180" />
+      <DropdownMenuTrigger aria-label={`Menú de usuario: ${user.nombre_usuario}`} className="group flex min-h-11 min-w-0 items-center gap-3 rounded-[10px] text-sm text-gray-700 outline-none hover:bg-gray-100 focus-visible:ring-3 focus-visible:ring-brand-400 dark:text-gray-300 dark:hover:bg-gray-800">
+        <UserAvatar firstName={user.primer_nombre} lastName={user.primer_apellido} fallback={user.nombre_usuario} className="size-11 rounded-[10px] text-sm" />
+        <span className="hidden max-w-40 truncate font-medium sm:block">{user.nombre_usuario}</span>
+        <ChevronDownIcon aria-hidden="true" data-menu-chevron className="-ms-2 size-5 shrink-0 transition-transform group-data-popup-open:rotate-180" />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <div className="mb-2 border-b border-gray-200 px-3 py-3 dark:border-gray-800">

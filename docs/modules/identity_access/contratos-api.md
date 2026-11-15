@@ -27,7 +27,7 @@ Salida `200`:
     "id": "uuid",
     "nombre_usuario": "jperez",
     "correo": "jperez@nexora.co",
-    "nombre_completo": "Juan Perez"
+    "nombre_completo": "Juan Perez", "primer_nombre": "Juan", "primer_apellido": "Perez"
   }
 }
 ```
@@ -76,7 +76,7 @@ Cabecera `Authorization: Bearer <access_token>`.
 ```json
 {
   "usuario": { "id": "uuid", "nombre_usuario": "jperez", "correo": "jperez@nexora.co",
-               "nombre_completo": "Juan Perez" },
+               "nombre_completo": "Juan Perez", "primer_nombre": "Juan", "primer_apellido": "Perez" },
   "roles": ["admin_usuarios"],
   "permisos": ["identity.users.view"]
 }

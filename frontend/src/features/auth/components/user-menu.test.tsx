@@ -8,7 +8,7 @@ import { UserMenu } from "./user-menu";
 
 const { logout, auth } = vi.hoisted(() => ({
   logout: vi.fn(),
-  auth: { user: { id: "1", nombre_usuario: "ana", nombre_completo: "Ana García López", correo: "ana@example.com" } as { id: string; nombre_usuario: string; nombre_completo: string; correo: string } | null },
+  auth: { user: { id: "1", nombre_usuario: "ana", nombre_completo: "Ana María García López", primer_nombre: "Ana", primer_apellido: "García", correo: "ana@example.com" } as { id: string; nombre_usuario: string; nombre_completo: string; primer_nombre?: string; primer_apellido?: string; correo: string } | null },
 }));
 vi.mock("../use-auth", () => ({ useAuth: () => ({ ...auth, logout }) }));
 afterEach(cleanup);
@@ -26,9 +26,13 @@ describe("menú de usuario", () => {
     const user = userEvent.setup();
     const { container } = mount();
     const trigger = screen.getByRole("button", { name: /Menú de usuario: ana/ });
-    expect(container.querySelector('[data-slot="avatar"], [data-slot="avatar-fallback"], img')).toBeNull();
-    expect(screen.queryByText("AG")).not.toBeInTheDocument();
-    expect(trigger.querySelector("svg.sm\\:hidden")).toHaveAttribute("aria-hidden", "true");
+    expect(container.querySelector("img")).toBeNull();
+    const avatar = trigger.querySelector('[data-slot="user-avatar"]') as HTMLElement;
+    expect(avatar).toHaveTextContent("AG");
+    expect(avatar).toHaveAttribute("aria-hidden", "true");
+    expect(avatar).not.toHaveClass("rounded-full");
+    expect(avatar).toHaveClass("size-11", "rounded-[10px]", "bg-brand-50", "text-brand-700", "dark:bg-brand-500/15", "dark:text-brand-300", "border-gray-200", "dark:border-gray-800");
+    expect(trigger).toHaveTextContent("ana");
     expect(trigger.querySelector("svg[data-menu-chevron]")).toHaveClass("group-data-popup-open:rotate-180");
     await user.click(trigger);
     expect(await screen.findByRole("menu")).toBeInTheDocument();
@@ -44,7 +48,7 @@ describe("menú de usuario", () => {
       expect(item.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
       expect(item.querySelector("svg")).toHaveClass("size-6");
     }
-    expect(screen.getByRole("menu").querySelector('[data-slot="avatar"], [data-slot="avatar-fallback"], img')).toBeNull();
+    expect(screen.getByRole("menu").querySelector('[data-slot="user-avatar"], img')).toBeNull();
     expect(screen.queryByText(/perfil|soporte|idioma/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole("menuitem", { name: "Cerrar sesión" }));
     expect(logout).toHaveBeenCalledOnce();
@@ -83,6 +87,22 @@ describe("menú de usuario", () => {
     await user.keyboard("{ArrowUp}{Enter}");
     expect(await screen.findByRole("heading", { name: "Destino perfil" })).toBeInTheDocument();
     expect(logout).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { primer_nombre: "administrador", primer_apellido: "nexora", expected: "AN" },
+    { primer_nombre: "  ángel ", primer_apellido: "Núñez", expected: "ÁN" },
+    { primer_nombre: "", primer_apellido: "", expected: "A" },
+    { primer_nombre: undefined, primer_apellido: undefined, expected: "A" },
+  ])("muestra las iniciales $expected con $primer_nombre / $primer_apellido", ({ primer_nombre, primer_apellido, expected }) => {
+    const previousUser = auth.user;
+    auth.user = { ...previousUser!, nombre_usuario: "admin", primer_nombre, primer_apellido };
+    try {
+      mount();
+      const trigger = screen.getByRole("button", { name: /Menú de usuario: admin/ });
+      expect(trigger.querySelector('[data-slot="user-avatar"]')).toHaveTextContent(new RegExp(`^${expected}$`));
+      expect(trigger).toHaveTextContent("admin");
+    } finally { auth.user = previousUser; }
   });
 
   it("no muestra menú sin usuario", () => {
