@@ -20,6 +20,7 @@ CODES = [
     "statistics.administrative.disability_management.view",
     "statistics.administrative.quality_surveys.view",
     "statistics.administrative.management_secretariat.view",
+    "statistics.administrative.sivigila.view",
 ]
 
 

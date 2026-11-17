@@ -79,4 +79,5 @@ PERMISSION_CATALOG: tuple[PermissionSpec, ...] = (
     _statistics("administrative.disability_management.view", "Consultar Gestión de Incapacidades"),
     _statistics("administrative.quality_surveys.view", "Consultar Encuestas de Calidad"),
     _statistics("administrative.management_secretariat.view", "Consultar Secretaría Gerencia"),
+    _statistics("administrative.sivigila.view", "Consultar Notificación SIVIGILA"),
 )

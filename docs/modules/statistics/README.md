@@ -31,6 +31,7 @@ Menus del sidebar sin vistas todavia, cada opcion con su permiso reservado (desh
 | Gestion Administrativa | Gestión de Incapacidades | `statistics.administrative.disability_management.view` |
 | Gestion Administrativa | Encuestas de Calidad | `statistics.administrative.quality_surveys.view` |
 | Gestion Administrativa | Secretaría Gerencia | `statistics.administrative.management_secretariat.view` |
+| Gestion Administrativa | Notificación SIVIGILA | `statistics.administrative.sivigila.view` |
 
 - Cada permiso se comprueba en backend en los cinco endpoints de su informe. Tener uno no
   permite consultar ni exportar el otro. Se siembra en el catalogo y solo se otorga a `ADMINISTRADOR`; los administradores lo

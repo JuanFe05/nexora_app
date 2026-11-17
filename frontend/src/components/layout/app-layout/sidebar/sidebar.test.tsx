@@ -163,6 +163,7 @@ const MENUS = {
     ["Gestión de Incapacidades", "statistics.administrative.disability_management.view"],
     ["Encuestas de Calidad", "statistics.administrative.quality_surveys.view"],
     ["Secretaría Gerencia", "statistics.administrative.management_secretariat.view"],
+    ["Notificación SIVIGILA", "statistics.administrative.sivigila.view"],
   ],
 } as const;
 

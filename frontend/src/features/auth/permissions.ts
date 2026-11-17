@@ -20,6 +20,7 @@ export const PERMISSIONS = {
   disabilityManagementView: "statistics.administrative.disability_management.view",
   qualitySurveysView: "statistics.administrative.quality_surveys.view",
   managementSecretariatView: "statistics.administrative.management_secretariat.view",
+  sivigilaView: "statistics.administrative.sivigila.view",
   usersView: "identity.users.view",
   usersCreate: "identity.users.create",
   usersUpdate: "identity.users.update",
