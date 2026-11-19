@@ -33,6 +33,7 @@ from nexora.statistics.domain.filters import InvalidReportFilter
 from nexora.statistics.presentation.http.v1.router import (
     admissions_router,
     statistics_router,
+    triage_router,
     vital_signs_router,
 )
 
@@ -147,6 +148,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(statistics_router, prefix=settings.api_prefix)
     app.include_router(vital_signs_router, prefix=settings.api_prefix)
     app.include_router(admissions_router, prefix=settings.api_prefix)
+    app.include_router(triage_router, prefix=settings.api_prefix)
 
     @app.get("/health", tags=["operacion"], summary="Estado del servicio")
     async def health() -> dict[str, str]:

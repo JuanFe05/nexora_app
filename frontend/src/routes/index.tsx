@@ -31,6 +31,10 @@ const AdmissionsPage = lazy(
   () => import("@/features/statistics/admissions/pages/admissions-page"),
 );
 
+const TriagePage = lazy(
+  () => import("@/features/statistics/triage/pages/triage-page"),
+);
+
 export const routes: RouteObject[] = [
   {
     element: <ProtectedRoute />,
@@ -68,6 +72,15 @@ export const routes: RouteObject[] = [
               {
                 path: "/estadistica/informes/admisiones",
                 element: <AdmissionsPage />,
+              },
+            ],
+          },
+          {
+            element: <RequirePermission permission={PERMISSIONS.triageView} />,
+            children: [
+              {
+                path: "/estadistica/informes/triaje",
+                element: <TriagePage />,
               },
             ],
           },

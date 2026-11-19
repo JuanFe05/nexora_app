@@ -9,13 +9,14 @@ import type { ReportFilters as Filters } from "./types";
 import { useCatalog } from "./use-catalog";
 import type { createReportApi } from "./report-api";
 
-type CatalogApi = Pick<ReturnType<typeof createReportApi>, "fetchSites" | "fetchCompanies" | "fetchProductLines">;
+export type CatalogApi = Pick<ReturnType<typeof createReportApi>, "fetchSites" | "fetchCompanies"> & Partial<Pick<ReturnType<typeof createReportApi>, "fetchProductLines">>;
 /** One short, uniform message for every filter catalog; the retry icon sits beside it. */
 const CATALOG_ERROR = "Error al cargar opciones";
 
-export function ReportFilters({ idPrefix, api, consulting, hasResults, onConsult, onClear }: {
+export function ReportFilters({ idPrefix, api, productLineFilter = true, consulting, hasResults, onConsult, onClear }: {
   idPrefix: string;
   api: CatalogApi;
+  productLineFilter?: boolean;
   consulting: boolean;
   hasResults: boolean;
   onConsult: (filters: Filters) => void;
@@ -23,14 +24,14 @@ export function ReportFilters({ idPrefix, api, consulting, hasResults, onConsult
 }) {
   const sites = useCatalog(api.fetchSites, CATALOG_ERROR);
   const companies = useCatalog(api.fetchCompanies, CATALOG_ERROR);
-  const productLines = useCatalog(api.fetchProductLines, CATALOG_ERROR);
+  const productLines = useCatalog(productLineFilter ? api.fetchProductLines : undefined, CATALOG_ERROR);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [selectedSites, setSelectedSites] = useState<MultiSelectValue[]>([]);
   const [selectedCompanies, setSelectedCompanies] = useState<MultiSelectValue[]>([]);
   const [selectedProductLines, setSelectedProductLines] = useState<MultiSelectValue[]>([]);
   const [errors, setErrors] = useState<{ startDate?: string; endDate?: string }>({});
-  const catalogsUnavailable = sites.loading || companies.loading || productLines.loading || Boolean(sites.error || companies.error || productLines.error);
+  const catalogsUnavailable = sites.loading || companies.loading || Boolean(sites.error || companies.error) || (productLineFilter && (productLines.loading || Boolean(productLines.error)));
   const nothingToClear = !startDate && !endDate && !selectedSites.length && !selectedCompanies.length && !selectedProductLines.length && !errors.startDate && !errors.endDate && !hasResults;
 
   function consult() {
@@ -44,7 +45,7 @@ export function ReportFilters({ idPrefix, api, consulting, hasResults, onConsult
     };
     setErrors(nextErrors);
     if (nextErrors.startDate || nextErrors.endDate || catalogsUnavailable || consulting) return;
-    onConsult({ startDate, endDate, sites: restrictedIds(selectedSites, sites.items), companies: restrictedIds(selectedCompanies, companies.items), productLines: restrictedIds(selectedProductLines, productLines.items) });
+    onConsult({ startDate, endDate, sites: restrictedIds(selectedSites, sites.items), companies: restrictedIds(selectedCompanies, companies.items), productLines: productLineFilter ? restrictedIds(selectedProductLines, productLines.items) : [] });
   }
   function clear() {
     setStartDate("");
@@ -64,7 +65,7 @@ export function ReportFilters({ idPrefix, api, consulting, hasResults, onConsult
           <DateField id={`${idPrefix}-end-date`} label="Fecha final" value={endDate} onChange={setEndDate} required maxDate="today" error={errors.endDate} />
           <MultiSelect id={`${idPrefix}-sites`} label="Sede" placeholder="Seleccionar sedes" options={sites.items.map((item) => ({ value: item.id, label: item.nombre }))} value={selectedSites} onChange={setSelectedSites} loading={sites.loading} error={sites.error} onRetry={sites.retry} />
           <MultiSelect id={`${idPrefix}-companies`} label="Empresa" placeholder="Seleccionar empresas" searchable options={companies.items.map((item) => ({ value: item.id, label: item.nombre }))} value={selectedCompanies} onChange={setSelectedCompanies} loading={companies.loading} error={companies.error} onRetry={companies.retry} />
-          <MultiSelect id={`${idPrefix}-product-lines`} label="Línea de Producto" placeholder="Seleccionar líneas de producto" searchable options={productLines.items.map((item) => ({ value: item.id, label: item.nombre }))} value={selectedProductLines} onChange={setSelectedProductLines} loading={productLines.loading} error={productLines.error} onRetry={productLines.retry} />
+          {productLineFilter && <MultiSelect id={`${idPrefix}-product-lines`} label="Línea de Producto" placeholder="Seleccionar líneas de producto" searchable options={productLines.items.map((item) => ({ value: item.id, label: item.nombre }))} value={selectedProductLines} onChange={setSelectedProductLines} loading={productLines.loading} error={productLines.error} onRetry={productLines.retry} />}
         </div>
         <div className="flex flex-wrap justify-end gap-3">
           <Button type="button" variant="outline" onClick={clear} disabled={nothingToClear}>Limpiar</Button>

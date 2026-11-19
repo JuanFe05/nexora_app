@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { CatalogOption } from "./types";
 
 export function useCatalog(
-  fetcher: (signal?: AbortSignal) => Promise<CatalogOption[]>,
+  fetcher: ((signal?: AbortSignal) => Promise<CatalogOption[]>) | undefined,
   errorMessage: string,
 ) {
   const [revision, setRevision] = useState(0);
@@ -12,6 +12,7 @@ export function useCatalog(
     revision: number;
   }>({ items: [], revision: -1 });
   useEffect(() => {
+    if (!fetcher) return;
     const controller = new AbortController();
     let active = true;
     void fetcher(controller.signal)
@@ -26,11 +27,11 @@ export function useCatalog(
       controller.abort();
     };
   }, [fetcher, errorMessage, revision]);
-  const loading = revision !== result.revision;
+  const loading = Boolean(fetcher) && revision !== result.revision;
   return {
-    items: result.items,
+    items: fetcher ? result.items : [],
     loading,
-    error: loading ? undefined : result.error,
+    error: !fetcher || loading ? undefined : result.error,
     retry: () => setRevision((current) => current + 1),
   };
 }

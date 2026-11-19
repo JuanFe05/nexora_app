@@ -99,6 +99,14 @@ it("Admisiones y Triaje solo aparecen con su permiso propio", () => {
   expect(screen.queryByText("Triaje (Urgencias)")).not.toBeInTheDocument();
 });
 
+it("muestra Triaje como enlace solo con su permiso independiente", () => {
+  auth.permissions = ["statistics.reports.triage.view"];
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "Informes" }));
+  expect(screen.getByRole("link", { name: "Triaje (Urgencias)" })).toHaveAttribute("href", "/estadistica/informes/triaje");
+  for (const label of ["Admisiones (Urgencias)", "Facturas Detalladas", "Signos Vitales"]) expect(screen.queryByText(label)).not.toBeInTheDocument();
+});
+
 it("con todos los permisos de informes organiza el grupo Informes y lo colapsa", () => {
   auth.permissions = ["statistics.reports.detailed_invoices.view", "statistics.reports.vital_signs.view", "statistics.reports.admissions.view", "statistics.reports.triage.view"];
   mount();
@@ -109,8 +117,8 @@ it("con todos los permisos de informes organiza el grupo Informes y lo colapsa",
   expect(panel).not.toBeVisible();
   fireEvent.click(informes);
   expect(informes).toHaveAttribute("aria-expanded", "true");
-  expect(within(panel).getAllByRole("link")).toHaveLength(3);
-  expect(within(panel).getByText("Triaje (Urgencias)")).toHaveAttribute("aria-disabled", "true");
+  expect(within(panel).getAllByRole("link")).toHaveLength(4);
+  expect(within(panel).getByRole("link", { name: "Triaje (Urgencias)" })).toHaveAttribute("href", "/estadistica/informes/triaje");
   fireEvent.click(informes);
   expect(informes).toHaveAttribute("aria-expanded", "false");
 });

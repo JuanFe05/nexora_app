@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { ChartBarIcon } from "@/icons";
 import { downloadBlob, type ExportColumn } from "@/lib/table-export";
 import type { createReportApi } from "./report-api";
-import { ReportFilters } from "./report-filters";
+import { ReportFilters, type CatalogApi } from "./report-filters";
 import { reportError } from "./report-utils";
 import type { ReportFilters as Filters } from "./types";
 
@@ -15,7 +15,9 @@ export type ReportDefinition<TRow> = {
   description: string;
   filename: string;
   emptyTitle: string;
-  api: ReturnType<typeof createReportApi<TRow>>;
+  /** Defaults to the existing three-filter form; Triaje opts out. */
+  productLineFilter?: boolean;
+  api: Omit<ReturnType<typeof createReportApi<TRow>>, "fetchProductLines"> & CatalogApi;
   columns: readonly (DataTableColumn<TRow> & { label: string })[];
   exportColumns: readonly ExportColumn[];
   defaultVisibleColumns: string[];
@@ -78,7 +80,7 @@ export function ReportPage<TRow>({ report }: { report: ReportDefinition<TRow> })
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader icon={<ChartBarIcon />} title={report.title} description={report.description} />
-      <ReportFilters idPrefix={report.idPrefix} api={report.api} consulting={consulting} hasResults={Boolean(applied)} onConsult={(filters) => setApplied((current) => ({ filters, revision: (current?.revision ?? 0) + 1 }))} onClear={() => setApplied(null)} />
+      <ReportFilters idPrefix={report.idPrefix} api={report.api} productLineFilter={report.productLineFilter} consulting={consulting} hasResults={Boolean(applied)} onConsult={(filters) => setApplied((current) => ({ filters, revision: (current?.revision ?? 0) + 1 }))} onClear={() => setApplied(null)} />
       {applied ? <ReportResults key={applied.revision} report={report} filters={applied.filters} visibleColumns={visibleColumns} onVisibleColumnsChange={setVisibleColumns} onLoadingChange={setConsulting} /> : (
         <Card>
           <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">Resultados</h2>

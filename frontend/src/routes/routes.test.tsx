@@ -39,6 +39,7 @@ vi.mock(
 );
 vi.mock("@/features/statistics/vital-signs/pages/vital-signs-page", () => ({ default: () => <h1>Signos Vitales</h1> }));
 vi.mock("@/features/statistics/admissions/pages/admissions-page", () => ({ default: () => <h1>Admisiones</h1> }));
+vi.mock("@/features/statistics/triage/pages/triage-page", () => ({ default: () => <h1>Triaje</h1> }));
 afterEach(cleanup);
 beforeEach(() => {
   auth.status = "authenticated";
@@ -66,6 +67,25 @@ const settings = [
   ["roles", "Roles"],
 ];
 describe("páginas protegidas", () => {
+  it("permite Triaje con su permiso independiente", async () => {
+    auth.permissions = ["statistics.reports.triage.view"];
+    mount("/estadistica/informes/triaje");
+    expect(await screen.findByRole("heading", { name: "Triaje" })).toBeVisible();
+  });
+  it.each([{ permissions: [] }, { permissions: ["statistics.reports.admissions.view"] }])("redirige Triaje sin su permiso: $permissions", async ({ permissions }) => {
+    auth.permissions = permissions;
+    const router = mount("/estadistica/informes/triaje");
+    expect(await screen.findByRole("heading", { name: "Inicio" })).toBeVisible();
+    expect(router.state.location.pathname).toBe("/");
+    expect(router.state.historyAction).toBe("REPLACE");
+  });
+  it("exige sesión antes del permiso de Triaje", async () => {
+    auth.status = "anonymous";
+    auth.permissions = ["statistics.reports.triage.view"];
+    const router = mount("/estadistica/informes/triaje");
+    expect(await screen.findByRole("button", { name: "Iniciar sesión" })).toBeVisible();
+    expect(router.state.location.pathname).toBe("/signin");
+  });
   it("permite Signos Vitales con su permiso independiente", async () => {
     auth.permissions = ["statistics.reports.vital_signs.view"];
     mount("/estadistica/informes/signos-vitales");

@@ -3,7 +3,7 @@
 Shell React basado en [TailAdmin React v2.5.0](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard/tree/v2.5.0).
 Conserva su diseño, componentes y tema claro/oscuro. Licencia MIT original en `LICENSE.md`.
 Incluye autenticación conectada a la API de NEXORA: acceso, restauración de sesión y cierre de sesión.
-Incluye las pantallas de administración de Usuarios, Roles y Permisos, y el perfil de usuario, todas protegidas por permisos. Incluye los informes de Facturas Detalladas, Signos Vitales y Admisiones. No incluye registro público.
+Incluye las pantallas de administración de Usuarios, Roles y Permisos, y el perfil de usuario, todas protegidas por permisos. Incluye los informes de Facturas Detalladas, Signos Vitales, Admisiones y Triaje. No incluye registro público.
 
 ## Inicio rápido
 
@@ -78,6 +78,7 @@ Rutas actuales: `/` y `/configuracion/perfil` requieren sesión; `/signin` solo 
 | `/estadistica/informes/facturas-detalladas` (Informes → Facturas Detalladas) | `statistics.reports.detailed_invoices.view` |
 | `/estadistica/informes/signos-vitales` (Informes → Signos Vitales) | `statistics.reports.vital_signs.view` |
 | `/estadistica/informes/admisiones` (Informes → Admisiones (Urgencias)) | `statistics.reports.admissions.view` |
+| `/estadistica/informes/triaje` (Informes → Triaje (Urgencias)) | `statistics.reports.triage.view` |
 
 Los códigos se reutilizan desde `features/auth/permissions.ts`; ningún nombre de rol concede acceso por sí solo.
 Las páginas conservan sus cargas con `React.lazy`. El menú «Configuración de la cuenta» lleva a
@@ -86,9 +87,9 @@ un destino de retorno. **Después de un login correcto siempre se abre `/`**, in
 ruta antes o existía un antiguo `location.state.from`. Una visita autenticada a `/signin` también vuelve a `/`.
 
 El sidebar conserva el diseño TailAdmin: la sección **ESTADÍSTICA** contiene Inicio y los grupos
-Informes, Gestión Administrativa, Resoluciones y Circulares. **Informes** contiene Facturas Detalladas
-Signos Vitales y Admisiones (Urgencias) (cada uno con ruta y permiso independiente) y Triaje (Urgencias);
-esta última opción aún no tiene ruta y permanece deshabilitada. Los otros grupos aún no tienen opciones.
+Informes, Gestión Administrativa, Resoluciones y Circulares. **Informes** contiene Facturas Detalladas,
+Signos Vitales, Admisiones (Urgencias) y Triaje (Urgencias), cada uno con ruta y permiso independiente.
+Los otros grupos conservan opciones deshabilitadas hasta tener ruta.
 **CONFIGURACIONES** contiene Perfil de usuario, Usuarios, Permisos y Roles.
 Cada entrada puede declarar `requiredPermission`; el sidebar filtra con `useAuth().hasPermission`
 y oculta secciones sin entradas visibles. Cada informe se oculta sin su propio permiso efectivo.
@@ -155,6 +156,25 @@ sus tipos, aliases, etiquetas y adaptador de API independientes. Las pruebas sim
 ficticios: no consultan el backend ni leen el CSV de pacientes. La cuadrícula y las primitivas con
 `min-w-0`, truncado y scroll horizontal tienen cobertura estructural; falta comprobar visualmente
 el comportamiento responsive y ambos temas en un navegador.
+
+## Triaje
+
+En **ESTADÍSTICA → Informes → Triaje (Urgencias)**, el período inclusivo corresponde a la fecha de
+ingreso. Reutiliza las validaciones, reintentos, selector de columnas y paginación 10/25/50/100.
+Solo muestra **Sede → Empresa**: no carga el catálogo ni muestra el filtro Línea de Producto,
+y las consultas y exportaciones no envían `lineas`. Los otros tres informes conservan ese filtro.
+
+Ofrece las **38 columnas** originales en orden, **15 visibles inicialmente**. La fecha de nacimiento
+ISO se presenta como `dd/MM/yyyy`; ingreso, triaje, admisión y atención conservan el texto
+`dd/MM/yyyy HH:mm:ss` del origen. Consecutivos, identificaciones y edad siguen siendo texto;
+tiempos en minutos, signos vitales y perímetro braquial son numéricos.
+**Exportar** descarga todas las filas de los filtros aplicados con columnas visibles o todas, en
+CSV o Excel, con nombre `triaje_<fecha inicial>_<fecha final>`.
+
+La ruta `/estadistica/informes/triaje` exige sesión y `statistics.reports.triage.view`
+(`PERMISSIONS.triageView`). La API usa `/statistics/reports/triage`, los catálogos `/filters/sites`
+y `/filters/companies`, y `/export`. Las pruebas usan datos ficticios y HTTP simulado; no acreditan
+conexión con SQL Server ni verificación visual en navegador.
 
 ## Variables públicas
 

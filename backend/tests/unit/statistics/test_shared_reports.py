@@ -457,3 +457,193 @@ def test_admissions_permission_catalog() -> None:
     permission = specs["statistics.reports.admissions.view"]
     assert permission.module == "statistics"
     assert permission.name == "Consultar informe Admisiones"
+
+
+TRIAGE_HEADER = [
+    "sede",
+    "cnsctvo_trgge",
+    "cnsctvo_admsns",
+    "estdo_admsn",
+    "cdgo_tpo_dcmnto",
+    "nmro_idntfccn",
+    "prmr_nmbre",
+    "sgndo_nmbre",
+    "prmr_aplldo",
+    "sgndo_aplldo",
+    "edd",
+    "tipo_edd",
+    "fcha_ncmnto",
+    "sexo",
+    "empresa",
+    "tpo_empresa",
+    "tpo_idntfccn_profesional",
+    "nmro_idntfccn_profesional",
+    "profesional_salud",
+    "cdgo",
+    "estdo_rgstro",
+    "fcha_ingrso",
+    "fcha_trge",
+    "fcha_admsn",
+    "fcha_atncn",
+    "t_prdmsn_trgge",
+    "t_trgge_admsn",
+    "t_admsn_prdmsn",
+    "t_prdmsn_atncn",
+    "tnsn_artrl_alta",
+    "tnsn_artrl_bja",
+    "frcnca_crdca",
+    "frcnca_rsprtra",
+    "tmprtra",
+    "pso",
+    "tlla",
+    "imc",
+    "prmtro_brql",
+]
+TRIAGE_PARAMS = {
+    "fecha_inicial",
+    "fecha_final",
+    "filtrar_sedes",
+    "sedes",
+    "filtrar_empresas",
+    "empresas",
+}
+
+
+def test_triage_sql_columns_bindings_read_only_and_derivation() -> None:
+    module = import_module("nexora.statistics.infrastructure.queries.triage")
+    sql = module.TRIAGE_SQL
+    select = sql.split("\nSELECT\n", 1)[1].split("FROM tbPreadmision pa", 1)[0]
+    assert re.findall(r"\bAS (\w+)\s*(?:,|--|$)", select, re.MULTILINE) == [
+        *TRIAGE_HEADER,
+        "total_registros",
+    ]
+    assert len(TRIAGE_HEADER) == 38
+    uncommented = re.sub(r"--[^\n]*", "", sql)
+    assert not re.search(r"\b(CREATE|DROP|INSERT|UPDATE|DELETE)\b", uncommented, re.IGNORECASE)
+    assert sql.lstrip().startswith(
+        "SET NOCOUNT ON;\nSET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;"
+    )
+    assert "CAST(:fecha_inicial AS DATE)" in sql and "CAST(:fecha_final AS DATE)" in sql
+    assert "pa.fcha_ingrso >= @FechaInicio" in sql
+    assert "pa.fcha_ingrso <  @FechaFinExc" in sql
+    assert "DATEADD(DAY, 1, @FechaFin)" in sql
+    assert "ORDER BY pa.cnsctvo_trgge, pa.unco, thc_trge.unco, thc_atncn.unco\nOFFSET" in sql
+    for field, alias in [("sedes", "s.unco"), ("empresas", "emp.unco")]:
+        assert f"AND (:filtrar_{field} = 0 OR {alias} IN :{field})" in sql
+    assert "ON emp.unco = ISNULL(ae_actv.unco_emprsa, ae.unco_emprsa)" in sql
+    expected = re.sub(r",\s*COUNT\(\*\) OVER \(\)\s+AS total_registros", "", sql).replace(
+        "OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY\n", ""
+    )
+    assert expected == module.TRIAGE_EXPORT_SQL
+    assert "OFFSET" not in expected and "total_registros" not in expected
+    assert set(text(expected).compile().params) == TRIAGE_PARAMS
+    for query, suffix in [(module.TRIAGE_QUERY, ""), (module.TRIAGE_EXPORT_QUERY, "_export")]:
+        assert query.name == f"statistics.triage{suffix}"
+        assert query.list_params == frozenset({"sedes", "empresas"})
+
+
+def test_triage_header_matches_csv_when_available() -> None:
+    csv_path = Path(__file__).resolve().parents[4] / "data_ips" / "TRIAJE.csv"
+    if not csv_path.exists():
+        pytest.skip("data_ips/TRIAJE.csv no disponible")
+    with csv_path.open(encoding="utf-8-sig") as csv_file:
+        assert csv_file.readline().strip().split(",") == TRIAGE_HEADER
+
+
+@pytest.mark.parametrize("ids", [(), (3, 9)])
+async def test_triage_source_binds_only_its_filters(ids) -> None:
+    reader = FakeReader([{"sede": "Synthetic", "total_registros": 7}])
+    source = source_for("triage", reader)
+    filters = DetailedInvoicesFilter(date(2026, 1, 1), date(2026, 1, 31), ids, ids, (2,))
+    page = await source.page(filters, 2, 4)
+    assert page.items == [{"sede": "Synthetic"}] and page.total == 7
+    reader.rows = [{"sede": "Synthetic"}]
+    assert [chunk async for chunk in source.stream(filters)] == [[{"sede": "Synthetic"}]]
+    expected = {
+        "fecha_inicial": filters.fecha_inicial,
+        "fecha_final": filters.fecha_final,
+        "filtrar_sedes": int(bool(ids)),
+        "sedes": list(ids) or [-1],
+        "filtrar_empresas": int(bool(ids)),
+        "empresas": list(ids) or [-1],
+    }
+    for index, (query, params) in enumerate(reader.calls):
+        assert params == (expected if index else {**expected, "limit": 2, "offset": 4})
+        assert "lineas" not in params and "filtrar_lineas" not in params
+        assert set(text(query.sql).compile().params) == set(params)
+    assert set(text(reader.calls[1][0].sql).compile().params) == TRIAGE_PARAMS
+
+
+def test_triage_permission_catalog() -> None:
+    permission = next(p for p in PERMISSION_CATALOG if p.code == "statistics.reports.triage.view")
+    assert permission.module == "statistics"
+    assert permission.name == "Consultar informe Triaje"
+
+
+@pytest.mark.parametrize(
+    "suffix", ["", "/filters/sites", "/filters/companies", "/filters/product-lines", "/export"]
+)
+def test_triage_permission_guards_every_route(suffix) -> None:
+    module = import_module("nexora.statistics.presentation.http.v1.router")
+    app = FastAPI()
+    _register_error_handlers(app)
+    app.include_router(module.triage_router)
+    reader = FakeReader([])
+    authentication = FakeAuthentication()
+    authentication.permissions = frozenset({"statistics.reports.admissions.view"})
+    app.dependency_overrides[get_container] = lambda: SimpleNamespace(sqlserver=reader)
+    app.dependency_overrides[get_authenticate_use_case] = lambda: authentication
+    with TestClient(app) as client:
+        params = {**DATES, "formato": "csv", "columnas": "sede:text"}
+        response = client.get(
+            "/statistics/reports/triage" + suffix,
+            params=params,
+            headers={"Authorization": "Bearer test-token"},
+        )
+        assert response.status_code == 403
+        assert response.json() == {"detail": "No tiene permisos para ejecutar esta operacion"}
+        assert reader.calls == [] and reader.rows == []
+        response = client.get("/statistics/reports/triage" + suffix, params=params)
+        assert response.status_code == 401
+        assert response.json() == {"detail": "Falta el encabezado Authorization: Bearer"}
+        assert reader.calls == [] and reader.rows == []
+
+
+@pytest.mark.parametrize("formato", ["csv", "xlsx"])
+def test_triage_http_page_catalogs_and_export(formato) -> None:
+    module = import_module("nexora.statistics.presentation.http.v1.router")
+    app = FastAPI()
+    _register_error_handlers(app)
+    app.include_router(module.triage_router)
+    reader = FakeReader([{"sede": "Synthetic", "total_registros": 7}])
+    authentication = FakeAuthentication()
+    authentication.permissions = frozenset({"statistics.reports.triage.view"})
+    app.dependency_overrides[get_container] = lambda: SimpleNamespace(sqlserver=reader)
+    app.dependency_overrides[get_authenticate_use_case] = lambda: authentication
+    with TestClient(app) as client:
+        headers = {"Authorization": "Bearer test-token"}
+        base = "/statistics/reports/triage"
+        response = client.get(base, params=DATES, headers=headers)
+        assert response.status_code == 200 and response.json() == [{"sede": "Synthetic"}]
+        assert response.headers["X-Total-Count"] == "7"
+        for catalog in ["sites", "companies"]:
+            reader.rows = [{"id": 3, "nombre": " Central "}]
+            response = client.get(base + "/filters/" + catalog, headers=headers)
+            assert response.status_code == 200
+            assert response.json() == [{"id": 3, "nombre": "Central"}]
+        reader.rows = [{"sede": "Synthetic"}]
+        response = client.get(
+            base + "/export",
+            params={**DATES, "formato": formato, "columnas": "sede:text"},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert f"triaje_2026-01-01_2026-01-31.{formato}" in response.headers["content-disposition"]
+        assert response.headers["cache-control"] == "no-store"
+        if formato == "csv":
+            assert response.content.decode("utf-8-sig") == "sede\r\nSynthetic\r\n"
+        else:
+            with zipfile.ZipFile(io.BytesIO(response.content)) as book:
+                assert book.testzip() is None
+                assert "Synthetic" in book.read("xl/worksheets/sheet1.xml").decode()
+        assert set(reader.calls[-1][1]) == TRIAGE_PARAMS

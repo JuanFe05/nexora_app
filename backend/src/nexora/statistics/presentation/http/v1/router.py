@@ -7,6 +7,7 @@ from nexora.statistics.infrastructure.admissions_source import SqlServerAdmissio
 from nexora.statistics.infrastructure.detailed_invoices_source import (
     SqlServerDetailedInvoicesSource,
 )
+from nexora.statistics.infrastructure.triage_source import SqlServerTriageSource
 from nexora.statistics.infrastructure.vital_signs_source import SqlServerVitalSignsSource
 from nexora.statistics.presentation.http.v1.report_router import create_report_router
 
@@ -21,6 +22,10 @@ def get_vital_signs_report(container: ContainerDep) -> Report:
 
 def get_admissions_report(container: ContainerDep) -> Report:
     return Report(SqlServerAdmissionsSource(container.sqlserver))
+
+
+def get_triage_report(container: ContainerDep) -> Report:
+    return Report(SqlServerTriageSource(container.sqlserver))
 
 
 statistics_router = create_report_router(
@@ -43,4 +48,11 @@ admissions_router = create_report_router(
     provider=get_admissions_report,
     title="admisiones",
     filename="admisiones",
+)
+triage_router = create_report_router(
+    prefix="/statistics/reports/triage",
+    permission="statistics.reports.triage.view",
+    provider=get_triage_report,
+    title="triaje",
+    filename="triaje",
 )

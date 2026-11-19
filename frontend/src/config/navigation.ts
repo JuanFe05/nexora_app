@@ -61,7 +61,11 @@ export const navigation: NavigationSection[] = [
             path: "/estadistica/informes/admisiones",
             requiredPermission: PERMISSIONS.admissionsView,
           },
-          { label: "Triaje (Urgencias)", requiredPermission: PERMISSIONS.triageView },
+          {
+            label: "Triaje (Urgencias)",
+            path: "/estadistica/informes/triaje",
+            requiredPermission: PERMISSIONS.triageView,
+          },
           {
             label: "Signos Vitales",
             path: "/estadistica/informes/signos-vitales",

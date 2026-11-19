@@ -11,13 +11,19 @@ almacena los datos consultados.
 | Facturas Detalladas | `/estadistica/informes/facturas-detalladas` | `/api/v1/statistics/reports/detailed-invoices` | `statistics.reports.detailed_invoices.view` |
 | Signos Vitales | `/estadistica/informes/signos-vitales` | `/api/v1/statistics/reports/vital-signs` | `statistics.reports.vital_signs.view` |
 | Admisiones (Urgencias) | `/estadistica/informes/admisiones` | `/api/v1/statistics/reports/admissions` | `statistics.reports.admissions.view` |
-
-Permiso sembrado sin informe ni vista todavia (reservado): `statistics.reports.triage.view`
-(Triaje). Aun no protege ningun endpoint ni ruta.
+| Triaje (Urgencias) | `/estadistica/informes/triaje` | `/api/v1/statistics/reports/triage` | `statistics.reports.triage.view` |
 
 Admisiones usa el periodo de **fecha de admision**, 59 columnas (alias de `Admisiones.sql`), los filtros
 Sede, Empresa y Linea de Producto, paginacion con desempate estable y exportacion CSV/XLSX derivada del
 mismo SQL (`queries/admissions.py`).
+
+Triaje usa el periodo de **fecha de ingreso** (`pa.fcha_ingrso`, inclusivo), las 38 columnas de
+`Triaje.sql` en el orden de la cabecera de `TRIAJE.csv`, filtros Sede (`s.unco`) y Empresa
+(`emp.unco`, empresa efectiva de la admision o del afiliado), paginacion con desempate estable y
+exportacion CSV/XLSX derivada del mismo SQL (`queries/triage.py`). No tiene relacion con Linea de
+Producto: no muestra ni carga ese filtro y no enlaza `lineas` ni `filtrar_lineas` en SQL.
+La fecha de nacimiento es ISO; las otras cuatro fechas conservan `dd/MM/yyyy HH:mm:ss` como texto,
+los identificadores y la edad permanecen texto, y los tiempos y signos vitales son numericos.
 
 Menus del sidebar sin vistas todavia, cada opcion con su permiso reservado (deshabilitada hasta tener ruta):
 
@@ -46,8 +52,10 @@ Menus del sidebar sin vistas todavia, cada opcion con su permiso reservado (desh
 
 ### Contrato compartido
 
-Los dos prefijos exponen las mismas rutas y filtros. `lineas` sigue a Empresa y acepta ids
-reales de `tbLineasProductos.unco`; seleccionar todas equivale a omitir el parametro.
+Los prefijos reutilizan las mismas rutas. Facturas Detalladas, Signos Vitales y Admisiones usan
+`lineas` despues de Empresa, con ids reales de `tbLineasProductos.unco`; seleccionar todas equivale
+a omitir el parametro. Triaje solo utiliza fechas, sedes y empresas: aunque la fabrica compartida
+expone el catalogo y acepta `lineas`, su fuente lo ignora y nunca lo envia al ejecutor SQL.
 
 | Endpoint (relativo al prefijo del informe) | Uso |
 | --- | --- |
@@ -83,7 +91,7 @@ inserta en las variables de tabla `@cerrado`, `@def`, `@esp`.
 - `Report` comparte validacion, pagina, exportacion y catalogos. `SqlServerReportSource`
   comparte parametros enlazados (lista `[-1]` cuando se omite un filtro), streaming y sondeo de
   total si la pagina esta fuera de rango. Cada informe aporta sus consultas nombradas.
-- La fabrica HTTP registra las cinco rutas por prefijo y permiso. La exportacion de ambos
+- La fabrica HTTP registra las cinco rutas por prefijo y permiso. La exportacion de todos los
   informes se deriva con el mismo helper, sin el conteo ni la paginacion.
 - `integration_management`: configuracion y motor de SQL Server, y ejecutor de consultas nombradas
   (`ReadOnlyQuery`) con parametros enlazados. No acepta SQL desde HTTP.
