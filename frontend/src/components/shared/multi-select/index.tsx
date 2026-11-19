@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -43,7 +43,10 @@ export type MultiSelectProps = {
 const triggerClassName = "cursor-pointer py-1 ps-3 pe-3.5";
 const itemClassName =
   "gap-3 pe-3 [&_[data-slot=select-item-indicator]]:hidden [&_[data-slot=combobox-item-indicator]]:hidden";
-const popupClassName = "custom-scrollbar max-w-[min(90vw,28rem)]";
+const popupClassName = "custom-scrollbar min-w-56";
+// Popup is user-resizable (like a textarea); the list fills whatever height the user picks.
+const searchPopupClassName = `${popupClassName} h-[min(24rem,var(--available-height))]`;
+const searchListClassName = "max-h-none min-h-0 flex-1";
 
 /**
  * TailAdmin "Multiple Select Options". The trigger keeps its fixed height: it shows the first
@@ -63,6 +66,7 @@ export function MultiSelect({
   error,
   onRetry,
 }: MultiSelectProps) {
+  const [search, setSearch] = useState("");
   const unavailable = disabled || loading || Boolean(error);
   const allSelected =
     options.length > 0 &&
@@ -77,7 +81,7 @@ export function MultiSelect({
           checked={value.includes(option.value)}
           className="pointer-events-none"
         />
-        <span className="truncate">{option.label}</span>
+        <span className="min-w-0 whitespace-normal break-words">{option.label}</span>
       </>
     );
   }
@@ -159,6 +163,12 @@ export function MultiSelect({
           isItemEqualToValue={(a, b) => a.value === b.value}
           itemToStringLabel={(option) => option.label}
           disabled={unavailable}
+          inputValue={search}
+          onInputValueChange={(next, details) => {
+            // Picking an option must not wipe the search: the user may need several matches.
+            if ((details as { isItemPress?: boolean }).isItemPress) return;
+            setSearch(next);
+          }}
         >
           <ComboboxPrimitive.Trigger
             id={id}
@@ -174,7 +184,7 @@ export function MultiSelect({
             </span>
             <ChevronDownIcon className={selectTriggerChevronClassName} />
           </ComboboxPrimitive.Trigger>
-          <ComboboxContent className={popupClassName}>
+          <ComboboxContent className={searchPopupClassName}>
             <ComboboxInput
               showTrigger={false}
               placeholder="Buscar…"
@@ -182,7 +192,7 @@ export function MultiSelect({
             />
             {selectAll}
             <ComboboxEmpty>No se encontraron opciones.</ComboboxEmpty>
-            <ComboboxList>
+            <ComboboxList className={searchListClassName}>
               {(option: MultiSelectOption) => (
                 <ComboboxItem
                   key={`${typeof option.value}-${option.value}`}
