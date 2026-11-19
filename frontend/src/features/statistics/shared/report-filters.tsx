@@ -60,7 +60,7 @@ export function ReportFilters({ idPrefix, api, productLineFilter = true, consult
     <Card>
       <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">Filtros de consulta</h2>
       <form noValidate onSubmit={(event) => { event.preventDefault(); consult(); }} className="space-y-5">
-        <div className="grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        <div className={`grid min-w-0 grid-cols-1 gap-5 sm:grid-cols-2 ${productLineFilter ? "lg:grid-cols-3 2xl:grid-cols-5" : "lg:grid-cols-4"}`}>
           <DateField id={`${idPrefix}-start-date`} label="Fecha inicial" value={startDate} onChange={setStartDate} required maxDate="today" error={errors.startDate} />
           <DateField id={`${idPrefix}-end-date`} label="Fecha final" value={endDate} onChange={setEndDate} required maxDate="today" error={errors.endDate} />
           <MultiSelect id={`${idPrefix}-sites`} label="Sede" placeholder="Seleccionar sedes" options={sites.items.map((item) => ({ value: item.id, label: item.nombre }))} value={selectedSites} onChange={setSelectedSites} loading={sites.loading} error={sites.error} onRetry={sites.retry} />
