@@ -5,6 +5,7 @@ import re
 import zipfile
 from datetime import date
 from importlib import import_module
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -22,7 +23,7 @@ from nexora.identity_access.presentation.http.v1.dependencies.auth import (
 )
 from nexora.statistics.domain.filters import DetailedInvoicesFilter, InvalidReportFilter
 
-REPORTS = ["detailed_invoices", "vital_signs"]
+REPORTS = ["detailed_invoices", "vital_signs", "admissions"]
 HEADER = [
     "sede",
     "linea_servicio",
@@ -151,6 +152,7 @@ def http(request):
     _register_error_handlers(app)
     app.include_router(module.statistics_router)
     app.include_router(module.vital_signs_router)
+    app.include_router(module.admissions_router)
     reader = FakeReader([{"sede": "Synthetic", "total_registros": 7}])
     authentication = FakeAuthentication()
     permission = f"statistics.reports.{request.param}.view"
@@ -210,7 +212,11 @@ def test_both_reports_export_exactly_one_format_and_bind_lineas(http, formato) -
         headers={"Authorization": "Bearer test-token"},
     )
     assert response.status_code == 200
-    filename = "facturas-detalladas" if name == "detailed_invoices" else "signos-vitales"
+    filename = {
+        "detailed_invoices": "facturas-detalladas",
+        "vital_signs": "signos-vitales",
+        "admissions": "admisiones",
+    }[name]
     assert f"{filename}_2026-01-01_2026-01-31.{formato}" in response.headers["content-disposition"]
     assert response.headers["cache-control"] == "no-store"
     if formato == "csv":
@@ -330,3 +336,124 @@ def test_vital_signs_permission_catalog() -> None:
     permission = specs["statistics.reports.vital_signs.view"]
     assert permission.module == "statistics"
     assert permission.name == "Consultar informe Signos Vitales"
+
+
+ADMISSIONS_HEADER = [
+    "cnsctvo_trgge",
+    "cnsctvo_admsn",
+    "sede",
+    "emprsa",
+    "tpo_idntfccn",
+    "nmro_idntfccn",
+    "prmr_nmbre",
+    "sgndo_nmbre",
+    "prmr_aplldo",
+    "sgndo_aplldo",
+    "edd",
+    "tlfno",
+    "fcha_ncmnto",
+    "sexo",
+    "rza",
+    "drccn",
+    "mncpo_rsdncia",
+    "tpo_idntfccn_prfsnl_ordna",
+    "nmro_idntfccn_prfsnl_ordna",
+    "prfsnl_ordna",
+    "prfsnl_rlza",
+    "cd_dx",
+    "dx",
+    "cd_dx_rlcndo1",
+    "dx_rlcndo1",
+    "cd_dx_rlcndo2",
+    "dx_rlcndo2",
+    "fcha_admsn",
+    "fcha_slda_admsn",
+    "fcha_ordn",
+    "fcha_atncn2",
+    "cnsctvo_dcto",
+    "fcha_dcto",
+    "cnsctvo_ordn_smntro_admsn",
+    "cdgo_prcdmnto",
+    "rslcn",
+    "prcdmnto",
+    "lna_prdcto",
+    "cntdd",
+    "vlr_srvco",
+    "vlr_ttl",
+    "vlr_srvcs",
+    "vlr_smnstrs",
+    "vlr_hnrrio",
+    "fcha_atrzcn_eps",
+    "nmro_atrzcn_eps",
+    "estdo_admsn",
+    "estdo_trnsccn",
+    "estdo_srvcs",
+    "usro_rlza",
+    "usro_mdfccn",
+    "tnsn_artrl_alta",
+    "tnsn_artrl_bja",
+    "frcnca_crdca",
+    "frcnca_rsprtra",
+    "tmprtra",
+    "pso",
+    "tlla",
+    "imc",
+]
+
+
+def test_admissions_sql_columns_bindings_read_only_and_derivation() -> None:
+    module = import_module("nexora.statistics.infrastructure.queries.admissions")
+    sql = module.ADMISSIONS_SQL
+    select = sql.split("SELECT\n    ISNULL(pra.cnsctvo_trgge, 0)", 1)[1].split(
+        "FROM tbAdmisiones adm", 1
+    )[0]
+    assert re.findall(r"\bAS (\w+)\s*(?:,|--|$)", select, re.MULTILINE) == [
+        *ADMISSIONS_HEADER,
+        "total_registros",
+    ]
+    assert len(ADMISSIONS_HEADER) == 59
+    uncommented = re.sub(r"--[^\n]*", "", sql)
+    assert not re.search(r"\b(CREATE|DROP|UPDATE|DELETE)\b", uncommented, re.IGNORECASE)
+    assert re.findall(r"\bINSERT\s+INTO\s+(\S+)", uncommented, re.IGNORECASE) == ["@def"]
+    assert sql.lstrip().startswith(
+        "SET NOCOUNT ON;\nSET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;"
+    )
+    assert (
+        "ORDER BY adm.fcha_admsn, adm.cnsctvo_admsns, det.tpo_dtlle, det.unco_dtlle\nOFFSET" in sql
+    )
+    for field, alias in [
+        ("sedes", "s.unco"),
+        ("empresas", "ae.unco_emprsa"),
+        ("lineas", "lp.unco"),
+    ]:
+        assert f"AND (:filtrar_{field} = 0 OR {alias} IN :{field})" in sql
+    expected = re.sub(r",\s*COUNT\(\*\) OVER \(\)\s+AS total_registros", "", sql).replace(
+        "OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY\n", ""
+    )
+    assert expected == module.ADMISSIONS_EXPORT_SQL
+    assert "total_registros" not in expected and "OFFSET" not in expected
+    assert set(text(expected).compile().params) == {
+        "fecha_inicial",
+        "fecha_final",
+        "filtrar_sedes",
+        "sedes",
+        "filtrar_empresas",
+        "empresas",
+        "filtrar_lineas",
+        "lineas",
+    }
+
+
+def test_admissions_header_matches_csv_when_available() -> None:
+    csv_path = Path(__file__).resolve().parents[4] / "data_ips" / "Admisiones.csv"
+    if not csv_path.exists():  # data_ips is git-ignored
+        pytest.skip("data_ips/Admisiones.csv no disponible")
+    first_line = csv_path.read_text(encoding="utf-8-sig").splitlines()[0]
+    assert first_line.split(",") == ADMISSIONS_HEADER
+
+
+def test_admissions_permission_catalog() -> None:
+    specs = {spec.code: spec for spec in PERMISSION_CATALOG}
+    permission = specs["statistics.reports.admissions.view"]
+    assert permission.module == "statistics"
+    assert permission.name == "Consultar informe Admisiones"

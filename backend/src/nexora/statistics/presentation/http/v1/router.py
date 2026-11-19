@@ -3,6 +3,7 @@
 from nexora.identity_access.presentation.http.v1.dependencies.auth import ContainerDep
 from nexora.statistics.application.detailed_invoices import DetailedInvoicesReport
 from nexora.statistics.application.report import Report
+from nexora.statistics.infrastructure.admissions_source import SqlServerAdmissionsSource
 from nexora.statistics.infrastructure.detailed_invoices_source import (
     SqlServerDetailedInvoicesSource,
 )
@@ -18,6 +19,10 @@ def get_vital_signs_report(container: ContainerDep) -> Report:
     return Report(SqlServerVitalSignsSource(container.sqlserver))
 
 
+def get_admissions_report(container: ContainerDep) -> Report:
+    return Report(SqlServerAdmissionsSource(container.sqlserver))
+
+
 statistics_router = create_report_router(
     prefix="/statistics/reports/detailed-invoices",
     permission="statistics.reports.detailed_invoices.view",
@@ -31,4 +36,11 @@ vital_signs_router = create_report_router(
     provider=get_vital_signs_report,
     title="signos vitales",
     filename="signos-vitales",
+)
+admissions_router = create_report_router(
+    prefix="/statistics/reports/admissions",
+    permission="statistics.reports.admissions.view",
+    provider=get_admissions_report,
+    title="admisiones",
+    filename="admisiones",
 )

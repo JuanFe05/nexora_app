@@ -56,7 +56,11 @@ export const navigation: NavigationSection[] = [
             path: "/estadistica/informes/facturas-detalladas",
             requiredPermission: PERMISSIONS.detailedInvoicesView,
           },
-          { label: "Admisiones (Urgencias)", requiredPermission: PERMISSIONS.admissionsView },
+          {
+            label: "Admisiones (Urgencias)",
+            path: "/estadistica/informes/admisiones",
+            requiredPermission: PERMISSIONS.admissionsView,
+          },
           { label: "Triaje (Urgencias)", requiredPermission: PERMISSIONS.triageView },
           {
             label: "Signos Vitales",

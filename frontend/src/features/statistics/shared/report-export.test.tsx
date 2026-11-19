@@ -7,6 +7,8 @@ import { httpClient } from "@/lib/http/http-client";
 import { downloadBlob } from "@/lib/table-export";
 import DetailedInvoicesPage from "../detailed-invoices/pages/detailed-invoices-page";
 import VitalSignsPage from "../vital-signs/pages/vital-signs-page";
+import AdmissionsPage from "../admissions/pages/admissions-page";
+import { admissionsExportColumns, defaultVisibleColumns as admissionsDefaults } from "../admissions/columns";
 import { invoiceExportColumns, defaultVisibleColumns as invoiceDefaults } from "../detailed-invoices/columns";
 import { vitalSignsExportColumns, defaultVisibleColumns as vitalDefaults } from "../vital-signs/columns";
 vi.mock("@/lib/http/http-client", () => ({ httpClient: { get: vi.fn(), getWithMeta: vi.fn(), getBlob: vi.fn() } }));
@@ -20,6 +22,7 @@ beforeEach(() => {
 it.each([
   { Page: DetailedInvoicesPage, prefix: "detailed-invoices", filename: "facturas-detalladas", columns: invoiceExportColumns, defaults: invoiceDefaults },
   { Page: VitalSignsPage, prefix: "vital-signs", filename: "signos-vitales", columns: vitalSignsExportColumns, defaults: vitalDefaults },
+  { Page: AdmissionsPage, prefix: "admissions", filename: "admisiones", columns: admissionsExportColumns, defaults: admissionsDefaults },
 ])("$prefix exports applied filters and columns in one blob per operation", async ({ Page, prefix, filename, columns, defaults }) => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   const file = new Blob(["synthetic"]);

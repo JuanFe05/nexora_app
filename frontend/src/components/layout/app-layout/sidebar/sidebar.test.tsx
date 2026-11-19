@@ -95,7 +95,7 @@ it("Admisiones y Triaje solo aparecen con su permiso propio", () => {
   auth.permissions = ["statistics.reports.admissions.view"];
   mount();
   fireEvent.click(screen.getByRole("button", { name: "Informes" }));
-  expect(screen.getByText("Admisiones (Urgencias)")).toHaveAttribute("aria-disabled", "true");
+  expect(screen.getByRole("link", { name: "Admisiones (Urgencias)" })).toHaveAttribute("href", "/estadistica/informes/admisiones");
   expect(screen.queryByText("Triaje (Urgencias)")).not.toBeInTheDocument();
 });
 
@@ -109,10 +109,8 @@ it("con todos los permisos de informes organiza el grupo Informes y lo colapsa",
   expect(panel).not.toBeVisible();
   fireEvent.click(informes);
   expect(informes).toHaveAttribute("aria-expanded", "true");
-  expect(within(panel).getAllByRole("link")).toHaveLength(2);
-  for (const label of ["Admisiones (Urgencias)", "Triaje (Urgencias)"]) {
-    expect(within(panel).getByText(label)).toHaveAttribute("aria-disabled", "true");
-  }
+  expect(within(panel).getAllByRole("link")).toHaveLength(3);
+  expect(within(panel).getByText("Triaje (Urgencias)")).toHaveAttribute("aria-disabled", "true");
   fireEvent.click(informes);
   expect(informes).toHaveAttribute("aria-expanded", "false");
 });

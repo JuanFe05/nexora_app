@@ -38,6 +38,7 @@ vi.mock(
   () => ({ default: () => <h1>Facturas Detalladas</h1> }),
 );
 vi.mock("@/features/statistics/vital-signs/pages/vital-signs-page", () => ({ default: () => <h1>Signos Vitales</h1> }));
+vi.mock("@/features/statistics/admissions/pages/admissions-page", () => ({ default: () => <h1>Admisiones</h1> }));
 afterEach(cleanup);
 beforeEach(() => {
   auth.status = "authenticated";
@@ -76,6 +77,17 @@ describe("páginas protegidas", () => {
     expect(await screen.findByRole("heading", { name: "Inicio" })).toBeVisible();
     expect(router.state.location.pathname).toBe("/");
     expect(router.state.historyAction).toBe("REPLACE");
+  });
+  it("permite Admisiones con su permiso independiente", async () => {
+    auth.permissions = ["statistics.reports.admissions.view"];
+    mount("/estadistica/informes/admisiones");
+    expect(await screen.findByRole("heading", { name: "Admisiones" })).toBeVisible();
+  });
+  it("redirige Admisiones sin su permiso", async () => {
+    auth.permissions = ["statistics.reports.vital_signs.view"];
+    const router = mount("/estadistica/informes/admisiones");
+    expect(await screen.findByRole("heading", { name: "Inicio" })).toBeVisible();
+    expect(router.state.location.pathname).toBe("/");
   });
   it("exige sesión antes del permiso de Signos Vitales", async () => {
     auth.status = "anonymous";

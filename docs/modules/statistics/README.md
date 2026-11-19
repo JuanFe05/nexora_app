@@ -10,9 +10,14 @@ almacena los datos consultados.
 | --- | --- | --- | --- |
 | Facturas Detalladas | `/estadistica/informes/facturas-detalladas` | `/api/v1/statistics/reports/detailed-invoices` | `statistics.reports.detailed_invoices.view` |
 | Signos Vitales | `/estadistica/informes/signos-vitales` | `/api/v1/statistics/reports/vital-signs` | `statistics.reports.vital_signs.view` |
+| Admisiones (Urgencias) | `/estadistica/informes/admisiones` | `/api/v1/statistics/reports/admissions` | `statistics.reports.admissions.view` |
 
-Permisos sembrados sin informe ni vista todavia (reservados): `statistics.reports.admissions.view`
-(Admisiones) y `statistics.reports.triage.view` (Triaje). Aun no protegen ningun endpoint ni ruta.
+Permiso sembrado sin informe ni vista todavia (reservado): `statistics.reports.triage.view`
+(Triaje). Aun no protege ningun endpoint ni ruta.
+
+Admisiones usa el periodo de **fecha de admision**, 59 columnas (alias de `Admisiones.sql`), los filtros
+Sede, Empresa y Linea de Producto, paginacion con desempate estable y exportacion CSV/XLSX derivada del
+mismo SQL (`queries/admissions.py`).
 
 Menus del sidebar sin vistas todavia, cada opcion con su permiso reservado (deshabilitada hasta tener ruta):
 

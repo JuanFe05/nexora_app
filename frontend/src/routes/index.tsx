@@ -27,6 +27,10 @@ const VitalSignsPage = lazy(
   () => import("@/features/statistics/vital-signs/pages/vital-signs-page"),
 );
 
+const AdmissionsPage = lazy(
+  () => import("@/features/statistics/admissions/pages/admissions-page"),
+);
+
 export const routes: RouteObject[] = [
   {
     element: <ProtectedRoute />,
@@ -55,6 +59,15 @@ export const routes: RouteObject[] = [
               {
                 path: "/estadistica/informes/signos-vitales",
                 element: <VitalSignsPage />,
+              },
+            ],
+          },
+          {
+            element: <RequirePermission permission={PERMISSIONS.admissionsView} />,
+            children: [
+              {
+                path: "/estadistica/informes/admisiones",
+                element: <AdmissionsPage />,
               },
             ],
           },

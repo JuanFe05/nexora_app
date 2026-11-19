@@ -3,7 +3,7 @@
 Shell React basado en [TailAdmin React v2.5.0](https://github.com/TailAdmin/free-react-tailwind-admin-dashboard/tree/v2.5.0).
 Conserva su diseño, componentes y tema claro/oscuro. Licencia MIT original en `LICENSE.md`.
 Incluye autenticación conectada a la API de NEXORA: acceso, restauración de sesión y cierre de sesión.
-Incluye las pantallas de administración de Usuarios, Roles y Permisos, y el perfil de usuario, todas protegidas por permisos. Incluye los informes de Facturas Detalladas y Signos Vitales. No incluye registro público.
+Incluye las pantallas de administración de Usuarios, Roles y Permisos, y el perfil de usuario, todas protegidas por permisos. Incluye los informes de Facturas Detalladas, Signos Vitales y Admisiones. No incluye registro público.
 
 ## Inicio rápido
 
@@ -77,6 +77,7 @@ Rutas actuales: `/` y `/configuracion/perfil` requieren sesión; `/signin` solo 
 | `/configuracion/roles` (Roles)                                               | `identity.roles.view`                       |
 | `/estadistica/informes/facturas-detalladas` (Informes → Facturas Detalladas) | `statistics.reports.detailed_invoices.view` |
 | `/estadistica/informes/signos-vitales` (Informes → Signos Vitales) | `statistics.reports.vital_signs.view` |
+| `/estadistica/informes/admisiones` (Informes → Admisiones (Urgencias)) | `statistics.reports.admissions.view` |
 
 Los códigos se reutilizan desde `features/auth/permissions.ts`; ningún nombre de rol concede acceso por sí solo.
 Las páginas conservan sus cargas con `React.lazy`. El menú «Configuración de la cuenta» lleva a
@@ -86,8 +87,8 @@ ruta antes o existía un antiguo `location.state.from`. Una visita autenticada a
 
 El sidebar conserva el diseño TailAdmin: la sección **ESTADÍSTICA** contiene Inicio y los grupos
 Informes, Gestión Administrativa, Resoluciones y Circulares. **Informes** contiene Facturas Detalladas
-y Signos Vitales (cada uno con ruta y permiso independiente), Admisiones (Urgencias) y Triaje (Urgencias);
-estas últimas dos opciones aún no tienen ruta y permanecen deshabilitadas. Los otros grupos aún no tienen opciones.
+Signos Vitales y Admisiones (Urgencias) (cada uno con ruta y permiso independiente) y Triaje (Urgencias);
+esta última opción aún no tiene ruta y permanece deshabilitada. Los otros grupos aún no tienen opciones.
 **CONFIGURACIONES** contiene Perfil de usuario, Usuarios, Permisos y Roles.
 Cada entrada puede declarar `requiredPermission`; el sidebar filtra con `useAuth().hasPermission`
 y oculta secciones sin entradas visibles. Cada informe se oculta sin su propio permiso efectivo.
