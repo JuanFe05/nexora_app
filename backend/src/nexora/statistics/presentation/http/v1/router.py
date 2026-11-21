@@ -3,6 +3,7 @@
 from nexora.identity_access.presentation.http.v1.dependencies.auth import ContainerDep
 from nexora.statistics.application.detailed_invoices import DetailedInvoicesReport
 from nexora.statistics.application.report import Report
+from nexora.statistics.application.sivigila import SivigilaReport
 from nexora.statistics.infrastructure.admissions_source import SqlServerAdmissionsSource
 from nexora.statistics.infrastructure.detailed_invoices_source import (
     SqlServerDetailedInvoicesSource,
@@ -10,6 +11,7 @@ from nexora.statistics.infrastructure.detailed_invoices_source import (
 from nexora.statistics.infrastructure.triage_source import SqlServerTriageSource
 from nexora.statistics.infrastructure.vital_signs_source import SqlServerVitalSignsSource
 from nexora.statistics.presentation.http.v1.report_router import create_report_router
+from nexora.statistics.presentation.http.v1.sivigila_router import create_sivigila_router
 
 
 def get_detailed_invoices_report(container: ContainerDep) -> DetailedInvoicesReport:
@@ -18,6 +20,11 @@ def get_detailed_invoices_report(container: ContainerDep) -> DetailedInvoicesRep
 
 def get_vital_signs_report(container: ContainerDep) -> Report:
     return Report(SqlServerVitalSignsSource(container.sqlserver))
+
+
+def get_sivigila_report(container: ContainerDep) -> SivigilaReport:
+    # Reutiliza la query de Signos Vitales; una sola lectura alimenta todas las pestañas.
+    return SivigilaReport(SqlServerVitalSignsSource(container.sqlserver))
 
 
 def get_admissions_report(container: ContainerDep) -> Report:
@@ -55,4 +62,9 @@ triage_router = create_report_router(
     provider=get_triage_report,
     title="triaje",
     filename="triaje",
+)
+sivigila_router = create_sivigila_router(
+    prefix="/statistics/administrative/sivigila",
+    permission="statistics.administrative.sivigila.view",
+    provider=get_sivigila_report,
 )
