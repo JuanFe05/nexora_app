@@ -16,7 +16,7 @@ from nexora.statistics.application.sivigila import (
     SivigilaReport,
     SivigilaResult,
 )
-from nexora.statistics.domain.filters import ReportFilter
+from nexora.statistics.domain.filters import InvalidReportFilter, ReportFilter
 from nexora.statistics.infrastructure.export_writers import WRITERS
 
 _CHUNK = 2000
@@ -75,16 +75,22 @@ def create_sivigila_router(
         fecha_final: Annotated[date, Query()],
         formato: Annotated[Literal["csv", "xlsx"], Query()],
         evento: Annotated[Event, Query()],
+        columnas: Annotated[
+            list[str] | None, Query(description="Claves de columna; omitir = todas")
+        ] = None,
         sedes: Annotated[list[int] | None, Query()] = None,
         empresas: Annotated[list[int] | None, Query()] = None,
         lineas: Annotated[list[int] | None, Query()] = None,
     ) -> StreamingResponse:
         result = await report.build(_filter(fecha_inicial, fecha_final, sedes, empresas, lineas))
+        selected = [item for item in COLUMNS if not columnas or item[0] in columnas]
+        if not selected or columnas and len(set(columnas)) != len(selected):
+            raise InvalidReportFilter("Columnas desconocidas.")
         label = GROUP_LABELS.get(evento, "Grupo")
-        headers = {key: (label if key == "grupo" else title) for key, title, _ in COLUMNS}
-        columns = [ExportColumn(headers[key], kind) for key, _, kind in COLUMNS]  # type: ignore[arg-type]
+        headers = {key: (label if key == "grupo" else title) for key, title, _ in selected}
+        columns = [ExportColumn(headers[key], kind) for key, _, kind in selected]  # type: ignore[arg-type]
         rows = [
-            {headers[key]: row[key] for key, _, _ in COLUMNS} for row in result.pestanas[evento]
+            {headers[key]: row[key] for key, _, _ in selected} for row in result.pestanas[evento]
         ]
         writer, media_type, extension = WRITERS[formato]
         name = f"notificacion-sivigila-{evento}_{fecha_inicial}_{fecha_final}.{extension}"

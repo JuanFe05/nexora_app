@@ -27,6 +27,10 @@ const VitalSignsPage = lazy(
   () => import("@/features/statistics/vital-signs/pages/vital-signs-page"),
 );
 
+const SivigilaPage = lazy(
+  () => import("@/features/statistics/sivigila/pages/sivigila-page"),
+);
+
 const AdmissionsPage = lazy(
   () => import("@/features/statistics/admissions/pages/admissions-page"),
 );
@@ -63,6 +67,15 @@ export const routes: RouteObject[] = [
               {
                 path: "/estadistica/informes/signos-vitales",
                 element: <VitalSignsPage />,
+              },
+            ],
+          },
+          {
+            element: <RequirePermission permission={PERMISSIONS.sivigilaView} />,
+            children: [
+              {
+                path: "/estadistica/administrativa/notificacion-sivigila",
+                element: <SivigilaPage />,
               },
             ],
           },

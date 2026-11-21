@@ -216,3 +216,10 @@ def test_export_xlsx_uses_labels_and_group_header(http: Any) -> None:
     assert "Grupo IRA" in first[0] and len(first) == 2
     xlsx = get(client, "/export", formato="xlsx", evento="general")
     assert zipfile.is_zipfile(io.BytesIO(xlsx.content))
+
+
+def test_export_honours_selected_columns_and_rejects_unknown(http: Any) -> None:
+    client, _, _ = http
+    ok = get(client, "/export", formato="csv", evento="eda", columnas=["sede", "grupo"])
+    assert ok.content.decode("utf-8-sig").splitlines()[0] == "Sede;Grupo EDA"
+    assert get(client, "/export", formato="csv", evento="eda", columnas=["x"]).status_code == 422
