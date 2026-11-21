@@ -17,6 +17,10 @@ export function BriefcaseIcon(props: IconProps) {
 export function DocumentTextIcon(props: IconProps) {
   return <Base {...props}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></Base>;
 }
+/** Heartbeat line: epidemiological surveillance (SIVIGILA). */
+export function PulseIcon(props: IconProps) {
+  return <Base {...props}><path d="M3 12h4l3-8 4 16 3-8h4" /></Base>;
+}
 export function MegaphoneIcon(props: IconProps) {
   return <Base {...props}><path d="M3 11v2a1 1 0 0 0 1 1h3l9 5V5L7 10H4a1 1 0 0 0-1 1ZM19 9a4 4 0 0 1 0 6M7 14l1 5h2l-1-4" /></Base>;
 }

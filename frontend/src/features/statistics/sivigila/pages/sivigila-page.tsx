@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
-import { ChartBarIcon } from "@/icons";
+import { PulseIcon } from "@/icons";
 import { ReportFilters } from "../../shared/report-filters";
 import { reportError } from "../../shared/report-utils";
 import type { ReportFilters as Filters } from "../../shared/types";
@@ -80,7 +80,7 @@ export default function SivigilaPage() {
   const [consulting, setConsulting] = useState(false);
   return (
     <div className="min-w-0 space-y-6">
-      <PageHeader icon={<ChartBarIcon />} title="Notificación SIVIGILA" description="Procesa las atenciones del período y clasifica los eventos IRA, EDA, Dengue, Varicela y Exposición Rábica." />
+      <PageHeader icon={<PulseIcon />} title="Notificación SIVIGILA" description="Procesa las atenciones del período y clasifica los eventos IRA, EDA, Dengue, Varicela y Exposición Rábica." />
       <ReportFilters idPrefix="sivigila" api={sivigilaApi} consulting={consulting} hasResults={Boolean(applied)} onConsult={(filters) => setApplied((current) => ({ filters, revision: (current?.revision ?? 0) + 1 }))} onClear={() => setApplied(null)} />
       {applied ? <SivigilaResults key={applied.revision} filters={applied.filters} onLoadingChange={setConsulting} /> : (
         <Card>

@@ -26,4 +26,4 @@ export { UserCircleIcon } from "./user-circle";
 export { PlusIcon } from "./plus";
 export { PencilIcon } from "./pencil";
 export { MailIcon, PhoneIcon, DesktopIcon, MobileIcon, RefreshIcon, ClockIcon } from "./profile-icons";
-export { ChartBarIcon, BriefcaseIcon, DocumentTextIcon, MegaphoneIcon } from "./navigation-icons";
+export { ChartBarIcon, BriefcaseIcon, DocumentTextIcon, MegaphoneIcon, PulseIcon } from "./navigation-icons";
