@@ -42,7 +42,6 @@ Menus del sidebar sin vistas todavia, cada opcion con su permiso reservado (desh
 | Gestion Administrativa | Gestión de Incapacidades | `statistics.administrative.disability_management.view` |
 | Gestion Administrativa | Encuestas de Calidad | `statistics.administrative.quality_surveys.view` |
 | Gestion Administrativa | Secretaría Gerencia | `statistics.administrative.management_secretariat.view` |
-| Gestion Administrativa | Notificación SIVIGILA | `statistics.administrative.sivigila.view` |
 
 - Cada permiso se comprueba en backend en los cinco endpoints de su informe. Tener uno no
   permite consultar ni exportar el otro. Se siembra en el catalogo y solo se otorga a `ADMINISTRADOR`; los administradores lo
@@ -116,3 +115,25 @@ Nada de lo siguiente se ha ejecutado contra el servidor:
 iniciar la operacion y se cierra al terminar, fallar o cancelarse; el motor no usa pool (`NullPool`).
 CSV se emite bloque a bloque; XLSX se escribe en un archivo temporal en disco (sin dependencias nuevas).
 No existe tope artificial de registros.
+
+### Notificación SIVIGILA
+
+Ruta frontend: `/estadistica/administrativa/notificacion-sivigila`.
+API: `GET /api/v1/statistics/administrative/sivigila` (cliente: `/statistics/administrative/sivigila`),
+con `fecha_inicial` y `fecha_final` obligatorias y filtros opcionales repetibles `sedes`,
+`empresas` y `lineas`; los catálogos reutilizan `/filters/sites`, `/filters/companies` y
+`/filters/product-lines`. Conserva el permiso existente `statistics.administrative.sivigila.view`.
+
+Una sola consulta de `Signos_Vitales.sql` alimenta el pipeline Python de limpieza, normalización,
+validación y clasificación y devuelve Análisis y todas las pestañas; cambiar de pestaña o paginar
+localmente no vuelve a consultar. Las reglas proceden de `Grupos_Edades.bas` y `Grupos_DX.bas`
+y se implementan en `domain/sivigila.py` y `application/sivigila.py`: los tres diagnósticos se
+clasifican independientemente, sin duplicar una atención dentro de un evento, y General incluye
+todas las atenciones. Meses/Días pertenecen a «Menor de 1 Año»; sexo no reconocido no se asigna
+en el análisis por sexo.
+
+Supuesto epidemiológico: semanas INS de domingo a sábado, la semana 1 contiene el 4 de enero;
+periodo = `ceil(semana/4)`, calculado sobre `fecha_final`. La exportación reutilizada usa
+`GET /statistics/administrative/sivigila/export`, los mismos filtros, `evento`, `columnas`
+repetibles y `formato` (`csv` o `xlsx`). Solo CSV/XLSX: no existe PDF en los componentes
+compartidos de exportación.
