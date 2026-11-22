@@ -1,7 +1,9 @@
 """HTTP factory for reports; never logs filters or patient records."""
 
-from collections.abc import AsyncIterator, Callable
+import json
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from datetime import date
+from decimal import Decimal
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -18,7 +20,13 @@ from nexora.statistics.infrastructure.export_writers import WRITERS
 
 
 def create_report_router(
-    *, prefix: str, permission: str, provider: Callable[..., Report], title: str, filename: str
+    *,
+    prefix: str,
+    permission: str,
+    provider: Callable[..., Report],
+    title: str,
+    filename: str,
+    labels: Mapping[str, str] | None = None,
 ) -> APIRouter:
     router = APIRouter(
         prefix=prefix,
@@ -49,6 +57,7 @@ def create_report_router(
     @router.get(
         "",
         summary=f"Consultar {title}",
+        response_model=list[dict[str, Any]],
         description=(
             "Fechas obligatorias e inclusivas. Sedes, empresas y líneas de producto admiten "
             "parámetros repetidos; omitirlos para no restringir (también al seleccionar todas "
@@ -81,7 +90,7 @@ def create_report_router(
         ] = None,
         limit: Annotated[int, Query(ge=1, le=100)] = 50,
         offset: Annotated[int, Query(ge=0)] = 0,
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, Any]] | Response:
         filters = ReportFilter(
             fecha_inicial,
             fecha_final,
@@ -91,6 +100,12 @@ def create_report_router(
         )
         result = await report.page(filters, limit, offset)
         response.headers["X-Total-Count"] = str(result.total)
+        if labels is not None:
+            return Response(
+                content=_numeric_json(result.items),
+                media_type="application/json",
+                headers={"X-Total-Count": str(result.total)},
+            )
         return result.items
 
     @router.get(
@@ -100,6 +115,11 @@ def create_report_router(
             "Transmite por bloques todos los registros que cumplen los filtros, sin el límite de "
             "paginación de la tabla. Un solo formato por solicitud. `columnas` repite `id:tipo`. "
             "Sedes, empresas y líneas de producto son opcionales y repetibles."
+        )
+        + (
+            " Los encabezados usan las etiquetas del informe; columnas acepta las claves API."
+            if labels is not None
+            else ""
         ),
         response_class=StreamingResponse,
     )
@@ -123,6 +143,10 @@ def create_report_router(
         ] = None,
     ) -> StreamingResponse:
         parsed = [_parse_column(raw) for raw in columnas]
+        if labels is not None:
+            unknown = [c.id for c in parsed if c.id not in labels]
+            if unknown:
+                raise InvalidReportFilter(f"Columnas desconocidas: {', '.join(unknown)}.")
         filters = ReportFilter(
             fecha_inicial,
             fecha_final,
@@ -142,6 +166,9 @@ def create_report_router(
             await chunks.aclose()  # type: ignore[attr-defined]
             raise
         body = _prepend(first, chunks) if first else _prepend([], chunks)
+        if labels is not None:
+            body = _label_chunks(body, parsed, labels)
+            parsed = [ExportColumn(labels[c.id], c.type) for c in parsed]
         writer, media_type, extension = WRITERS[formato]
         name = f"{filename}_{fecha_inicial}_{fecha_final}.{extension}"
         return StreamingResponse(
@@ -165,6 +192,32 @@ async def _prepend(
             yield chunk
     finally:
         await rest.aclose()  # type: ignore[attr-defined]
+
+
+def _numeric_json(value: Any) -> str:
+    """Preserve Decimal numeric tokens instead of Pydantic strings or float rounding."""
+    if isinstance(value, Decimal):
+        return format(value, "f")
+    if isinstance(value, dict):
+        return (
+            "{" + ",".join(json.dumps(k) + ":" + _numeric_json(v) for k, v in value.items()) + "}"
+        )
+    if isinstance(value, list):
+        return "[" + ",".join(_numeric_json(v) for v in value) + "]"
+    return json.dumps(value, ensure_ascii=False, allow_nan=False)
+
+
+async def _label_chunks(
+    chunks: AsyncIterator[list[dict[str, Any]]],
+    columns: Sequence[ExportColumn],
+    labels: Mapping[str, str],
+) -> AsyncIterator[list[dict[str, Any]]]:
+    """Adapt keys for existing writers without changing any unlabelled report."""
+    try:
+        async for chunk in chunks:
+            yield [{labels[c.id]: row.get(c.id) for c in columns} for row in chunk]
+    finally:
+        await chunks.aclose()  # type: ignore[attr-defined]
 
 
 def _parse_column(raw: str) -> ExportColumn:

@@ -116,6 +116,37 @@ iniciar la operacion y se cierra al terminar, fallar o cancelarse; el motor no u
 CSV se emite bloque a bloque; XLSX se escribe en un archivo temporal en disco (sin dependencias nuevas).
 No existe tope artificial de registros.
 
+### Facturación General
+
+API: `GET /api/v1/statistics/administrative/general-billing`, con permiso
+`statistics.administrative.general_billing.view`. Fechas inicial/final obligatorias; filtros
+opcionales repetibles Sede (`sedes`), Empresa (`empresas`) y Línea de producto (`lineas`),
+en ese orden. Comparte los catálogos `/filters/*`, paginación `limit`/`offset` (1–100) y
+`X-Total-Count`; `/export?formato=csv|xlsx` recibe `columnas=clave:tipo` repetible.
+Las 44 claves, etiquetas exactas y tipos están en `application/general_billing.py:COLUMNS`:
+exporta las etiquetas en el orden solicitado; los tipos de exportación son `text`, `number`
+y `date` (metadatos `longtext` → `text`, `money` → `number`). Clave desconocida: 422,
+incluso sin filas. Los demás informes conservan encabezados basados en sus claves.
+
+Una sola lectura de la query de Facturas Detalladas alimenta el ETL. De
+`modProcesarFacturasDetalladas.bas` proceden el filtro CERRADO (facturas electrónicas,
+agrupadas o TRANSACCION de los dos contratos SOS PGP) y la normalización a mayúsculas,
+espacios colapsados y fechas ISO. `modCalculoEdad.bas` calcula edad y curso de vida con
+referencia en la fecha de factura, meses/años completos y ajuste al fin del mes.
+`modCalculosFactura.bas` aporta nombre completo, mes en español, total, copago y pagos
+particulares/descuentos: solo la primera fila retenida de cada factura lleva estos importes.
+Nulos y valores defectuosos se normalizan a vacío/0, edad inválida a null; una fila defectuosa
+no interrumpe el informe. Se usan Decimal e identificadores textuales, sin formato de miles.
+
+Desviaciones deliberadas de las macros: clave `(prefijo, tipo documento, consecutivo)` para
+no mezclar facturas, unidades `DÍAS`/`MESES`/`AÑOS`, una pasada por grupos contiguos y spool
+privado temporal JSON Lines con índice `array('Q')`. Página y exportación reutilizan el mismo
+resultado durante 60 segundos, con single-flight y máximo de 8 entradas por aplicación;
+expirar, expulsar o cerrar elimina sus archivos (un export activo conserva su archivo hasta
+cerrar su lector). La memoria del ETL está acotada por factura y la del índice a 8 bytes/fila.
+No cambia Facturas Detalladas ni almacena resultados en PostgreSQL. La consulta y su
+contigüidad/rendimiento aún deben verificarse contra SQL Server real.
+
 ### Notificación SIVIGILA
 
 Ruta frontend: `/estadistica/administrativa/notificacion-sivigila`.

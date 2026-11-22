@@ -30,8 +30,10 @@ from nexora.integration_management.application.ports import (
     ExternalSourceUnavailable,
 )
 from nexora.statistics.domain.filters import InvalidReportFilter
+from nexora.statistics.infrastructure.general_billing_source import GeneralBillingSource
 from nexora.statistics.presentation.http.v1.router import (
     admissions_router,
+    general_billing_router,
     sivigila_router,
     statistics_router,
     triage_router,
@@ -49,8 +51,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await initialize_access(container)
         yield
     finally:
-        container.sqlserver.dispose()
-        await container.database.dispose()
+        try:
+            source: GeneralBillingSource | None = getattr(app.state, "general_billing_source", None)
+            if source is not None:
+                await source.aclose()
+        finally:
+            container.sqlserver.dispose()
+            await container.database.dispose()
 
 
 def _register_error_handlers(app: FastAPI) -> None:
@@ -136,6 +143,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=_lifespan,
     )
     app.state.container = build_container(settings)
+    app.state.general_billing_source = GeneralBillingSource(app.state.container.sqlserver)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.allowed_origins),
@@ -151,6 +159,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admissions_router, prefix=settings.api_prefix)
     app.include_router(triage_router, prefix=settings.api_prefix)
     app.include_router(sivigila_router, prefix=settings.api_prefix)
+    app.include_router(general_billing_router, prefix=settings.api_prefix)
 
     @app.get("/health", tags=["operacion"], summary="Estado del servicio")
     async def health() -> dict[str, str]:
