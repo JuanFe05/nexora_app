@@ -5,10 +5,12 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { httpClient } from "@/lib/http/http-client";
 import { ApiError } from "@/lib/http/api-error";
+import { downloadBlob } from "@/lib/table-export";
 import { SIVIGILA_COLUMN_KEYS, type SivigilaRecord, type SivigilaReport } from "../types";
 import SivigilaPage from "./sivigila-page";
 
-vi.mock("@/lib/http/http-client", () => ({ httpClient: { get: vi.fn(), getWithMeta: vi.fn(), getBlob: vi.fn() } }));
+vi.mock("@/lib/http/http-client", () => ({ httpClient: { get: vi.fn(), getWithMeta: vi.fn(), getBlob: vi.fn(), post: vi.fn() } }));
+vi.mock("@/lib/table-export", async (original) => ({ ...await original<typeof import("@/lib/table-export")>(), downloadBlob: vi.fn() }));
 afterEach(cleanup);
 const path = "/statistics/administrative/sivigila";
 const iraHeaders = ["< 1 Año", "1 Año", "2 a 4 Años", "5 a 19 Años", "20 a 39 Años", "40 a 59 Años", ">= 60 Años"];
@@ -122,4 +124,36 @@ it("shows the safe 502 error and retries the same report", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
   expect(await screen.findByRole("table", { name: "Notificación IRA" })).toBeVisible();
   expect(reportCalls()).toHaveLength(2);
+});
+
+it("offers only PDF and Excel exports, from Análisis, using the processed report without a new query", async () => {
+  const user = userEvent.setup();
+  const file = new Blob(["synthetic"]);
+  vi.mocked(httpClient.post).mockResolvedValue(file);
+  await queryReport();
+  expect(screen.getByRole("heading", { name: "Resultados" })).toBeVisible();
+  expect(screen.getAllByRole("button", { name: /^Exportar/ }).map((button) => button.textContent)).toEqual(["Exportar a PDF", "Exportar a Excel"]);
+  await user.click(screen.getByRole("button", { name: "Exportar a PDF" }));
+  await waitFor(() => expect(downloadBlob).toHaveBeenCalledWith(file, "NOTIFICACION_SEDE_FICTICIA.pdf"));
+  expect(httpClient.post).toHaveBeenLastCalledWith(`${path}/export/pdf`, expect.objectContaining({ body: report, responseType: "blob" }));
+  await user.click(screen.getByRole("button", { name: "Exportar a Excel" }));
+  await waitFor(() => expect(downloadBlob).toHaveBeenCalledWith(file, "NOTIFICACION_SEDE_FICTICIA.xlsx"));
+  expect(httpClient.post).toHaveBeenLastCalledWith(`${path}/export/xlsx`, expect.objectContaining({ body: report, responseType: "blob" }));
+  expect(reportCalls()).toHaveLength(1);
+  for (const label of ["General", "Evento IRA", "Evento EDA", "Dengue"]) {
+    await user.click(screen.getByRole("tab", { name: new RegExp(`^${label}`) }));
+    expect(await screen.findByRole("columnheader", { name: /^Grupo/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /^Exportar/ })).not.toBeInTheDocument();
+  }
+});
+
+it("reports an export failure without leaking details", async () => {
+  const user = userEvent.setup();
+  vi.mocked(httpClient.post).mockRejectedValue(new ApiError(500, "private detail", null));
+  await queryReport();
+  await user.click(screen.getByRole("button", { name: "Exportar a PDF" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo exportar la información. Intenta de nuevo.");
+  expect(screen.queryByText("private detail")).not.toBeInTheDocument();
+  expect(downloadBlob).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "Exportar a PDF" })).toBeEnabled();
 });

@@ -1,7 +1,5 @@
 """Notificación SIVIGILA: reglas, pipeline y HTTP con registros sintéticos y lector falso."""
 
-import io
-import zipfile
 from collections.abc import Iterator
 from datetime import date
 from types import SimpleNamespace
@@ -109,7 +107,7 @@ def test_record_appears_once_per_event_and_general_has_all() -> None:
         record(cdgo_dgnstco="J00X", cdgo_dgnstco_rl_1="J010", gener="X"),
         record(cdgo_dgnstco="Z000"),
     ]
-    result = process_rows(rows, reference_date=date(2026, 10, 6))
+    result = process_rows(rows, fallback_date=date(2026, 10, 6))
     tabs = result.pestanas
     assert [len(tabs[t]) for t in ("general", "ira", "eda", "dengue", "varicela", "rabia")] == [
         3,
@@ -137,7 +135,9 @@ def test_analysis_is_computed_and_unknown_sex_is_not_assigned() -> None:
         record(cdgo_dgnstco="A09X", gener="?"),
         record(fcha_ncmnto="", fcha_atncn="", edad="", tipo_edad=""),
     ]
-    result = process_rows(rows, reference_date=date(2026, 10, 6), site_name="Corinto Cauca")
+    result = process_rows(
+        rows, fallback_date=date(2026, 1, 1), selected_sites=["CORINTO-CL 7 # 7 -79"]
+    )
     assert result.titulo == "NOTIFICACIÓN CORINTO CAUCA"
     assert result.subtitulo == "SEMANA 40 PERIODO 10 2026"
     ira_event, ira_all = result.ira.filas
@@ -152,7 +152,7 @@ def test_analysis_is_computed_and_unknown_sex_is_not_assigned() -> None:
 
 
 def test_defective_record_does_not_break_processing() -> None:
-    result = process_rows([record(), None, record()], reference_date=date(2026, 10, 6))  # type: ignore[list-item]
+    result = process_rows([record(), None, record()], fallback_date=date(2026, 10, 6))  # type: ignore[list-item]
     assert result.total_registros == 2
     assert any("omitidos" in w for w in result.advertencias)
 
@@ -171,6 +171,9 @@ def http() -> Iterator[tuple[TestClient, FakeReader, FakeAuthentication]]:
         yield client, reader, authentication
 
 
+AUTH = {"Authorization": "Bearer test-token"}
+
+
 def get(client: TestClient, path: str = "", **extra: Any) -> Any:
     return client.get(
         BASE + path, params={**DATES, **extra}, headers={"Authorization": "Bearer test-token"}
@@ -181,7 +184,9 @@ def test_requires_permission_without_touching_source(http: Any) -> None:
     client, reader, authentication = http
     authentication.permissions = frozenset()
     assert get(client).status_code == 403
-    assert get(client, "/export", formato="csv", evento="ira").status_code == 403
+    for kind in ("pdf", "xlsx"):
+        denied = client.post(BASE + f"/export/{kind}", json={}, headers=AUTH)
+        assert denied.status_code == 403
     assert reader.calls == []
 
 
@@ -190,7 +195,9 @@ def test_consult_runs_one_query_with_dates_and_filters(http: Any) -> None:
     response = get(client, sedes=[3], empresas=[4])
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["subtitulo"] == "SEMANA 4 PERIODO 1 2026"
+    assert body["subtitulo"] == "SEMANA 40 PERIODO 10 2026"  # primera fecha de atención
+    # El catálogo falso no entrega ids: el encabezado cae a la sede presente en los datos.
+    assert body["titulo"] == "NOTIFICACIÓN CORINTO CAUCA"
     assert body["total_registros"] == 3
     assert [len(body["pestanas"][t]) for t in ("general", "ira", "varicela")] == [3, 1, 1]
     stream_calls = [c for c in reader.calls if c[1] and "fecha_inicial" in c[1]]
@@ -205,21 +212,3 @@ def test_consult_runs_one_query_with_dates_and_filters(http: Any) -> None:
 def test_reversed_dates_are_rejected(http: Any) -> None:
     client, _, _ = http
     assert get(client, fecha_inicial="2026-02-01").status_code == 422
-
-
-def test_export_xlsx_uses_labels_and_group_header(http: Any) -> None:
-    client, _, _ = http
-    csv = get(client, "/export", formato="csv", evento="ira")
-    assert csv.status_code == 200
-    first = csv.content.decode("utf-8-sig").splitlines()
-    assert first[0].split(";")[:4] == ["Sede", "Servicio", "Tipo Documento", "No. Documento"]
-    assert "Grupo IRA" in first[0] and len(first) == 2
-    xlsx = get(client, "/export", formato="xlsx", evento="general")
-    assert zipfile.is_zipfile(io.BytesIO(xlsx.content))
-
-
-def test_export_honours_selected_columns_and_rejects_unknown(http: Any) -> None:
-    client, _, _ = http
-    ok = get(client, "/export", formato="csv", evento="eda", columnas=["sede", "grupo"])
-    assert ok.content.decode("utf-8-sig").splitlines()[0] == "Sede;Grupo EDA"
-    assert get(client, "/export", formato="csv", evento="eda", columnas=["x"]).status_code == 422

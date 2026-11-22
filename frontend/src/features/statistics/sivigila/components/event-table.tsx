@@ -1,9 +1,6 @@
 import { useMemo, useState } from "react";
-import { ColumnVisibilityMenu, DataTable, ExportMenu } from "@/components/shared/data-table";
-import { downloadBlob } from "@/lib/table-export";
-import type { ReportFilters } from "../../shared/types";
-import { sivigilaApi } from "../api/sivigila-api";
-import { sivigilaColumns, sivigilaExportColumns } from "../columns";
+import { ColumnVisibilityMenu, DataTable } from "@/components/shared/data-table";
+import { sivigilaColumns } from "../columns";
 import type { SivigilaEvent, SivigilaRecord } from "../types";
 
 const ignoreSearch = () => {};
@@ -16,10 +13,9 @@ const EMPTY: Record<SivigilaEvent, string> = {
   rabia: "No hay atenciones de Exposición Rábica para este período.",
 };
 
-/** The rows already arrived with the single query; pagination is local and export asks the backend for the tab. */
-export function EventTable({ event, rows, filters }: { event: SivigilaEvent; rows: SivigilaRecord[]; filters: ReportFilters }) {
+/** The rows already arrived with the single query; pagination is local. Export lives in the Análisis tab. */
+export function EventTable({ event, rows }: { event: SivigilaEvent; rows: SivigilaRecord[] }) {
   const columns = useMemo(() => sivigilaColumns(event), [event]);
-  const exportColumns = useMemo(() => sivigilaExportColumns(event), [event]);
   const [visible, setVisible] = useState<string[]>(() => columns.map((column) => column.id));
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -42,14 +38,7 @@ export function EventTable({ event, rows, filters }: { event: SivigilaEvent; row
       search=""
       onSearchChange={ignoreSearch}
       showSearch={false}
-      headerAction={<>
-        <ColumnVisibilityMenu columns={columns} value={visible} onChange={setVisible} />
-        <ExportMenu columns={exportColumns} visibleIds={visible} disabled={rows.length === 0} exportFile={async (scope, format, signal) => {
-          const file = await sivigilaApi.download(filters, event, scope.map((column) => column.id), format, signal);
-          if (signal.aborted) return;
-          downloadBlob(file, `notificacion-sivigila-${event}_${filters.startDate}_${filters.endDate}.${format}`);
-        }} />
-      </>}
+      headerAction={<ColumnVisibilityMenu columns={columns} value={visible} onChange={setVisible} />}
       emptyState={{ title: EMPTY[event], description: "Prueba con otro período o modifica los filtros." }}
     />
   );

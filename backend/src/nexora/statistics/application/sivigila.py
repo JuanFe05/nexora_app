@@ -6,7 +6,7 @@ from datetime import date
 from typing import Any
 
 from nexora.statistics.application.ports import CatalogOption, ReportSource
-from nexora.statistics.domain.filters import ReportFilter
+from nexora.statistics.domain.filters import InvalidReportFilter, ReportFilter
 from nexora.statistics.domain.sivigila import (
     EDA_AGE_GROUPS,
     EVENT_DENGUE,
@@ -22,6 +22,8 @@ from nexora.statistics.domain.sivigila import (
     full_name,
     ira_group,
     normalize_sex,
+    notification_location,
+    notification_title,
     parse_date,
     resolve_age,
 )
@@ -56,7 +58,6 @@ COLUMNS = (
 )
 GROUP_LABELS = {EVENT_IRA: "Grupo IRA", EVENT_EDA: "Grupo EDA"}
 DX_FIELDS = ("cdgo_dgnstco", "cdgo_dgnstco_rl_1", "cdgo_dgnstco_rl_2")
-ALL_SITES = "TODAS LAS SEDES"
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,15 +144,20 @@ def _table(
 
 
 def process_rows(
-    rows: Iterable[Row], *, reference_date: date, site_name: str | None = None
+    rows: Iterable[Row], *, fallback_date: date, selected_sites: Sequence[str] = ()
 ) -> SivigilaResult:
+    """Construye análisis y pestañas desde una sola lectura.
+
+    `selected_sites` son los nombres de las sedes filtradas (vacío = todas) y solo definen el
+    encabezado; los datos ya llegan filtrados. La semana se calcula con la primera fecha de
+    atención de General (como `EscribirPeriodoEpidemiologico`); sin registros, `fallback_date`.
+    """
     tabs: dict[str, list[Row]] = {tab: [] for tab in TABS}
     ira_labels = [g.label for g in IRA_AGE_GROUPS]
     eda_labels = [g.label for g in EDA_AGE_GROUPS]
     ira_event = [0] * len(ira_labels)
     ira_all = [0] * len(ira_labels)
     eda_counts = {"F": [0] * len(eda_labels), "M": [0] * len(eda_labels)}
-    sites: list[str] = []
     skipped = no_age = eda_no_sex = eda_no_age = 0
 
     for raw in rows:
@@ -161,8 +167,6 @@ def process_rows(
         except Exception:  # un registro defectuoso no debe detener el resto
             skipped += 1
             continue
-        if row["sede"] and row["sede"] not in sites:
-            sites.append(row["sede"])
         age, kind = row["edad"], row["tipo_edad"]
         ira, eda = ira_group(age, kind), eda_group(age, kind)
         if not ira:
@@ -183,8 +187,11 @@ def process_rows(
             else:
                 eda_counts[sex][eda_labels.index(eda)] += 1
 
-    week, period, year = epidemiological_period(reference_date)
-    name = (site_name or (sites[0] if len(sites) == 1 else ALL_SITES)).upper()
+    reference = next(
+        (parsed for row in tabs[GENERAL] if (parsed := parse_date(row["fecha_atencion"]))),
+        fallback_date,
+    )
+    week, period, year = epidemiological_period(reference)
     totals = [f + m for f, m in zip(eda_counts["F"], eda_counts["M"], strict=True)]
     warnings = []
     if skipped:
@@ -196,8 +203,8 @@ def process_rows(
     if eda_no_age:
         warnings.append(f"{eda_no_age} registro(s) EDA sin edad válida no se asignaron.")
     return SivigilaResult(
-        titulo=f"NOTIFICACIÓN {name}",
-        subtitulo=f"SEMANA {week} PERIODO {period} {year}",
+        titulo=notification_title(notification_location(selected_sites)),
+        subtitulo=f"SEMANA {week:02d} PERIODO {period:02d} {year}",
         semana=week,
         periodo=period,
         anio=year,
@@ -243,15 +250,27 @@ class SivigilaReport:
         records: list[Row] = []
         async for chunk in self._source.stream(filter):
             records.extend(chunk)
-        return process_rows(
-            records, reference_date=filter.fecha_final, site_name=await self._site_name(filter)
-        )
+        selected = await self._selected_sites(filter, records)
+        return process_rows(records, fallback_date=filter.fecha_final, selected_sites=selected)
 
-    async def _site_name(self, filter: ReportFilter) -> str | None:
+    async def _selected_sites(self, filter: ReportFilter, records: list[Row]) -> list[str]:
+        """Nombres de las sedes filtradas; vacío si no hay restricción (todas las sedes)."""
         if not filter.sedes:
-            return None
+            return []
         try:
-            selected = {s.id: s.nombre for s in await self._source.sites()}
-        except Exception:  # el encabezado cae a las sedes presentes en los datos
-            return None
-        return " / ".join(selected[i] for i in filter.sedes if i in selected) or None
+            catalog = {site.id: site.nombre for site in await self._source.sites()}
+            names = [catalog[i] for i in filter.sedes if i in catalog]
+            if len(names) != len(filter.sedes):
+                names = []
+        except Exception:  # sin catálogo, se identifican por las sedes presentes en los datos
+            names = []
+        return names or list(dict.fromkeys(_text(r.get("sede")) for r in records))
+
+
+def ensure_consistent(report: SivigilaResult) -> None:
+    """Valida la forma de un resultado recibido para exportar; los datos se usan tal cual."""
+    if set(report.pestanas) != set(TABS):
+        raise InvalidReportFilter("El resultado no contiene exactamente las siete pestañas.")
+    for table in (report.ira, report.eda):
+        if any(len(row.valores) != len(table.columnas) for row in table.filas):
+            raise InvalidReportFilter("Las tablas de análisis son inconsistentes.")

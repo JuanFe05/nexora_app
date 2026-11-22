@@ -1,26 +1,26 @@
 """HTTP de la Notificación SIVIGILA; nunca registra filtros ni datos de pacientes."""
 
-from collections.abc import AsyncIterator, Callable
+import re
+import unicodedata
+from collections.abc import Callable
 from datetime import date
-from typing import Annotated, Any, Literal
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Query, Response
 
 from nexora.identity_access.presentation.http.v1.dependencies.auth import require_permission
-from nexora.statistics.application.export import ExportColumn
 from nexora.statistics.application.ports import CatalogOption
 from nexora.statistics.application.sivigila import (
-    COLUMNS,
-    GROUP_LABELS,
     SivigilaReport,
     SivigilaResult,
+    ensure_consistent,
 )
-from nexora.statistics.domain.filters import InvalidReportFilter, ReportFilter
-from nexora.statistics.infrastructure.export_writers import WRITERS
+from nexora.statistics.domain.filters import ReportFilter
+from nexora.statistics.infrastructure.sivigila_pdf import build_analysis_pdf
+from nexora.statistics.infrastructure.sivigila_workbook import build_workbook
 
-_CHUNK = 2000
-Event = Literal["general", "ira", "eda", "dengue", "varicela", "rabia"]
+PDF = "application/pdf"
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def create_sivigila_router(
@@ -62,60 +62,59 @@ def create_sivigila_router(
         empresas: Annotated[list[int] | None, Query()] = None,
         lineas: Annotated[list[int] | None, Query()] = None,
     ) -> SivigilaResult:
-        return await report.build(_filter(fecha_inicial, fecha_final, sedes, empresas, lineas))
-
-    @router.get(
-        "/export",
-        summary="Exportar una pestaña de Notificación SIVIGILA (CSV o Excel)",
-        response_class=StreamingResponse,
-    )
-    async def export(
-        report: Report,
-        fecha_inicial: Annotated[date, Query()],
-        fecha_final: Annotated[date, Query()],
-        formato: Annotated[Literal["csv", "xlsx"], Query()],
-        evento: Annotated[Event, Query()],
-        columnas: Annotated[
-            list[str] | None, Query(description="Claves de columna; omitir = todas")
-        ] = None,
-        sedes: Annotated[list[int] | None, Query()] = None,
-        empresas: Annotated[list[int] | None, Query()] = None,
-        lineas: Annotated[list[int] | None, Query()] = None,
-    ) -> StreamingResponse:
-        result = await report.build(_filter(fecha_inicial, fecha_final, sedes, empresas, lineas))
-        selected = [item for item in COLUMNS if not columnas or item[0] in columnas]
-        if not selected or columnas and len(set(columnas)) != len(selected):
-            raise InvalidReportFilter("Columnas desconocidas.")
-        label = GROUP_LABELS.get(evento, "Grupo")
-        headers = {key: (label if key == "grupo" else title) for key, title, _ in selected}
-        columns = [ExportColumn(headers[key], kind) for key, _, kind in selected]  # type: ignore[arg-type]
-        rows = [
-            {headers[key]: row[key] for key, _, _ in selected} for row in result.pestanas[evento]
-        ]
-        writer, media_type, extension = WRITERS[formato]
-        name = f"notificacion-sivigila-{evento}_{fecha_inicial}_{fecha_final}.{extension}"
-        return StreamingResponse(
-            writer(columns, _chunks(rows)),
-            media_type=media_type,
-            headers={
-                "Content-Disposition": f'attachment; filename="{name}"',
-                "Cache-Control": "no-store",
-            },
+        filters = ReportFilter(
+            fecha_inicial,
+            fecha_final,
+            tuple(sedes or ()),
+            tuple(empresas or ()),
+            tuple(lineas or ()),
         )
+        return await report.build(filters)
+
+    @router.post(
+        "/export/pdf",
+        summary="Exportar la pestaña Análisis a PDF",
+        description=(
+            "Recibe el resultado ya procesado que muestra el módulo y genera un PDF horizontal "
+            "de una sola página con las tablas de Análisis. No vuelve a consultar SQL Server."
+        ),
+        response_class=Response,
+        responses={200: {"content": {PDF: {}}}},
+    )
+    async def export_pdf(result: SivigilaResult) -> Response:
+        ensure_consistent(result)
+        return _file(build_analysis_pdf(result), PDF, _filename(result, "pdf"))
+
+    @router.post(
+        "/export/xlsx",
+        summary="Exportar el libro completo (siete hojas) a Excel",
+        description=(
+            "Recibe el resultado ya procesado y genera un único libro con las hojas Análisis, "
+            "General, Evento IRA, Evento EDA, Dengue, Varicela y Exposición Rábica. No vuelve a "
+            "consultar SQL Server."
+        ),
+        response_class=Response,
+        responses={200: {"content": {XLSX: {}}}},
+    )
+    async def export_xlsx(result: SivigilaResult) -> Response:
+        ensure_consistent(result)
+        return _file(build_workbook(result), XLSX, _filename(result, "xlsx"))
 
     return router
 
 
-def _filter(
-    start: date,
-    end: date,
-    sites: list[int] | None,
-    companies: list[int] | None,
-    lines: list[int] | None,
-) -> ReportFilter:
-    return ReportFilter(start, end, tuple(sites or ()), tuple(companies or ()), tuple(lines or ()))
+def _file(content: bytes, media_type: str, name: str) -> Response:
+    return Response(
+        content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
-async def _chunks(rows: list[dict[str, Any]]) -> AsyncIterator[list[dict[str, Any]]]:
-    for start in range(0, len(rows), _CHUNK):
-        yield rows[start : start + _CHUNK]
+def _filename(result: SivigilaResult, extension: str) -> str:
+    ascii_title = unicodedata.normalize("NFKD", result.titulo).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", ascii_title).strip("_") or "NOTIFICACION"
+    return f"{slug}.{extension}"

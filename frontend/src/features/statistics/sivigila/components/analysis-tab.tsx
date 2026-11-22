@@ -1,5 +1,10 @@
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
+import { downloadBlob } from "@/lib/table-export";
 import { cn } from "@/utils";
+import { sivigilaApi } from "../api/sivigila-api";
 import type { AnalysisTable, SivigilaReport } from "../types";
 
 const numberFormat = new Intl.NumberFormat("es-CO");
@@ -36,9 +41,57 @@ export function AnalysisTableView({ table, totalRowIndexes, id }: { table: Analy
   );
 }
 
+type ExportKind = "pdf" | "xlsx";
+
+function fileBase(title: string) {
+  return title.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "NOTIFICACION";
+}
+
+/** Both buttons export the same processed report shown below; the backend never re-queries SQL Server. */
+function ExportActions({ report }: { report: SivigilaReport }) {
+  const [exporting, setExporting] = useState<ExportKind | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => controller.current?.abort(), []);
+  async function run(kind: ExportKind) {
+    const abort = new AbortController();
+    controller.current = abort;
+    setError(null);
+    setExporting(kind);
+    try {
+      const file = kind === "pdf" ? await sivigilaApi.exportAnalysisPdf(report, abort.signal) : await sivigilaApi.exportWorkbook(report, abort.signal);
+      if (!abort.signal.aborted) downloadBlob(file, `${fileBase(report.titulo)}.${kind}`);
+    } catch {
+      if (!abort.signal.aborted) setError("No se pudo exportar la información. Intenta de nuevo.");
+    } finally {
+      if (controller.current === abort) {
+        controller.current = null;
+        setExporting(null);
+      }
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-3">
+      <Button type="button" variant="outline" onClick={() => void run("pdf")} disabled={exporting !== null} aria-busy={exporting === "pdf"}>
+        {exporting === "pdf" && <Spinner aria-hidden="true" role="presentation" />}
+        {exporting === "pdf" ? "Exportando PDF…" : "Exportar a PDF"}
+      </Button>
+      <Button type="button" variant="outline" onClick={() => void run("xlsx")} disabled={exporting !== null} aria-busy={exporting === "xlsx"}>
+        {exporting === "xlsx" && <Spinner aria-hidden="true" role="presentation" />}
+        {exporting === "xlsx" ? "Exportando Excel…" : "Exportar a Excel"}
+      </Button>
+      {error && <p role="alert" className="w-full text-right text-sm text-error-600 dark:text-error-400">{error}</p>}
+    </div>
+  );
+}
+
 export function AnalysisTab({ report }: { report: SivigilaReport }) {
   return (
     <div className="min-w-0 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">Resultados</h2>
+        <ExportActions report={report} />
+      </div>
       <Card className="text-center">
         <h2 className="text-xl font-bold tracking-wide text-gray-800 dark:text-white/90">{report.titulo}</h2>
         <p className="text-sm font-semibold tracking-wider text-brand-600 dark:text-brand-400">{report.subtitulo}</p>

@@ -1,8 +1,7 @@
 import { httpClient } from "@/lib/http/http-client";
-import type { ExportFormat } from "@/lib/table-export";
 import { createReportApi } from "../../shared/report-api";
 import type { ReportFilters } from "../../shared/types";
-import type { SivigilaEvent, SivigilaReport } from "../types";
+import type { SivigilaReport } from "../types";
 
 const PATH = "/statistics/administrative/sivigila";
 const catalogs = createReportApi<never>(PATH);
@@ -21,11 +20,9 @@ export const sivigilaApi = {
   fetchCompanies: catalogs.fetchCompanies,
   fetchProductLines: catalogs.fetchProductLines,
   fetchReport: (filters: ReportFilters, signal?: AbortSignal) => httpClient.get<SivigilaReport>(`${PATH}?${query(filters)}`, { signal }),
-  download: (filters: ReportFilters, evento: SivigilaEvent, columns: readonly string[], format: ExportFormat, signal: AbortSignal) => {
-    const params = query(filters);
-    params.set("formato", format);
-    params.set("evento", evento);
-    for (const column of columns) params.append("columnas", column);
-    return httpClient.getBlob(`${PATH}/export?${params}`, { signal });
-  },
+  /** Both exports render the already processed result shown in the module: no new SQL Server query. */
+  exportAnalysisPdf: (report: SivigilaReport, signal?: AbortSignal) =>
+    httpClient.post<Blob>(`${PATH}/export/pdf`, { body: report, responseType: "blob", signal }),
+  exportWorkbook: (report: SivigilaReport, signal?: AbortSignal) =>
+    httpClient.post<Blob>(`${PATH}/export/xlsx`, { body: report, responseType: "blob", signal }),
 };

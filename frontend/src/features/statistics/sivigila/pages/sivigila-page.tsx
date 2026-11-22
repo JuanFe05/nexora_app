@@ -68,7 +68,7 @@ function SivigilaResults({ filters, onLoadingChange }: { filters: Filters; onLoa
       </TabsList>
       {TABS.map(({ value }) => (
         <TabsPanel key={value} value={value}>
-          {value === "analisis" ? <AnalysisTab report={report} /> : <EventTable event={value} rows={report.pestanas[value]} filters={filters} />}
+          {value === "analisis" ? <AnalysisTab report={report} /> : <EventTable event={value} rows={report.pestanas[value]} />}
         </TabsPanel>
       ))}
     </Tabs>

@@ -208,20 +208,62 @@ def full_name(*parts: Any) -> str:
     return " ".join(word for part in parts if part is not None for word in str(part).split())
 
 
-def epidemiological_period(reference: date) -> tuple[int, int, int]:
-    """(semana, periodo, año) epidemiológicos INS: semanas domingo-sábado; la 1 contiene el 4-ene.
+def epidemiological_week(day: date) -> int:
+    """Semana epidemiológica de `Notificaciones.bas::ObtenerSemanaEpidemiologica`.
 
-    El periodo agrupa 4 semanas (13 por año).
+    La semana 1 empieza el primer domingo del año (el 1 de enero si es domingo). Una fecha
+    anterior a ese domingo pertenece a la última semana del año anterior.
     """
+    first = date(day.year, 1, 1)
+    weekday = (first.weekday() + 1) % 7 + 1  # VBA Weekday(..., vbSunday): domingo = 1
+    first_sunday = first if weekday == 1 else first + timedelta(days=8 - weekday)
+    if day < first_sunday:
+        return epidemiological_week(date(day.year - 1, 12, 31))
+    return (day - first_sunday).days // 7 + 1
 
-    def week_one_start(year: int) -> date:
-        jan4 = date(year, 1, 4)
-        return jan4 - timedelta(days=(jan4.weekday() + 1) % 7)
 
-    year = reference.year
-    if reference >= week_one_start(year + 1):
-        year += 1
-    elif reference < week_one_start(year):
-        year -= 1
-    week = (reference - week_one_start(year)).days // 7 + 1
-    return week, min((week - 1) // 4 + 1, 13), year
+def epidemiological_period(day: date) -> tuple[int, int, int]:
+    """(semana, periodo, año) como `EscribirPeriodoEpidemiologico`: periodo = (semana-1)\4 + 1."""
+    week = epidemiological_week(day)
+    return week, (week - 1) // 4 + 1, day.year
+
+
+# Equivalencias de sede -> municipio (nombre para el análisis).
+SITE_LOCATIONS = {
+    "FLORIDA-CRA 19 # 10-32": "FLORIDA",
+    "SEDE 3 CRA 19 # 10-52": "FLORIDA",
+    "CORINTO-CL 7 # 7 -79": "CORINTO",
+    "MIRANDA-CL 10 # 7-31": "MIRANDA",
+}
+GENERAL_LOCATION = "GENERAL"
+# Títulos de `Notificaciones.bas::EscribirTituloNotificacion`.
+LOCATION_TITLES = {
+    "FLORIDA": "FLORIDA VALLE DEL CAUCA",
+    "MIRANDA": "MIRANDA CAUCA",
+    "CORINTO": "CORINTO CAUCA",
+}
+
+
+def _site_key(name: Any) -> str:
+    return " ".join(str(name or "").upper().split())
+
+
+def notification_location(selected_sites: Iterable[Any]) -> str:
+    """Municipio del encabezado según las sedes seleccionadas; sin selección = todas = GENERAL.
+
+    Solo las sedes de la tabla de equivalencias se asignan a un municipio. Una selección con
+    sedes de varios municipios, o con varias sedes no contempladas, no se asigna a ninguno.
+    """
+    sites = list(dict.fromkeys(key for key in map(_site_key, selected_sites) if key))
+    if not sites:
+        return GENERAL_LOCATION
+    locations = {SITE_LOCATIONS.get(site) for site in sites}
+    if len(locations) == 1 and None not in locations:
+        return next(iter(locations))  # type: ignore[return-value]
+    if len(sites) == 1:
+        return sites[0]  # sede no contemplada, sola: se muestra su propio nombre
+    return GENERAL_LOCATION
+
+
+def notification_title(location: str) -> str:
+    return f"NOTIFICACIÓN {LOCATION_TITLES.get(location, location)}"

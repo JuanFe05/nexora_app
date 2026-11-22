@@ -1,8 +1,9 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { httpClient } from "@/lib/http/http-client";
+import type { SivigilaReport } from "../types";
 import { sivigilaApi } from "./sivigila-api";
 
-vi.mock("@/lib/http/http-client", () => ({ httpClient: { get: vi.fn(), getWithMeta: vi.fn(), getBlob: vi.fn() } }));
+vi.mock("@/lib/http/http-client", () => ({ httpClient: { get: vi.fn(), getWithMeta: vi.fn(), getBlob: vi.fn(), post: vi.fn() } }));
 beforeEach(() => vi.resetAllMocks());
 const path = "/statistics/administrative/sivigila";
 
@@ -34,24 +35,14 @@ it.each([{ ids: [] }, { ids: [7] }, { ids: [7, 8] }])("fetches one report with d
   expect(options).toEqual({ signal });
 });
 
-it.each(["csv", "xlsx"] as const)("downloads a single %s blob with event, columns and repeated filters", async (format) => {
+it.each([["pdf", "exportAnalysisPdf"], ["xlsx", "exportWorkbook"]] as const)("posts the processed report once to render the %s without a new query", async (kind, method) => {
   const signal = new AbortController().signal;
   const file = new Blob(["synthetic"]);
-  vi.mocked(httpClient.getBlob).mockResolvedValue(file);
-  expect(await sivigilaApi.download({ startDate: "2026-01-01", endDate: "2026-01-31", sites: [2, 3], companies: [4, 5], productLines: [7, 8] }, "ira", ["no_documento", "grupo", "edad"], format, signal)).toBe(file);
-  expect(httpClient.getBlob).toHaveBeenCalledTimes(1);
-  const [url, options] = vi.mocked(httpClient.getBlob).mock.calls[0];
-  expect(url.split("?")[0]).toBe(`${path}/export`);
-  const params = new URLSearchParams(url.split("?")[1]);
-  expect(params.getAll("formato")).toEqual([format]);
-  expect(params.getAll("evento")).toEqual(["ira"]);
-  expect(params.getAll("columnas")).toEqual(["no_documento", "grupo", "edad"]);
-  expect(params.getAll("sedes")).toEqual(["2", "3"]);
-  expect(params.getAll("empresas")).toEqual(["4", "5"]);
-  expect(params.getAll("lineas")).toEqual(["7", "8"]);
-  expect(params.get("fecha_inicial")).toBe("2026-01-01");
-  expect(params.get("fecha_final")).toBe("2026-01-31");
-  expect(params.has("limit")).toBe(false);
-  expect(params.has("offset")).toBe(false);
-  expect(options).toEqual({ signal });
+  vi.mocked(httpClient.post).mockResolvedValue(file);
+  const report = { titulo: "NOTIFICACIÓN CORINTO CAUCA", subtitulo: "SEMANA 40 PERIODO 10 2026" } as SivigilaReport;
+  expect(await sivigilaApi[method](report, signal)).toBe(file);
+  expect(httpClient.post).toHaveBeenCalledTimes(1);
+  expect(httpClient.post).toHaveBeenCalledWith(`${path}/export/${kind}`, { body: report, responseType: "blob", signal });
+  expect(httpClient.getWithMeta).not.toHaveBeenCalled();
+  expect(httpClient.get).not.toHaveBeenCalled();
 });

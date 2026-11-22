@@ -132,8 +132,21 @@ clasifican independientemente, sin duplicar una atención dentro de un evento, y
 todas las atenciones. Meses/Días pertenecen a «Menor de 1 Año»; sexo no reconocido no se asigna
 en el análisis por sexo.
 
-Supuesto epidemiológico: semanas INS de domingo a sábado, la semana 1 contiene el 4 de enero;
-periodo = `ceil(semana/4)`, calculado sobre `fecha_final`. La exportación reutilizada usa
-`GET /statistics/administrative/sivigila/export`, los mismos filtros, `evento`, `columnas`
-repetibles y `formato` (`csv` o `xlsx`). Solo CSV/XLSX: no existe PDF en los componentes
-compartidos de exportación.
+Semana y periodo siguen `Notificaciones.bas`: la semana 1 empieza el primer domingo del año (una
+fecha anterior pertenece a la última semana del año previo), periodo = `(semana-1) + 1`, año =
+año de la fecha, formato `SEMANA 05 PERIODO 02 2026`. La fecha de referencia es la primera fecha
+de atención de General (sin registros, `fecha_final`). El encabezado `NOTIFICACIÓN …` depende de
+las sedes filtradas (FLORIDA VALLE DEL CAUCA, CORINTO CAUCA, MIRANDA CAUCA o GENERAL; sin
+selección o con varios municipios = GENERAL; sedes fuera de la tabla de equivalencias no se
+asignan a una ciudad); solo rotula, los datos siguen los filtros. Las tablas IRA y EDA reproducen
+`NotificacionIRA.bas` y `NotificacionEDA.bas` (conteo por grupo de edad, por sexo F/M en EDA).
+
+Exportación (solo desde la pestaña Análisis, sin nueva consulta a SQL Server; el cliente envía el
+resultado ya procesado):
+
+- `POST /statistics/administrative/sivigila/export/pdf`: PDF real (`infrastructure/sivigila_pdf.py`),
+  Carta horizontal, una página, solo las tablas de Análisis, centrado en ambos ejes, encabezados
+  azules sobre fondo blanco, tamaños de letra y columnas autoajustados.
+- `POST /statistics/administrative/sivigila/export/xlsx`: un libro con siete hojas (Análisis,
+  General, Evento IRA, Evento EDA, Dengue, Varicela, Exposición Rábica), con fechas reales,
+  anchos, bordes y encabezados (`infrastructure/sivigila_workbook.py`).

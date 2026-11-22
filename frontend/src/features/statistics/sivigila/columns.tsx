@@ -1,4 +1,4 @@
-import { createReportColumns, reportExportColumns, type ColumnType } from "../shared/report-columns";
+import { createReportColumns, type ColumnType } from "../shared/report-columns";
 import type { SivigilaColumnKey, SivigilaEvent } from "./types";
 
 const definitions = [
@@ -29,7 +29,4 @@ const GROUP_LABEL: Partial<Record<SivigilaEvent, string>> = { ira: "Grupo IRA", 
 /** Same 20 columns on every tab; only the group header changes (empty for events without group). */
 export function sivigilaColumns(event: SivigilaEvent) {
   return createReportColumns(definitions.map(([id, label, type]) => [id, id === "grupo" ? (GROUP_LABEL[event] ?? label) : label, type] as const));
-}
-export function sivigilaExportColumns(event: SivigilaEvent) {
-  return reportExportColumns(sivigilaColumns(event));
 }
