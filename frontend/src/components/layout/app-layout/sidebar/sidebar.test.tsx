@@ -201,6 +201,19 @@ it.each(Object.entries(MENUS))("%s: sin permisos no aparece y con un permiso mue
   for (const [label] of options.slice(1)) expect(within(panel).queryByText(label)).not.toBeInTheDocument();
 });
 
+it("habilita Facturación General solo con su permiso y conserva las demás opciones administrativas", () => {
+  auth.permissions = ["statistics.administrative.general_billing.view", "statistics.administrative.general_consumption.view"];
+  const { unmount } = mount();
+  fireEvent.click(screen.getByRole("button", { name: "Gestión Administrativa" }));
+  expect(screen.getByRole("link", { name: "Facturación General" })).toHaveAttribute("href", "/estadistica/administrativa/facturacion-general");
+  expect(screen.getByText("Consumo General")).toHaveAttribute("aria-disabled", "true");
+  unmount();
+  auth.permissions = ["statistics.administrative.general_consumption.view"];
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "Gestión Administrativa" }));
+  expect(screen.queryByText("Facturación General")).not.toBeInTheDocument();
+});
+
 it("expandido: isotipo antes de NEXORA, alineados verticalmente y centrados", () => {
   mount(true);
   const link = screen.getByRole("link", { name: "NEXORA" });
