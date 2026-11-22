@@ -13,7 +13,7 @@ const EMPTY: Record<SivigilaEvent, string> = {
   rabia: "No hay atenciones de Exposición Rábica para este período.",
 };
 
-/** The rows already arrived with the single query; pagination is local. Export lives in the Análisis tab. */
+/** Las filas ya llegaron con la consulta única; la paginación es local y la exportación está en la pestaña Análisis. */
 export function EventTable({ event, rows }: { event: SivigilaEvent; rows: SivigilaRecord[] }) {
   const columns = useMemo(() => sivigilaColumns(event), [event]);
   const [visible, setVisible] = useState<string[]>(() => columns.map((column) => column.id));

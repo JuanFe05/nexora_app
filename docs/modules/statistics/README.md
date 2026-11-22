@@ -128,17 +128,19 @@ exporta las etiquetas en el orden solicitado; los tipos de exportación son `tex
 y `date` (metadatos `longtext` → `text`, `money` → `number`). Clave desconocida: 422,
 incluso sin filas. Los demás informes conservan encabezados basados en sus claves.
 
-Una sola lectura de la query de Facturas Detalladas alimenta el ETL. De
-`modProcesarFacturasDetalladas.bas` proceden el filtro CERRADO (facturas electrónicas,
-agrupadas o TRANSACCION de los dos contratos SOS PGP) y la normalización a mayúsculas,
-espacios colapsados y fechas ISO. `modCalculoEdad.bas` calcula edad y curso de vida con
-referencia en la fecha de factura, meses/años completos y ajuste al fin del mes.
-`modCalculosFactura.bas` aporta nombre completo, mes en español, total, copago y pagos
+Una sola lectura de la query de Facturas Detalladas alimenta el ETL; los datos llegan tipados
+directamente de SQL Server (no se procesa ningún CSV). Las macros de `data_ips` son solo una guía
+de las reglas: de `modProcesarFacturasDetalladas.bas` proceden el filtro CERRADO (facturas
+electrónicas, agrupadas o TRANSACCION de los dos contratos SOS PGP) y la normalización a
+mayúsculas con espacios colapsados; `modCalculoEdad.bas` inspira edad y curso de vida con
+referencia en la fecha de factura, meses/años completos y ajuste al fin del mes;
+`modCalculosFactura.bas` inspira nombre completo, mes en español, total, copago y pagos
 particulares/descuentos: solo la primera fila retenida de cada factura lleva estos importes.
-Nulos y valores defectuosos se normalizan a vacío/0, edad inválida a null; una fila defectuosa
-no interrumpe el informe. Se usan Decimal e identificadores textuales, sin formato de miles.
+Fechas nativas o ISO e importes con punto decimal; nulos y valores defectuosos se normalizan a
+vacío/0, edad inválida a null, y una fila defectuosa no interrumpe el informe. Se usan Decimal
+e identificadores textuales, sin formato de miles.
 
-Desviaciones deliberadas de las macros: clave `(prefijo, tipo documento, consecutivo)` para
+Diferencias deliberadas respecto de las macros: clave `(prefijo, tipo documento, consecutivo)` para
 no mezclar facturas, unidades `DÍAS`/`MESES`/`AÑOS`, una pasada por grupos contiguos y spool
 privado temporal JSON Lines con índice `array('Q')`. Página y exportación reutilizan el mismo
 resultado durante 60 segundos, con single-flight y máximo de 8 entradas por aplicación;

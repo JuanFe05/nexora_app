@@ -1,4 +1,4 @@
-"""Pure billing rules and streaming ETL, using synthetic invoice records only."""
+"""Reglas puras y ETL en streaming de Facturación General, solo con facturas sintéticas."""
 
 from collections.abc import AsyncIterator
 from datetime import date, datetime, timedelta
@@ -35,7 +35,7 @@ def record(**overrides: Any) -> dict[str, Any]:
         "sgndo_aplldo": "",
         "cntdd1": Decimal("0.10"),
         "tpo_lqdcn_pcnte": " copago ",
-        "vlr_lqdd_pcnte": "15,25",
+        "vlr_lqdd_pcnte": "15.25",
         "vlr_frmas_pgo_tpo1": "20.50",
         "vlr_frmas_pgo_tpo2": None,
         "cc_afldo": "00123",
@@ -71,7 +71,7 @@ async def processed(rows: list[Any]) -> list[dict[str, Any]]:
         ("invalid", "2026-01-31", (None, "")),
         ("2000-01-01garbage", "2026-01-31", (None, "")),
         ("2000-01-01", "2026-01-31garbage", (None, "")),
-        ("31/01/2025 08:30:00", "2025-03-02T12:30:00", (1, "MESES")),
+        ("2025-01-31 08:30:00", "2025-03-02T12:30:00", (1, "MESES")),
         (None, None, (None, "")),
     ],
 )
@@ -131,7 +131,7 @@ def test_filter(transaction: Any, company: Any, state: Any, expected: bool) -> N
 @pytest.mark.parametrize(
     "kind", ["COPAGO", "COPAGO Y CUOTA MODERADORA", "CUOTA MODERADORA", "SIN CLASIFICAR"]
 )
-@pytest.mark.parametrize("payment2", [None, "", "  ", 0, "0,00", Decimal("0")])
+@pytest.mark.parametrize("payment2", [None, "", "  ", 0, "0.00", Decimal("0")])
 def test_non_particular_copago(kind: str, payment2: Any) -> None:
     assert payments(record(tpo_lqdcn_pcnte=f" {kind.lower()} ", vlr_frmas_pgo_tpo2=payment2)) == (
         Decimal("15.25"),
@@ -148,7 +148,7 @@ def test_non_particular_copago(kind: str, payment2: Any) -> None:
         ({"tpo_lqdcn_pcnte": "OTRO"}, (0, 0, 0)),
         ({"vlr_lqdd_pcnte": None}, (0, 0, 0)),
         (
-            {"emprs": " particular ", "vlr_frmas_pgo_tpo2": "2,25"},
+            {"emprs": " particular ", "vlr_frmas_pgo_tpo2": "2.25"},
             (0, Decimal("20.50"), Decimal("2.25")),
         ),
         ({"emprs": "PARTICULAR", "vlr_frmas_pgo_tpo1": None}, (0, 0, 0)),
@@ -169,7 +169,7 @@ def test_payment_exclusions_and_particular(
         ("bad", 0),
         ("NaN", 0),
         ("Infinity", 0),
-        ("0,10", Decimal("0.10")),
+        ("0.10", Decimal("0.10")),
         (Decimal("12.30"), Decimal("12.30")),
         ("-2.25", Decimal("-2.25")),
         ("1000", 1000),
@@ -207,7 +207,7 @@ async def test_filtered_first_row_totals_across_chunks_and_invoice_keys() -> Non
             record(estado="ABIERTO", cntdd1=999),
             record(),
             None,
-            record(cntdd1="0,20"),
+            record(cntdd1="0.20"),
             record(prfjo_dcto="OTRO", cntdd1="3"),
             record(prfjo_dcto="OTRO", dscrp_transcn="FACTURA AGRUPADA", cntdd1="4"),
             record(cnsctvo_dcto="0002", emprs="PARTICULAR", cntdd1="5", vlr_frmas_pgo_tpo2="2"),

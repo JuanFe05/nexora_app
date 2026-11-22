@@ -10,7 +10,7 @@ import type { AnalysisTable, SivigilaReport } from "../types";
 const numberFormat = new Intl.NumberFormat("es-CO");
 const cell = "border-b border-gray-100 px-3 py-2.5 text-right tabular-nums whitespace-nowrap dark:border-gray-800";
 
-/** Statistical sheet layout: label column, one column per age group and a highlighted Total column. */
+/** Hoja estadística: columna de etiqueta, una columna por grupo de edad y una columna Total resaltada. */
 export function AnalysisTableView({ table, totalRowIndexes, id }: { table: AnalysisTable; totalRowIndexes?: number[]; id: string }) {
   return (
     <Card className="min-w-0 space-y-4">
@@ -47,7 +47,7 @@ function fileBase(title: string) {
   return title.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "NOTIFICACION";
 }
 
-/** Both buttons export the same processed report shown below; the backend never re-queries SQL Server. */
+/** Ambos botones exportan el mismo resultado procesado que se muestra abajo; el backend no vuelve a consultar SQL Server. */
 function ExportActions({ report }: { report: SivigilaReport }) {
   const [exporting, setExporting] = useState<ExportKind | null>(null);
   const [error, setError] = useState<string | null>(null);

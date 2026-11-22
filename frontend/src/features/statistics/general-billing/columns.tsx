@@ -1,7 +1,7 @@
 import { createReportColumns, reportExportColumns, type ColumnType } from "../shared/report-columns";
 import type { GeneralBillingColumnKey } from "./types";
 
-/** S3: all 44 aliases in API order, with identifiers kept as text. */
+/** Las 44 claves de la API en su orden, con los identificadores como texto. */
 const definitions = [
   ["sede", "Sede", "text"],
   ["emprs", "Empresa", "text"],
@@ -53,7 +53,7 @@ export const defaultVisibleColumns: GeneralBillingColumnKey[] = [
   "sede", "emprs", "prfjo_dcto", "cnsctvo_dcto", "dscrp_transcn", "fcha_dcto", "pnto_atncn", "procedimiento", "nombre_completo", "vlr_srvcs", "vlr_smnstrs", "total_cntdd1", "vlr_copago", "pago_tpo1", "pago_tpo2",
 ];
 export const generalBillingColumns = createReportColumns<GeneralBillingColumnKey>(definitions);
-// The API owns file headers; keep their labels alongside the shared export type mapping.
+// El backend define los encabezados de los archivos; aquí se conservan junto al tipo de exportación compartido.
 export const generalBillingExportColumns = reportExportColumns(generalBillingColumns).map((column, index) => ({
   ...column,
   label: generalBillingColumns[index].label,

@@ -86,7 +86,7 @@ it.each(["csv", "xlsx"] as const)("exports %s with applied filters and chosen vi
   dates("2026-01-20");
   for (const all of [false, true]) {
     await user.click(screen.getByRole("button", { name: "Exportar" }));
-    // Match the shared menu tests: jsdom cannot model Base UI's pointer transition.
+    // Igual que en las pruebas de menús compartidos: jsdom no modela la transición de puntero de Base UI.
     fireEvent.click(await screen.findByRole("menuitem", { name: all ? "Todas las columnas (44)" : "Columnas visibles (14)" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: format === "csv" ? "CSV" : "Excel (.xlsx)" }));
     await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(all ? 2 : 1));

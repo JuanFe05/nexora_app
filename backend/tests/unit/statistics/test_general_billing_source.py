@@ -1,4 +1,4 @@
-"""Disk-spool reuse, expiry, concurrency and cleanup through ReportSource's public API."""
+"""Reutilización, vencimiento, concurrencia y limpieza del spool en disco por la API pública."""
 
 import asyncio
 from datetime import date
@@ -113,7 +113,7 @@ async def test_eviction_and_shutdown_remove_private_spool() -> None:
     await source.aclose()
     await source.aclose()
     assert not directory.exists()
-    with pytest.raises(RuntimeError, match="closed"):
+    with pytest.raises(RuntimeError, match="cerrado"):
         await source.page(FILTER, 1, 0)
 
 
@@ -146,7 +146,7 @@ async def test_export_lease_survives_expiry_and_eviction_then_cleans_up() -> Non
         assert directory is not None
         paths = set(directory.iterdir())
         await asyncio.sleep(0.05)
-        assert all(path.exists() for path in paths)  # active export cannot be truncated
+        assert all(path.exists() for path in paths)  # una exportación activa no se puede truncar
         assert len(await anext(stream)) == 1
         await stream.aclose()
         assert list(directory.iterdir()) == []

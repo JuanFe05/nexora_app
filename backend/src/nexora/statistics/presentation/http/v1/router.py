@@ -18,7 +18,8 @@ from nexora.statistics.presentation.http.v1.sivigila_router import create_sivigi
 
 
 def get_general_billing_report(request: Request) -> Report:
-    # Application-owned source survives requests: page and export share SQL/ETL and spool.
+    # La fuente pertenece a la aplicación y sobrevive a las solicitudes: página y exportación
+    # comparten la consulta SQL, el ETL y el spool.
     return Report(request.app.state.general_billing_source)
 
 

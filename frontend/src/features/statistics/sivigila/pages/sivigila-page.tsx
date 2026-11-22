@@ -24,7 +24,7 @@ const TABS: readonly { value: "analisis" | SivigilaEvent; label: string }[] = [
 
 type State = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; report: SivigilaReport };
 
-/** Mounted on Consultar: one request feeds every tab, so switching tabs never queries again. */
+/** Se monta al consultar: una solicitud alimenta todas las pestañas, así que cambiar de pestaña no vuelve a consultar. */
 function SivigilaResults({ filters, onLoadingChange }: { filters: Filters; onLoadingChange: (loading: boolean) => void }) {
   const [state, setState] = useState<State>({ status: "loading" });
   const [tab, setTab] = useState<string>("analisis");

@@ -195,7 +195,7 @@ async def _prepend(
 
 
 def _numeric_json(value: Any) -> str:
-    """Preserve Decimal numeric tokens instead of Pydantic strings or float rounding."""
+    """Conserva los Decimal como números JSON, sin cadenas de Pydantic ni redondeo de float."""
     if isinstance(value, Decimal):
         return format(value, "f")
     if isinstance(value, dict):
@@ -212,7 +212,7 @@ async def _label_chunks(
     columns: Sequence[ExportColumn],
     labels: Mapping[str, str],
 ) -> AsyncIterator[list[dict[str, Any]]]:
-    """Adapt keys for existing writers without changing any unlabelled report."""
+    """Adapta las claves para los escritores existentes sin alterar los informes sin etiquetas."""
     try:
         async for chunk in chunks:
             yield [{labels[c.id]: row.get(c.id) for c in columns} for row in chunk]

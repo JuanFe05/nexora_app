@@ -1,7 +1,8 @@
-"""Private, short-lived JSONL spool shared by billing pagination and exports.
+"""Spool JSONL privado y de corta vida que comparten la paginación y las exportaciones.
 
-SQL and ETL run once per cache miss. Offsets occupy eight bytes per retained row; records
-stay on disk. Readers lease an entry so expiry/eviction cannot truncate an active export.
+La consulta SQL y el ETL se ejecutan una sola vez por falla de caché. Los desplazamientos
+ocupan ocho bytes por fila retenida y los registros permanecen en disco. Los lectores toman
+una concesión de la entrada para que el vencimiento o la expulsión no trunque una exportación.
 """
 
 import asyncio
@@ -28,7 +29,7 @@ Row = dict[str, Any]
 
 
 def _encode(row: Row) -> bytes:
-    # JSON numeric tokens, not quoted decimals and never a lossy Decimal -> float conversion.
+    # Números JSON sin comillas y sin convertir Decimal a float (evita perder precisión).
     cells = (
         json.dumps(key)
         + ":"
@@ -63,17 +64,18 @@ class _Entry:
 
 
 class GeneralBillingSource:
-    """Application-lifetime ReportSource, with a bounded cache and single-flight builds.
+    """Fuente de reporte con vida de aplicación, caché acotada y una sola construcción por filtro.
 
-    A single build lock also bounds concurrent SQL/spool writers across different filters.
-    Cache keys use the existing validated ReportFilter (including all three catalog filters).
+    Un único candado de construcción acota también los escritores SQL/spool concurrentes entre
+    filtros distintos. La clave de caché es el `ReportFilter` ya validado (con sedes, empresas
+    y líneas).
     """
 
     def __init__(
         self, reader: SqlServerReader, *, ttl_seconds: float = 60, max_entries: int = 8
     ) -> None:
         if ttl_seconds <= 0 or max_entries < 1:
-            raise ValueError("Spool TTL and maximum entries must be positive")
+            raise ValueError("El TTL y el máximo de entradas del spool deben ser positivos")
         self._source = SqlServerDetailedInvoicesSource(reader)
         self._ttl = ttl_seconds
         self._maximum = max_entries
@@ -85,7 +87,7 @@ class GeneralBillingSource:
 
     @property
     def spool_directory(self) -> Path | None:
-        """Operational cleanup observability; never expose this private path over HTTP."""
+        """Para observar la limpieza operativa; esta ruta privada nunca se expone por HTTP."""
         return Path(self._directory.name) if self._directory else None
 
     async def sites(self) -> list[CatalogOption]:
@@ -112,7 +114,7 @@ class GeneralBillingSource:
 
     async def _build(self, filter: ReportFilter) -> _Entry:
         if self._directory is None:
-            # Secure creation (0700 on POSIX, user-private OS temp location on Windows).
+            # Creación segura (0700 en POSIX; carpeta temporal privada del usuario en Windows).
             self._directory = tempfile.TemporaryDirectory(prefix="nexora-billing-")
         offsets = array("Q")
         path: Path | None = None
@@ -137,7 +139,7 @@ class GeneralBillingSource:
     async def _lease(self, filter: ReportFilter) -> AsyncIterator[_Entry]:
         async with self._lock:
             if self._closed:
-                raise RuntimeError("Billing spool is closed")
+                raise RuntimeError("El spool de facturación está cerrado")
             loop = asyncio.get_running_loop()
             for key, cached in list(self._entries.items()):
                 if cached.expires <= loop.time():
@@ -172,7 +174,7 @@ class GeneralBillingSource:
                 yield entry.read(2000, offset)
 
     async def aclose(self) -> None:
-        """Called at application shutdown; active leases clean up when their readers close."""
+        """Se llama al apagar; las concesiones activas limpian cuando sus lectores terminan."""
         async with self._lock:
             self._closed = True
             for filter, entry in list(self._entries.items()):

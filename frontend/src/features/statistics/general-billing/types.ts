@@ -11,5 +11,5 @@ export type GeneralBillingColumnKey =
   | "vlr_srvcs" | "vlr_smnstrs" | "cntdd" | "vlr_untro" | "cntdd1" | "total_cntdd1"
   | "vlr_copago" | "pago_tpo1" | "pago_tpo2" | "usrio_mdfca" | "nmro_atrzcn_eps"
   | "cnsctvo_fctra_agrpda" | "no_remision" | "fcha_rmsn" | "no_envio" | "mes_dcto";
-/** API aliases stay independent from presentation; identifiers are never coerced. */
+/** Las claves de la API son independientes de la presentación; los identificadores nunca se convierten. */
 export type GeneralBilling = Record<GeneralBillingColumnKey, ReportCell>;

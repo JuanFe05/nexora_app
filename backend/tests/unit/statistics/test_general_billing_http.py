@@ -1,4 +1,4 @@
-"""Billing HTTP and optional factory labels; all inputs are synthetic."""
+"""HTTP de Facturación General y etiquetas opcionales de la fábrica; entradas sintéticas."""
 
 import csv
 import io
@@ -157,7 +157,7 @@ def test_exact_export_labels_and_requested_order(http: Any, formato: str, revers
         assert rows[1][export_params(columns).index("cc_afldo:text")] == "00123"
     else:
         with zipfile.ZipFile(io.BytesIO(response.content)) as book:
-            sheet = ElementTree.fromstring(book.read("xl/worksheets/sheet1.xml"))  # noqa: S314 -- generated synthetic workbook
+            sheet = ElementTree.fromstring(book.read("xl/worksheets/sheet1.xml"))  # noqa: S314 -- libro sintético generado en la prueba
         ns = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
         header = sheet.find("s:sheetData/s:row", ns)
         assert header is not None

@@ -14,13 +14,13 @@ function query(filters: ReportFilters) {
   return params;
 }
 
-/** One request returns the analysis and every tab: the backend runs the Signos Vitales query once. */
+/** Una sola solicitud devuelve el análisis y todas las pestañas: el backend ejecuta la query de Signos Vitales una vez. */
 export const sivigilaApi = {
   fetchSites: catalogs.fetchSites,
   fetchCompanies: catalogs.fetchCompanies,
   fetchProductLines: catalogs.fetchProductLines,
   fetchReport: (filters: ReportFilters, signal?: AbortSignal) => httpClient.get<SivigilaReport>(`${PATH}?${query(filters)}`, { signal }),
-  /** Both exports render the already processed result shown in the module: no new SQL Server query. */
+  /** Ambas exportaciones generan el archivo con el resultado ya procesado que muestra el módulo: sin nueva consulta a SQL Server. */
   exportAnalysisPdf: (report: SivigilaReport, signal?: AbortSignal) =>
     httpClient.post<Blob>(`${PATH}/export/pdf`, { body: report, responseType: "blob", signal }),
   exportWorkbook: (report: SivigilaReport, signal?: AbortSignal) =>

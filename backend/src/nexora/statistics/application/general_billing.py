@@ -1,4 +1,4 @@
-"""Streaming billing ETL: one contiguous invoice at a time, filtering before totals."""
+"""ETL de Facturación General en streaming: una factura a la vez, filtrando antes de totalizar."""
 
 from collections.abc import AsyncGenerator, AsyncIterator
 from decimal import Decimal
@@ -17,7 +17,7 @@ from nexora.statistics.domain.general_billing import (
     row_matches,
 )
 
-# API key, exact table/export label, semantic type (S3).
+# Clave de la API, encabezado exacto de la tabla y la exportación, y tipo de dato.
 COLUMNS = (
     ("sede", "Sede", "text"),
     ("emprs", "Empresa", "text"),
@@ -68,6 +68,7 @@ Row = dict[str, Any]
 
 
 def clean_record(raw: Row) -> Row:
+    """Fila de salida: texto en mayúsculas, fechas ISO, importes exactos y edad calculada."""
     row: Row = {}
     for key, _, kind in COLUMNS:
         value = raw.get(key)
@@ -94,10 +95,11 @@ def clean_record(raw: Row) -> Row:
 
 
 async def process_chunks(chunks: AsyncIterator[list[Row]]) -> AsyncGenerator[Row]:
-    """Consume SQL once; only retained rows of the current invoice occupy memory.
+    """Consume SQL una sola vez; solo las filas de la factura en curso ocupan memoria.
 
-    The source guarantees contiguous invoice keys. A malformed row is omitted, while bad
-    scalar values are normalized to empty/zero. Payments use the first retained row only.
+    La consulta entrega las filas de cada factura de forma contigua. Una fila defectuosa se
+    omite y los valores sueltos inválidos se normalizan a vacío o cero. El total de la factura
+    y los pagos (copago, pago particular y descuento) se asignan solo a su primera fila.
     """
     group: list[Row] = []
     current: tuple[str, str, str] | None = None
@@ -111,7 +113,7 @@ async def process_chunks(chunks: AsyncIterator[list[Row]]) -> AsyncGenerator[Row
                     key = invoice_key(raw)
                     row = clean_record(raw)
                     copago, payment1, payment2 = payments(raw)
-                except Exception:  # noqa: S112 -- omit defective rows without logging patient data
+                except Exception:  # noqa: S112 -- se omite la fila defectuosa sin registrar datos del paciente
                     continue
                 if group and key != current:
                     group[0]["total_cntdd1"] = money(total)
