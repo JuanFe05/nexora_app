@@ -32,6 +32,12 @@ it("todos los permisos view muestran las cuatro opciones de configuración y los
   expect(screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/configuracion/"))).toHaveLength(4);
 });
 
+it("lista Roles antes que Permisos en Configuraciones", () => {
+  mount();
+  const labels = screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/configuracion/")).map((link) => link.textContent?.trim());
+  expect(labels).toEqual(["Perfil de usuario", "Usuarios", "Roles", "Permisos"]);
+});
+
 it.each([
   { permissions: [], visible: [] },
   { permissions: ["identity.users.view"], visible: ["Usuarios"] },

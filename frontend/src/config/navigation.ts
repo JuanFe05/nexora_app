@@ -123,16 +123,16 @@ export const navigation: NavigationSection[] = [
         requiredPermission: PERMISSIONS.usersView,
       },
       {
-        label: "Permisos",
-        path: "/configuracion/permisos",
-        icon: KeyIcon,
-        requiredPermission: PERMISSIONS.permissionsView,
-      },
-      {
         label: "Roles",
         path: "/configuracion/roles",
         icon: LockIcon,
         requiredPermission: PERMISSIONS.rolesView,
+      },
+      {
+        label: "Permisos",
+        path: "/configuracion/permisos",
+        icon: KeyIcon,
+        requiredPermission: PERMISSIONS.permissionsView,
       },
     ],
   },
