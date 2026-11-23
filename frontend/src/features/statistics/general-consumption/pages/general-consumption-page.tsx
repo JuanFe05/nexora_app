@@ -77,15 +77,14 @@ export default function GeneralConsumptionPage() {
     } catch (error) {
       if (!signal.aborted && error instanceof ApiError && error.status === 410) {
         setSerLaboral(null);
+        if (table === "ser_laboral") setUploadError("El archivo de Ser Laboral expiró; cárgalo de nuevo.");
         throw new ExportError("El archivo de Ser Laboral expiró; cárgalo de nuevo.");
       }
       throw error;
     }
   }
-  function tableExport(table: ConsumptionTableId, title: string, rowCount: number, filename: string) {
-    return <div aria-label={`Exportación de ${title}`} className="mb-4 flex flex-wrap items-center justify-end gap-3">
-      <ExportMenu label={`Exportar ${title}`} columns={generalConsumptionExportColumns} visibleIds={visible} disabled={!ready || uploading || rowCount === 0 || (table === "ser_laboral" && !serLaboral)} exportFile={(columns, format, signal) => exportData(columns, format, signal, table, filename)} />
-    </div>;
+  function tableExport(table: ConsumptionTableId, rowCount: number, filename: string) {
+    return <ExportMenu label="Exportar" columns={generalConsumptionExportColumns} visibleIds={visible} disabled={!ready || uploading || rowCount === 0 || (table === "ser_laboral" && !serLaboral)} exportFile={(columns, format, signal) => exportData(columns, format, signal, table, filename)} />;
   }
   const report = state.status === "ready" ? state.report : null;
   return (
@@ -117,18 +116,15 @@ export default function GeneralConsumptionPage() {
           </TabsList>
           <TabsPanel value="analisis"><AnalysisTab indicators={report.indicadores} /></TabsPanel>
           <TabsPanel value="facturas">
-            {tableExport("facturas", "Facturas Detalladas", report.facturas.length, "consumo-general-facturas-detalladas")}
-            <ConsumptionTable title="Facturas Detalladas" rows={report.facturas} visible={visible} onVisibleChange={setVisible} emptyTitle="No hay facturas detalladas para este período." />
+            <ConsumptionTable title="Facturas Detalladas" rows={report.facturas} exportAction={tableExport("facturas", report.facturas.length, "consumo-general-facturas-detalladas")} visible={visible} onVisibleChange={setVisible} emptyTitle="No hay facturas detalladas para este período." />
           </TabsPanel>
           <TabsPanel value="admisiones">
-            {tableExport("admisiones", "Admisiones", report.admisiones.length, "consumo-general-admisiones")}
-            <ConsumptionTable title="Admisiones" rows={report.admisiones} visible={visible} onVisibleChange={setVisible} emptyTitle="No hay admisiones para este período." />
+            <ConsumptionTable title="Admisiones" rows={report.admisiones} exportAction={tableExport("admisiones", report.admisiones.length, "consumo-general-admisiones")} visible={visible} onVisibleChange={setVisible} emptyTitle="No hay admisiones para este período." />
           </TabsPanel>
           <TabsPanel value="ser-laboral">
-            {tableExport("ser_laboral", "Ser Laboral", serLaboral?.filas.length ?? 0, "consumo-general-ser-laboral")}
             {serLaboral ? <div className="space-y-4">
               <div role="status" className="text-sm text-gray-600 dark:text-gray-300"><p>Total: {serLaboral.total} · Omitidas: {serLaboral.omitidas}</p>{serLaboral.advertencias.length > 0 && <ul className="mt-2 list-disc pl-5">{serLaboral.advertencias.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul>}</div>
-              <ConsumptionTable key={serLaboral.ser_laboral_id} title="Ser Laboral" rows={serLaboral.filas} visible={visible} onVisibleChange={setVisible} emptyTitle="No hay registros de Ser Laboral." />
+              <ConsumptionTable key={serLaboral.ser_laboral_id} title="Ser Laboral" rows={serLaboral.filas} exportAction={tableExport("ser_laboral", serLaboral.filas.length, "consumo-general-ser-laboral")} visible={visible} onVisibleChange={setVisible} emptyTitle="No hay registros de Ser Laboral." />
             </div> : <Card><p className="text-sm text-gray-500 dark:text-gray-400">Carga un CSV Ser Laboral para ver los registros.</p></Card>}
           </TabsPanel>
         </Tabs>

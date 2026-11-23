@@ -266,9 +266,9 @@ it("exports from the action bar with the uploaded token, clears it on 410 and ex
 });
 
 const tableExports = [
-  { tab: /^Facturas Detalladas/, label: "Exportar Facturas Detalladas", table: "facturas", filename: "facturas-detalladas" },
-  { tab: /^Admisiones/, label: "Exportar Admisiones", table: "admisiones", filename: "admisiones" },
-  { tab: /^Ser Laboral/, label: "Exportar Ser Laboral", table: "ser_laboral", filename: "ser-laboral" },
+  { tab: /^Facturas Detalladas/, label: "Exportar", table: "facturas", filename: "facturas-detalladas" },
+  { tab: /^Admisiones/, label: "Exportar", table: "admisiones", filename: "admisiones" },
+  { tab: /^Ser Laboral/, label: "Exportar", table: "ser_laboral", filename: "ser-laboral" },
 ] as const;
 
 it.each(tableExports)("exports $table individually with visible/all columns and applied filters", async ({ tab, label, table, filename }) => {
@@ -282,7 +282,7 @@ it.each(tableExports)("exports $table individually with visible/all columns and 
   await user.click(screen.getByRole("tab", { name: tab }));
   const button = await screen.findByRole("button", { name: label });
   expect(button).toBeEnabled();
-  expect(button.compareDocumentPosition(screen.getByRole("button", { name: "Columnas visibles" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Columnas visibles" }).compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Columnas visibles" }));
   await user.click(screen.getByRole("checkbox", { name: "Sede" }));
   await user.keyboard("{Escape}");
@@ -312,16 +312,18 @@ it("disables individual exports for empty tables and before a CSV is loaded", as
   report.facturas = []; report.admisiones = []; report.total_facturas = 0; report.total_admisiones = 0;
   const user = userEvent.setup();
   await queryReport();
-  for (const { tab, label } of tableExports) {
+  for (const { tab, label } of tableExports.slice(0, 2)) {
     await user.click(screen.getByRole("tab", { name: tab }));
     expect(await screen.findByRole("button", { name: label })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: label }));
   }
+  await user.click(screen.getByRole("tab", { name: /^Ser Laboral/ }));
+  expect(screen.queryByRole("button", { name: "Exportar" })).not.toBeInTheDocument();
   expect(httpClient.getBlob).not.toHaveBeenCalled();
   vi.mocked(generalConsumptionApi.uploadSerLaboral).mockResolvedValue({ ...serResult(), filas: [], total: 0 });
   fireEvent.change(screen.getByLabelText("Archivo CSV Ser Laboral"), { target: { files: [csv()] } });
   await screen.findByText("Total: 0 · Omitidas: 3");
-  expect(screen.getByRole("button", { name: "Exportar Ser Laboral" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Exportar" })).toBeDisabled();
   expect(httpClient.getBlob).not.toHaveBeenCalled();
 });
 
@@ -335,12 +337,12 @@ it("prevents individual downloads during upload and consultation", async () => {
   fireEvent.change(screen.getByLabelText("Archivo CSV Ser Laboral"), { target: { files: [csv()] } });
   for (const { tab, label } of tableExports) {
     await user.click(screen.getByRole("tab", { name: tab }));
-    expect(await screen.findByRole("button", { name: label })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: label }));
+    const button = screen.queryByRole("button", { name: label });
+    if (button) { expect(button).toBeDisabled(); fireEvent.click(button); }
   }
   expect(httpClient.getBlob).not.toHaveBeenCalled();
   await act(async () => resolve(serResult()));
-  expect(screen.getByRole("button", { name: "Exportar Ser Laboral" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Exportar" })).toBeEnabled();
   let resolveReport!: (value: GeneralConsumptionReport) => void;
   vi.mocked(httpClient.get).mockImplementation(() => new Promise((done) => { resolveReport = done as typeof resolveReport; }));
   fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
@@ -349,7 +351,7 @@ it("prevents individual downloads during upload and consultation", async () => {
   expect(httpClient.getBlob).not.toHaveBeenCalled();
   await act(async () => resolveReport(report));
   await user.click(screen.getByRole("tab", { name: /^Ser Laboral/ }));
-  expect(await screen.findByRole("button", { name: "Exportar Ser Laboral" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Exportar" })).not.toBeInTheDocument();
 });
 
 it("clears an expired individual Ser Laboral export and requires reloading the CSV", async () => {
@@ -358,7 +360,7 @@ it("clears an expired individual Ser Laboral export and requires reloading the C
   vi.mocked(generalConsumptionApi.uploadSerLaboral).mockResolvedValue(serResult());
   await upload();
   vi.mocked(httpClient.getBlob).mockRejectedValueOnce(new ApiError(410, "private detail", null));
-  await user.click(screen.getByRole("button", { name: "Exportar Ser Laboral" }));
+  await user.click(screen.getByRole("button", { name: "Exportar" }));
   fireEvent.click(await screen.findByRole("menuitem", { name: /Todas las columnas/ }));
   fireEvent.click(await screen.findByRole("menuitem", { name: "CSV" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("El archivo de Ser Laboral expiró; cárgalo de nuevo.");
@@ -367,12 +369,12 @@ it("clears an expired individual Ser Laboral export and requires reloading the C
   expect(params.getAll("tablas")).toEqual(["ser_laboral"]);
   expect(params.get("ser_laboral_id")).toBe("opaque-test-token");
   expect(screen.queryByText("Ser Laboral prueba 1")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Exportar Ser Laboral" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Exportar" })).not.toBeInTheDocument();
   expect(screen.getByRole("region", { name: "Exportación de datos unidos" })).not.toHaveTextContent("+ Ser Laboral");
   expect(downloadBlob).not.toHaveBeenCalled();
   expect(reportCalls()).toHaveLength(1);
   await upload();
-  expect(screen.getByRole("button", { name: "Exportar Ser Laboral" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Exportar" })).toBeEnabled();
 });
 
 it("shows safe analysis export failures and re-enables buttons", async () => {
