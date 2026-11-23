@@ -138,6 +138,7 @@ it.each([["csv", "CSV"], ["xlsx", "Excel (.xlsx)"]] as const)("exports combined 
   expect(params.getAll("columnas")).toHaveLength(40);
   expect(params.has("limit")).toBe(false);
   expect(params.has("offset")).toBe(false);
+  expect(params.has("tablas")).toBe(false);
   expect(httpClient.post).not.toHaveBeenCalled();
   expect(reportCalls()).toHaveLength(1);
 });
@@ -262,6 +263,116 @@ it("exports from the action bar with the uploaded token, clears it on 410 and ex
   await exportCsv();
   await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1));
   expect(new URLSearchParams(vi.mocked(httpClient.getBlob).mock.calls[1][0].split("?")[1]).has("ser_laboral_id")).toBe(false);
+});
+
+const tableExports = [
+  { tab: /^Facturas Detalladas/, label: "Exportar Facturas Detalladas", table: "facturas", filename: "facturas-detalladas" },
+  { tab: /^Admisiones/, label: "Exportar Admisiones", table: "admisiones", filename: "admisiones" },
+  { tab: /^Ser Laboral/, label: "Exportar Ser Laboral", table: "ser_laboral", filename: "ser-laboral" },
+] as const;
+
+it.each(tableExports)("exports $table individually with visible/all columns and applied filters", async ({ tab, label, table, filename }) => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const file = new Blob(["synthetic"]);
+  vi.mocked(httpClient.getBlob).mockResolvedValue(file);
+  vi.mocked(generalConsumptionApi.uploadSerLaboral).mockResolvedValue(serResult());
+  await queryReport();
+  await upload();
+  dates("2026-01-10", "2026-01-20");
+  await user.click(screen.getByRole("tab", { name: tab }));
+  const button = await screen.findByRole("button", { name: label });
+  expect(button).toBeEnabled();
+  expect(button.compareDocumentPosition(screen.getByRole("button", { name: "Columnas visibles" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Columnas visibles" }));
+  await user.click(screen.getByRole("checkbox", { name: "Sede" }));
+  await user.keyboard("{Escape}");
+  const headers = screen.getAllByRole("columnheader").map((header) => header.textContent);
+  for (const [scope, format, formatLabel] of [[/Columnas visibles/, "csv", "CSV"], [/Todas las columnas/, "xlsx", "Excel (.xlsx)"]] as const) {
+    await user.click(button);
+    fireEvent.click(await screen.findByRole("menuitem", { name: scope }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: formatLabel }));
+    await waitFor(() => expect(downloadBlob).toHaveBeenLastCalledWith(file, `consumo-general-${filename}_2026-01-01_2026-01-31.${format}`));
+    const [url, options] = vi.mocked(httpClient.getBlob).mock.lastCall!;
+    const params = new URLSearchParams(url.split("?")[1]);
+    expect(url.split("?")[0]).toBe(`${path}/export`);
+    expect(params.getAll("tablas")).toEqual([table]);
+    expect(params.get("ser_laboral_id")).toBe(table === "ser_laboral" ? "opaque-test-token" : null);
+    expect(params.get("fecha_inicial")).toBe("2026-01-01");
+    expect(params.get("fecha_final")).toBe("2026-01-31");
+    expect(params.get("formato")).toBe(format);
+    const expectedColumns = generalConsumptionColumns.filter((column) => format === "xlsx" || headers.includes(column.header as string));
+    expect(params.getAll("columnas").map((column) => column.split(":")[0])).toEqual(expectedColumns.map(({ id }) => id));
+    expect(options).toEqual({ signal: expect.any(AbortSignal) });
+  }
+  expect(httpClient.getBlob).toHaveBeenCalledTimes(2);
+  expect(reportCalls()).toHaveLength(1);
+});
+
+it("disables individual exports for empty tables and before a CSV is loaded", async () => {
+  report.facturas = []; report.admisiones = []; report.total_facturas = 0; report.total_admisiones = 0;
+  const user = userEvent.setup();
+  await queryReport();
+  for (const { tab, label } of tableExports) {
+    await user.click(screen.getByRole("tab", { name: tab }));
+    expect(await screen.findByRole("button", { name: label })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: label }));
+  }
+  expect(httpClient.getBlob).not.toHaveBeenCalled();
+  vi.mocked(generalConsumptionApi.uploadSerLaboral).mockResolvedValue({ ...serResult(), filas: [], total: 0 });
+  fireEvent.change(screen.getByLabelText("Archivo CSV Ser Laboral"), { target: { files: [csv()] } });
+  await screen.findByText("Total: 0 · Omitidas: 3");
+  expect(screen.getByRole("button", { name: "Exportar Ser Laboral" })).toBeDisabled();
+  expect(httpClient.getBlob).not.toHaveBeenCalled();
+});
+
+it("prevents individual downloads during upload and consultation", async () => {
+  const user = userEvent.setup();
+  await queryReport();
+  vi.mocked(generalConsumptionApi.uploadSerLaboral).mockResolvedValue(serResult());
+  await upload();
+  let resolve!: (value: ReturnType<typeof serResult>) => void;
+  vi.mocked(generalConsumptionApi.uploadSerLaboral).mockImplementation(() => new Promise((done) => { resolve = done; }));
+  fireEvent.change(screen.getByLabelText("Archivo CSV Ser Laboral"), { target: { files: [csv()] } });
+  for (const { tab, label } of tableExports) {
+    await user.click(screen.getByRole("tab", { name: tab }));
+    expect(await screen.findByRole("button", { name: label })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: label }));
+  }
+  expect(httpClient.getBlob).not.toHaveBeenCalled();
+  await act(async () => resolve(serResult()));
+  expect(screen.getByRole("button", { name: "Exportar Ser Laboral" })).toBeEnabled();
+  let resolveReport!: (value: GeneralConsumptionReport) => void;
+  vi.mocked(httpClient.get).mockImplementation(() => new Promise((done) => { resolveReport = done as typeof resolveReport; }));
+  fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
+  expect(screen.getByRole("button", { name: "Exportar datos unidos" })).toBeDisabled();
+  for (const { label } of tableExports) expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
+  expect(httpClient.getBlob).not.toHaveBeenCalled();
+  await act(async () => resolveReport(report));
+  await user.click(screen.getByRole("tab", { name: /^Ser Laboral/ }));
+  expect(await screen.findByRole("button", { name: "Exportar Ser Laboral" })).toBeDisabled();
+});
+
+it("clears an expired individual Ser Laboral export and requires reloading the CSV", async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  await queryReport();
+  vi.mocked(generalConsumptionApi.uploadSerLaboral).mockResolvedValue(serResult());
+  await upload();
+  vi.mocked(httpClient.getBlob).mockRejectedValueOnce(new ApiError(410, "private detail", null));
+  await user.click(screen.getByRole("button", { name: "Exportar Ser Laboral" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /Todas las columnas/ }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "CSV" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("El archivo de Ser Laboral expiró; cárgalo de nuevo.");
+  expect(screen.queryByText("private detail")).not.toBeInTheDocument();
+  const params = new URLSearchParams(vi.mocked(httpClient.getBlob).mock.calls[0][0].split("?")[1]);
+  expect(params.getAll("tablas")).toEqual(["ser_laboral"]);
+  expect(params.get("ser_laboral_id")).toBe("opaque-test-token");
+  expect(screen.queryByText("Ser Laboral prueba 1")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Exportar Ser Laboral" })).toBeDisabled();
+  expect(screen.getByRole("region", { name: "Exportación de datos unidos" })).not.toHaveTextContent("+ Ser Laboral");
+  expect(downloadBlob).not.toHaveBeenCalled();
+  expect(reportCalls()).toHaveLength(1);
+  await upload();
+  expect(screen.getByRole("button", { name: "Exportar Ser Laboral" })).toBeEnabled();
 });
 
 it("shows safe analysis export failures and re-enables buttons", async () => {

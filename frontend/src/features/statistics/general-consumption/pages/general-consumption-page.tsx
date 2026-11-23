@@ -7,7 +7,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from "@/components/ui/tabs";
 import { CartIcon } from "@/icons";
 import { ApiError } from "@/lib/http/api-error";
-import { downloadBlob, ExportError } from "@/lib/table-export";
+import { downloadBlob, ExportError, type ExportColumn, type ExportFormat } from "@/lib/table-export";
 import { reportError } from "../../shared/report-utils";
 import type { ReportFilters as Filters } from "../../shared/types";
 import { generalConsumptionApi } from "../api/general-consumption-api";
@@ -15,7 +15,7 @@ import { defaultConsumptionColumns, generalConsumptionExportColumns } from "../c
 import { AnalysisTab } from "../components/analysis-tab";
 import { ConsumptionFilters } from "../components/consumption-filters";
 import { ConsumptionTable } from "../components/consumption-table";
-import type { GeneralConsumptionReport, SerLaboralReport } from "../types";
+import type { ConsumptionTable as ConsumptionTableId, GeneralConsumptionReport, SerLaboralReport } from "../types";
 
 const TABS = [{ value: "analisis", label: "Análisis" }, { value: "facturas", label: "Facturas Detalladas" }, { value: "admisiones", label: "Admisiones" }, { value: "ser-laboral", label: "Ser Laboral" }] as const;
 type State = { status: "idle" | "loading" } | { status: "error"; message: string } | { status: "ready"; report: GeneralConsumptionReport };
@@ -68,6 +68,25 @@ export default function GeneralConsumptionPage() {
       if (uploadController.current === controller) { uploadController.current = null; setUploading(false); }
     }
   }
+  async function exportData(columns: readonly ExportColumn[], format: ExportFormat, signal: AbortSignal, table?: ConsumptionTableId, filename = "consumo-general") {
+    if (!applied) return;
+    try {
+      const token = !table || table === "ser_laboral" ? serLaboral?.ser_laboral_id : undefined;
+      const file = await generalConsumptionApi.download(applied.filters, columns, format, signal, token, table ? [table] : undefined);
+      if (!signal.aborted) downloadBlob(file, `${filename}_${applied.filters.startDate}_${applied.filters.endDate}.${format}`);
+    } catch (error) {
+      if (!signal.aborted && error instanceof ApiError && error.status === 410) {
+        setSerLaboral(null);
+        throw new ExportError("El archivo de Ser Laboral expiró; cárgalo de nuevo.");
+      }
+      throw error;
+    }
+  }
+  function tableExport(table: ConsumptionTableId, title: string, rowCount: number, filename: string) {
+    return <div aria-label={`Exportación de ${title}`} className="mb-4 flex flex-wrap items-center justify-end gap-3">
+      <ExportMenu label={`Exportar ${title}`} columns={generalConsumptionExportColumns} visibleIds={visible} disabled={!ready || uploading || rowCount === 0 || (table === "ser_laboral" && !serLaboral)} exportFile={(columns, format, signal) => exportData(columns, format, signal, table, filename)} />
+    </div>;
+  }
   const report = state.status === "ready" ? state.report : null;
   return (
     <div className="min-w-0 space-y-6">
@@ -86,19 +105,7 @@ export default function GeneralConsumptionPage() {
       {uploadError && <p role="alert" className="text-sm text-error-600 dark:text-error-400">{uploadError}</p>}
       <section aria-label="Exportación de datos unidos" className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/3">
         <p className="text-sm text-gray-500 dark:text-gray-400">Incluye Facturas Detalladas + Admisiones{serLaboral ? " + Ser Laboral" : ""} en un solo archivo.</p>
-        <ExportMenu key={applied?.revision ?? "idle"} label="Exportar datos unidos" columns={generalConsumptionExportColumns} visibleIds={visible} disabled={!ready || uploading} exportFile={async (columns, format, signal) => {
-          if (!applied) return;
-          try {
-            const file = await generalConsumptionApi.download(applied.filters, columns, format, signal, serLaboral?.ser_laboral_id);
-            if (!signal.aborted) downloadBlob(file, `consumo-general_${applied.filters.startDate}_${applied.filters.endDate}.${format}`);
-          } catch (error) {
-            if (!signal.aborted && error instanceof ApiError && error.status === 410) {
-              setSerLaboral(null);
-              throw new ExportError("El archivo de Ser Laboral expiró; cárgalo de nuevo.");
-            }
-            throw error;
-          }
-        }} />
+        <ExportMenu key={applied?.revision ?? "idle"} label="Exportar datos unidos" columns={generalConsumptionExportColumns} visibleIds={visible} disabled={!ready || uploading} exportFile={exportData} />
       </section>
       {consulting && <Card role="status" aria-live="polite" className="flex items-center gap-3"><Spinner aria-hidden="true" role="presentation" /><span className="text-sm text-gray-500 dark:text-gray-400">Consultando y procesando registros…</span></Card>}
       {state.status === "error" && <Card role="alert" className="space-y-3"><p className="text-sm text-error-600 dark:text-error-400">{state.message}</p><button type="button" onClick={() => { if (applied) consult(applied.filters); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">Reintentar</button></Card>}
@@ -109,9 +116,16 @@ export default function GeneralConsumptionPage() {
             {TABS.map(({ value, label }) => <TabsTrigger key={value} value={value}>{label}{value !== "analisis" && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-white/10 dark:text-gray-300">{value === "facturas" ? report.total_facturas : value === "admisiones" ? report.total_admisiones : serLaboral?.total ?? 0}</span>}</TabsTrigger>)}
           </TabsList>
           <TabsPanel value="analisis"><AnalysisTab indicators={report.indicadores} /></TabsPanel>
-          <TabsPanel value="facturas"><ConsumptionTable title="Facturas Detalladas" rows={report.facturas} visible={visible} onVisibleChange={setVisible} emptyTitle="No hay facturas detalladas para este período." /></TabsPanel>
-          <TabsPanel value="admisiones"><ConsumptionTable title="Admisiones" rows={report.admisiones} visible={visible} onVisibleChange={setVisible} emptyTitle="No hay admisiones para este período." /></TabsPanel>
+          <TabsPanel value="facturas">
+            {tableExport("facturas", "Facturas Detalladas", report.facturas.length, "consumo-general-facturas-detalladas")}
+            <ConsumptionTable title="Facturas Detalladas" rows={report.facturas} visible={visible} onVisibleChange={setVisible} emptyTitle="No hay facturas detalladas para este período." />
+          </TabsPanel>
+          <TabsPanel value="admisiones">
+            {tableExport("admisiones", "Admisiones", report.admisiones.length, "consumo-general-admisiones")}
+            <ConsumptionTable title="Admisiones" rows={report.admisiones} visible={visible} onVisibleChange={setVisible} emptyTitle="No hay admisiones para este período." />
+          </TabsPanel>
           <TabsPanel value="ser-laboral">
+            {tableExport("ser_laboral", "Ser Laboral", serLaboral?.filas.length ?? 0, "consumo-general-ser-laboral")}
             {serLaboral ? <div className="space-y-4">
               <div role="status" className="text-sm text-gray-600 dark:text-gray-300"><p>Total: {serLaboral.total} · Omitidas: {serLaboral.omitidas}</p>{serLaboral.advertencias.length > 0 && <ul className="mt-2 list-disc pl-5">{serLaboral.advertencias.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul>}</div>
               <ConsumptionTable key={serLaboral.ser_laboral_id} title="Ser Laboral" rows={serLaboral.filas} visible={visible} onVisibleChange={setVisible} emptyTitle="No hay registros de Ser Laboral." />

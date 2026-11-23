@@ -47,6 +47,7 @@ it.each(["csv", "xlsx"] as const)("downloads one combined %s with all 40 unified
   expect(params.get("fecha_final")).toBe(filters.endDate);
   expect(params.has("limit")).toBe(false);
   expect(params.has("offset")).toBe(false);
+  expect(params.has("tablas")).toBe(false);
   expect(options).toEqual({ signal });
 });
 
@@ -55,6 +56,30 @@ it.each(["csv", "xlsx"] as const)("includes the optional Ser Laboral token in co
   const params = new URLSearchParams(vi.mocked(httpClient.getBlob).mock.calls[0][0].split("?")[1]);
   expect(params.get("ser_laboral_id")).toBe("opaque-token");
   expect(params.getAll("columnas")).toHaveLength(40);
+  expect(params.has("tablas")).toBe(false);
+});
+
+it.each([
+  ["facturas"], ["admisiones"], ["ser_laboral"], ["facturas", "admisiones", "ser_laboral"],
+] as const)("serializes optional repeatable table selection %j", async (...tablas) => {
+  const file = new Blob(["synthetic"]);
+  vi.mocked(httpClient.getBlob).mockResolvedValue(file);
+  const token = tablas.some((table) => table === "ser_laboral") ? "opaque-token" : undefined;
+  expect(await generalConsumptionApi.download(filters, generalConsumptionExportColumns, "csv", signal, token, [...tablas])).toBe(file);
+  expect(httpClient.getBlob).toHaveBeenCalledTimes(1);
+  const [url, options] = vi.mocked(httpClient.getBlob).mock.calls[0];
+  expect(url.split("?")[0]).toBe(`${path}/export`);
+  const params = new URLSearchParams(url.split("?")[1]);
+  expect(params.getAll("tablas")).toEqual(tablas);
+  expect(params.get("ser_laboral_id")).toBe(token ?? null);
+  expect(params.getAll("columnas")).toEqual(generalConsumptionExportColumns.map(({ id, type }) => `${id}:${type}`));
+  expect(params.getAll("sedes")).toEqual(["7", "8"]);
+  expect(params.getAll("empresas")).toEqual(["9"]);
+  expect(params.getAll("lineas")).toEqual(["10", "11"]);
+  expect(params.get("fecha_inicial")).toBe(filters.startDate);
+  expect(params.get("fecha_final")).toBe(filters.endDate);
+  expect(params.get("formato")).toBe("csv");
+  expect(options).toEqual({ signal });
 });
 
 it.each(["pdf", "xlsx"] as const)("POSTs only indicators for analysis %s", async (format) => {
