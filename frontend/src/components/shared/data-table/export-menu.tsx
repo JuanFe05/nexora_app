@@ -26,7 +26,9 @@ export function ExportMenu({
   visibleIds,
   exportFile,
   disabled = false,
+  label = "Exportar",
 }: {
+  label?: string;
   columns: readonly ExportColumn[];
   visibleIds: readonly string[];
   exportFile: (
@@ -94,7 +96,7 @@ export function ExportMenu({
             />
           }
         >
-          {exporting ? "Exportando…" : "Exportar"}
+          {exporting ? "Exportando…" : label}
           {exporting ? (
             <Spinner aria-hidden="true" role="presentation" />
           ) : (

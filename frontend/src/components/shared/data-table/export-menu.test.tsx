@@ -23,6 +23,13 @@ async function choose(scope: RegExp, format: string) {
   fireEvent.click(await screen.findByRole("menuitem", { name: format }));
 }
 
+it("preserves the default label when no custom label is supplied", () => {
+  const { rerender } = render(<ExportMenu columns={columns} visibleIds={["a"]} exportFile={vi.fn()} />);
+  expect(screen.getByRole("button", { name: "Exportar" })).toBeEnabled();
+  rerender(<ExportMenu label="Exportar datos unidos" columns={columns} visibleIds={["a"]} exportFile={vi.fn()} />);
+  expect(screen.getByRole("button", { name: "Exportar datos unidos" })).toBeEnabled();
+});
+
 it("offers exactly one format per operation and exports the chosen columns in it", async () => {
   const exportFile = vi.fn().mockResolvedValue(undefined);
   render(<ExportMenu columns={columns} visibleIds={["c", "a"]} exportFile={exportFile} />);

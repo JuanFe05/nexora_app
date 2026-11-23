@@ -6,12 +6,14 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { httpClient } from "@/lib/http/http-client";
 import { ApiError } from "@/lib/http/api-error";
 import { downloadBlob } from "@/lib/table-export";
+import { generalConsumptionApi } from "../api/general-consumption-api";
 import { generalConsumptionColumns } from "../columns";
 import type { GeneralConsumptionReport, GeneralConsumptionRow } from "../types";
 import GeneralConsumptionPage from "./general-consumption-page";
 
 vi.mock("@/lib/http/http-client", () => ({ httpClient: { get: vi.fn(), getWithMeta: vi.fn(), getBlob: vi.fn(), post: vi.fn() } }));
 vi.mock("@/lib/table-export", async (original) => ({ ...await original<typeof import("@/lib/table-export")>(), downloadBlob: vi.fn() }));
+vi.mock("../api/general-consumption-api", async (original) => ({ generalConsumptionApi: { ...(await original<typeof import("../api/general-consumption-api")>()).generalConsumptionApi, uploadSerLaboral: vi.fn() } }));
 afterEach(cleanup);
 const path = "/statistics/administrative/general-consumption";
 let report: GeneralConsumptionReport;
@@ -32,6 +34,12 @@ function dates(start = "2026-01-01", end = "2026-01-31") {
     const input = screen.getByLabelText(label) as HTMLInputElement & { _flatpickr: { setDate(date: string, trigger: boolean, format: string): void } };
     act(() => input._flatpickr.setDate(iso, true, "Y-m-d"));
   }
+}
+const serResult = () => ({ ser_laboral_id: "opaque-test-token", filas: Array.from({ length: 11 }, (_, index) => ({ ...report.facturas[0], nombre_completo: `Ser Laboral prueba ${index + 1}` })), total: 11, omitidas: 3, advertencias: ["Advertencia CSV"] });
+const csv = () => new File(["estado\nCERRADO"], "ser-laboral.csv", { type: "text/csv" });
+async function upload() {
+  fireEvent.change(screen.getByLabelText("Archivo CSV Ser Laboral"), { target: { files: [csv()] } });
+  await screen.findByText("Ser Laboral prueba 1");
 }
 const reportCalls = () => vi.mocked(httpClient.get).mock.calls.filter(([url]) => url.startsWith(`${path}?`));
 async function queryReport() {
@@ -61,9 +69,9 @@ it("validates five filters and waits for Consultar before making one report requ
   expect(httpClient.getWithMeta).not.toHaveBeenCalled();
 });
 
-it("renders three Line tabs and all seven indicators in es-CO COP", async () => {
+it("renders four Line tabs and all seven indicators in es-CO COP", async () => {
   await queryReport();
-  expect(screen.getAllByRole("tab").map((tab) => tab.textContent?.replace(/\d+$/, ""))).toEqual(["Análisis", "Facturas Detalladas", "Admisiones"]);
+  expect(screen.getAllByRole("tab").map((tab) => tab.textContent?.replace(/\d+$/, ""))).toEqual(["Análisis", "Facturas Detalladas", "Admisiones", "Ser Laboral"]);
   expect(screen.getByRole("tablist")).toHaveAttribute("data-slot", "tabs-list");
   const table = within(screen.getByRole("table", { name: "Indicadores de consumo general" }));
   expect(table.getAllByRole("rowheader")).toHaveLength(7);
@@ -115,8 +123,8 @@ it.each([["csv", "CSV"], ["xlsx", "Excel (.xlsx)"]] as const)("exports combined 
   dates("2026-01-10", "2026-01-20");
   await user.click(screen.getByRole("tab", { name: /^Admisiones/ }));
   expect(await screen.findByText("Admisión prueba")).toBeVisible();
-  expect(screen.getAllByRole("button", { name: "Exportar" })).toHaveLength(1);
-  await user.click(screen.getByRole("button", { name: "Exportar" }));
+  expect(screen.getAllByRole("button", { name: "Exportar datos unidos" })).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "Exportar datos unidos" }));
   fireEvent.click(await screen.findByRole("menuitem", { name: /Todas las columnas/ }));
   fireEvent.click(await screen.findByRole("menuitem", { name: label }));
   await waitFor(() => expect(downloadBlob).toHaveBeenCalledWith(file, `consumo-general_2026-01-01_2026-01-31.${format}`));
@@ -140,7 +148,7 @@ it("shows warnings and empty datasets without another query", async () => {
   const user = userEvent.setup();
   await queryReport();
   expect(screen.getByText("Advertencia de prueba")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Exportar" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Exportar datos unidos" })).toBeEnabled();
   await user.click(screen.getByRole("tab", { name: /^Facturas Detalladas/ }));
   expect(await screen.findByText("No hay facturas detalladas para este período.")).toBeVisible();
   await user.click(screen.getByRole("tab", { name: /^Admisiones/ }));
@@ -158,6 +166,8 @@ it("reports a safe error, retries, and clears results", async () => {
   dates(); fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo consultar el informe. La fuente de datos no está disponible. Intenta de nuevo.");
   expect(screen.queryByText("private detail")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Cargar CSV Ser Laboral" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Exportar datos unidos" })).toBeDisabled();
   vi.mocked(httpClient.get).mockResolvedValue(report);
   fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
   await screen.findByRole("table", { name: "Indicadores de consumo general" });
@@ -165,6 +175,93 @@ it("reports a safe error, retries, and clears results", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Limpiar" }));
   expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   expect(screen.getByText("Selecciona un período y presiona Consultar.")).toBeVisible();
+});
+
+it("gates upload on successful consultation and places it immediately before Consultar", async () => {
+  render(<GeneralConsumptionPage />);
+  const load = screen.getByRole("button", { name: "Cargar CSV Ser Laboral" });
+  expect(load).toBeDisabled();
+  expect(load.nextElementSibling).toHaveTextContent("Consultar");
+  expect(screen.getByRole("button", { name: "Exportar datos unidos" })).toBeDisabled();
+  expect(screen.getByLabelText("Archivo CSV Ser Laboral")).toHaveAttribute("accept", ".csv");
+  await waitFor(() => expect(screen.getByRole("button", { name: "Consultar" })).toBeEnabled());
+  let resolve!: (value: GeneralConsumptionReport) => void;
+  vi.mocked(httpClient.get).mockImplementation(() => new Promise((done) => { resolve = done as typeof resolve; }));
+  dates(); fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
+  expect(load).toBeDisabled();
+  await act(async () => resolve(report));
+  await waitFor(() => expect(load).toBeEnabled());
+  expect(screen.getByRole("button", { name: "Exportar datos unidos" })).toBeEnabled();
+});
+
+it("renders the empty Ser Laboral tab, uploads with loading state, totals, warnings and local pagination, then resets on reconsult", async () => {
+  const user = userEvent.setup();
+  await queryReport();
+  await user.click(screen.getByRole("tab", { name: /^Ser Laboral/ }));
+  expect(await screen.findByText("Carga un CSV Ser Laboral para ver los registros.")).toBeVisible();
+  await user.click(screen.getByRole("tab", { name: "Análisis" }));
+  let resolve!: (value: ReturnType<typeof serResult>) => void;
+  vi.mocked(generalConsumptionApi.uploadSerLaboral).mockImplementation(() => new Promise((done) => { resolve = done; }));
+  fireEvent.change(screen.getByLabelText("Archivo CSV Ser Laboral"), { target: { files: [csv()] } });
+  expect(screen.getByRole("button", { name: "Cargando CSV…" })).toBeDisabled();
+  await act(async () => resolve(serResult()));
+  expect(await screen.findByText("Ser Laboral prueba 1")).toBeVisible();
+  expect(screen.getByRole("tab", { name: /^Ser Laboral/ })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByText("Total: 11 · Omitidas: 3")).toBeVisible();
+  expect(screen.getByText("Advertencia CSV")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: /siguiente/i }));
+  expect(await screen.findByText("Ser Laboral prueba 11")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Columnas visibles" }));
+  expect(screen.getAllByRole("checkbox")).toHaveLength(40);
+  await user.keyboard("{Escape}");
+  dates("2026-01-10", "2026-01-20");
+  fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
+  await screen.findByRole("table", { name: "Indicadores de consumo general" });
+  await user.click(screen.getByRole("tab", { name: /^Ser Laboral/ }));
+  expect(await screen.findByText("Carga un CSV Ser Laboral para ver los registros.")).toBeVisible();
+  expect(screen.queryByText("Advertencia CSV")).not.toBeInTheDocument();
+  vi.mocked(httpClient.getBlob).mockResolvedValue(new Blob(["synthetic"]));
+  await user.click(screen.getByRole("button", { name: "Exportar datos unidos" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /Todas las columnas/ }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "CSV" }));
+  await waitFor(() => expect(httpClient.getBlob).toHaveBeenCalledTimes(1));
+  expect(new URLSearchParams(vi.mocked(httpClient.getBlob).mock.calls[0][0].split("?")[1]).has("ser_laboral_id")).toBe(false);
+});
+
+it.each([422, 413])("shows upload %s detail without changing the loaded data", async (status) => {
+  await queryReport();
+  vi.mocked(generalConsumptionApi.uploadSerLaboral).mockResolvedValue(serResult());
+  await upload();
+  vi.mocked(generalConsumptionApi.uploadSerLaboral).mockRejectedValue(new ApiError(status, "Detalle CSV de prueba", null));
+  fireEvent.change(screen.getByLabelText("Archivo CSV Ser Laboral"), { target: { files: [csv()] } });
+  expect(await screen.findByRole("alert")).toHaveTextContent("Detalle CSV de prueba");
+  expect(screen.getByText("Ser Laboral prueba 1")).toBeVisible();
+  expect(screen.getByText("Total: 11 · Omitidas: 3")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Cargar CSV Ser Laboral" })).toBeEnabled();
+});
+
+it("exports from the action bar with the uploaded token, clears it on 410 and exports again without it", async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  await queryReport();
+  vi.mocked(generalConsumptionApi.uploadSerLaboral).mockResolvedValue(serResult());
+  await upload();
+  const bar = screen.getByRole("region", { name: "Exportación de datos unidos" });
+  expect(bar.compareDocumentPosition(screen.getByRole("tablist")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(bar).toHaveTextContent("Facturas Detalladas + Admisiones + Ser Laboral");
+  vi.mocked(httpClient.getBlob).mockRejectedValueOnce(new ApiError(410, "El archivo de Ser Laboral expiró; cárgalo de nuevo.", null)).mockResolvedValue(new Blob(["synthetic"]));
+  async function exportCsv() {
+    await user.click(screen.getByRole("button", { name: "Exportar datos unidos" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Todas las columnas/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "CSV" }));
+  }
+  await exportCsv();
+  expect(await screen.findByRole("alert")).toHaveTextContent("El archivo de Ser Laboral expiró; cárgalo de nuevo.");
+  expect(new URLSearchParams(vi.mocked(httpClient.getBlob).mock.calls[0][0].split("?")[1]).get("ser_laboral_id")).toBe("opaque-test-token");
+  expect(screen.queryByText("Ser Laboral prueba 1")).not.toBeInTheDocument();
+  expect(bar).not.toHaveTextContent("+ Ser Laboral");
+  await exportCsv();
+  await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1));
+  expect(new URLSearchParams(vi.mocked(httpClient.getBlob).mock.calls[1][0].split("?")[1]).has("ser_laboral_id")).toBe(false);
 });
 
 it("shows safe analysis export failures and re-enables buttons", async () => {

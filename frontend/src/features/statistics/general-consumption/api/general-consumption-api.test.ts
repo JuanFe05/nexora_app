@@ -50,6 +50,13 @@ it.each(["csv", "xlsx"] as const)("downloads one combined %s with all 40 unified
   expect(options).toEqual({ signal });
 });
 
+it.each(["csv", "xlsx"] as const)("includes the optional Ser Laboral token in combined %s exports", async (format) => {
+  await generalConsumptionApi.download(filters, generalConsumptionExportColumns, format, signal, "opaque-token");
+  const params = new URLSearchParams(vi.mocked(httpClient.getBlob).mock.calls[0][0].split("?")[1]);
+  expect(params.get("ser_laboral_id")).toBe("opaque-token");
+  expect(params.getAll("columnas")).toHaveLength(40);
+});
+
 it.each(["pdf", "xlsx"] as const)("POSTs only indicators for analysis %s", async (format) => {
   const file = new Blob(["synthetic"]);
   vi.mocked(httpClient.post).mockResolvedValue(file);

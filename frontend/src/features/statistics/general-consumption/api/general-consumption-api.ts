@@ -1,3 +1,5 @@
+import type { ExportColumn, ExportFormat } from "@/lib/table-export";
+import { uploadSerLaboral } from "./ser-laboral-upload";
 import { httpClient } from "@/lib/http/http-client";
 import { createReportApi } from "../../shared/report-api";
 import type { ReportFilters } from "../../shared/types";
@@ -18,11 +20,19 @@ export const generalConsumptionApi = {
   fetchSites: reportApi.fetchSites,
   fetchCompanies: reportApi.fetchCompanies,
   fetchProductLines: reportApi.fetchProductLines,
-  /** Una solicitud alimenta las tres pestañas; sin paginación remota ni endpoint /columns (40 columnas locales). */
+  /** Una solicitud alimenta las pestañas generales; sin paginación remota ni endpoint /columns (40 columnas locales). */
   fetchReport: (filters: ReportFilters, signal?: AbortSignal) =>
     httpClient.get<GeneralConsumptionReport>(`${PATH}?${query(filters)}`, { signal }),
-  /** El backend concatena Facturas Detalladas y Admisiones; no recibe indicadores. */
-  download: reportApi.download,
+  uploadSerLaboral,
+  /** Con token, añade Ser Laboral al final; conserva la descarga compartida sin CSV cargado. */
+  download: (filters: ReportFilters, columns: readonly ExportColumn[], format: ExportFormat, signal: AbortSignal, serLaboralId?: string) => {
+    if (!serLaboralId) return reportApi.download(filters, columns, format, signal);
+    const params = query(filters);
+    params.set("formato", format);
+    for (const column of columns) params.append("columnas", `${column.id}:${column.type}`);
+    params.set("ser_laboral_id", serLaboralId);
+    return httpClient.getBlob(`${PATH}/export?${params}`, { signal });
+  },
   exportAnalysis: (indicadores: ConsumptionIndicator[], format: "pdf" | "xlsx", signal?: AbortSignal) =>
     httpClient.post<Blob>(`${PATH}/export/analysis/${format}`, { body: { indicadores }, responseType: "blob", signal }),
 };

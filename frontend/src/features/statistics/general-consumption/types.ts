@@ -4,6 +4,13 @@ import type { GeneralBilling } from "../general-billing/types";
 export type ExcludedConsumptionColumn = "cnsctvo_fctra_agrpda" | "no_remision" | "fcha_rmsn" | "no_envio";
 export type GeneralConsumptionRow = Omit<GeneralBilling, ExcludedConsumptionColumn>;
 export type ConsumptionIndicator = { clave: string; etiqueta: string; valor: number };
+export type SerLaboralReport = {
+  ser_laboral_id: string;
+  filas: GeneralConsumptionRow[];
+  total: number;
+  omitidas: number;
+  advertencias: string[];
+};
 export type GeneralConsumptionReport = {
   indicadores: ConsumptionIndicator[];
   facturas: GeneralConsumptionRow[];
