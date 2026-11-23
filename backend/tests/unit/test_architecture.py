@@ -93,6 +93,12 @@ def test_infraestructura_de_reportes_no_se_importa_desde_otros_contextos(path: P
     if owner == "bootstrap":
         return
     for module in imported_modules(path):
+        # Alembic debe registrar únicamente los modelos, no usar adaptadores de informes.
+        if (
+            path == SRC / "migrations" / "env.py"
+            and module == "nexora.statistics.infrastructure.persistence.models"
+        ):
+            continue
         for context in ("statistics", "integration_management"):
             prefix = f"nexora.{context}.infrastructure"
             if module == prefix or module.startswith(prefix + "."):

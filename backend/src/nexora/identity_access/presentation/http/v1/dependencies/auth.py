@@ -11,6 +11,7 @@ from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nexora.bootstrap.container import Container
+from nexora.bootstrap.moderator_fees import build_moderator_fees_administration
 from nexora.identity_access.application.dto.auth import AuthenticatedPrincipal
 from nexora.identity_access.application.use_cases.administration import (
     PermissionAdministration,
@@ -37,6 +38,7 @@ from nexora.identity_access.infrastructure.persistence.repositories import (
     SqlAlchemyUserRepository,
 )
 from nexora.identity_access.infrastructure.persistence.transaction import SqlAlchemyTransaction
+from nexora.statistics.application.moderator_fees import ModeratorFeesAdministration
 
 
 def get_container(request: Request) -> Container:
@@ -161,6 +163,12 @@ def get_permission_administration(session: SessionDep) -> PermissionAdministrati
         repository=SqlAlchemyAdministrationRepository(session),
         transaction=SqlAlchemyTransaction(session),
     )
+
+
+def get_moderator_fees_administration(
+    container: ContainerDep, session: SessionDep
+) -> ModeratorFeesAdministration:
+    return build_moderator_fees_administration(session, container.clock)
 
 
 def get_profile_service(container: ContainerDep, session: SessionDep) -> ProfileService:

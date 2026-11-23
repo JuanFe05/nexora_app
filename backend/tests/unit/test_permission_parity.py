@@ -23,4 +23,6 @@ def test_catalog_codes_follow_module_prefix_and_view_suffix_for_statistics() -> 
         assert spec.code.startswith(f"{spec.module}."), spec.code
         assert spec.name.strip() == spec.name and spec.name, spec.code
         if spec.module == "statistics":
+            if spec.code == "statistics.administrative.moderator_fees.manage":
+                continue
             assert re.fullmatch(r"statistics\.[a-z]+\.[a-z0-9_]+\.view", spec.code), spec.code

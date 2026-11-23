@@ -13,8 +13,8 @@ from typing import IO, Any
 
 from nexora.statistics.application.general_billing import COLUMNS as BILLING_COLUMNS
 from nexora.statistics.application.general_billing import Row, clean_record, process_chunks
+from nexora.statistics.application.moderator_fees import ModeratorFeeSnapshot
 from nexora.statistics.application.ports import CatalogOption, ReportSource
-from nexora.statistics.configuration.general_consumption import MODERATOR_FEES
 from nexora.statistics.domain.filters import InvalidReportFilter, ReportFilter
 from nexora.statistics.domain.general_billing import add_money, money, normalize_text, parse_date
 from nexora.statistics.domain.general_consumption import UnconfiguredFeeYear, fila_cumple
@@ -203,7 +203,7 @@ class GeneralConsumptionReport:
         invoices: ReportSource,
         admissions: ReportSource,
         *,
-        fees: Mapping[int, frozenset[int]] = MODERATOR_FEES,
+        fees: ModeratorFeeSnapshot,
         ttl_seconds: float = 60,
         max_entries: int = 2,
     ) -> None:
@@ -214,7 +214,8 @@ class GeneralConsumptionReport:
 
         self.ser_laboral = SerLaboralCache()
         self._invoices, self._admissions = invoices, admissions
-        self._fees = dict(fees)
+        self._fees = fees
+        self._fee_version: tuple[tuple[int, tuple[int, ...]], ...] | None = None
         self._ttl, self._maximum = ttl_seconds, max_entries
         self._cache: OrderedDict[ReportFilter, tuple[dict[str, Any], asyncio.TimerHandle]] = (
             OrderedDict()
@@ -236,6 +237,15 @@ class GeneralConsumptionReport:
 
     async def build(self, filters: ReportFilter) -> dict[str, Any]:
         async with self._lock:
+            # Una lectura actual por operación: ningún TTL local oculta cambios de otro worker.
+            fees = dict(await self._fees.snapshot())
+            version = tuple(
+                sorted((year, tuple(sorted(amounts))) for year, amounts in fees.items())
+            )
+            if version != self._fee_version:
+                for key in list(self._cache):
+                    self._expire(key)
+                self._fee_version = version
             if cached := self._cache.get(filters):
                 self._cache.move_to_end(filters)
                 return cached[0]
@@ -255,7 +265,7 @@ class GeneralConsumptionReport:
                     task.cancel()
                 await asyncio.gather(*tasks, return_exceptions=True)
                 raise
-            indicators = await _thread(analyze, invoices, self._fees)
+            indicators = await _thread(analyze, invoices, fees)
             result = {
                 "indicadores": indicators,
                 "facturas": invoices,

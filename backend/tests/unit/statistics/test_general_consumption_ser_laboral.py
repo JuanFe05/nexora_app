@@ -254,7 +254,7 @@ async def test_incremental_cap_stops_reading_and_exact_limit_is_allowed() -> Non
 def test_expired_token_http_410_without_sql() -> None:
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from tests.unit.statistics.test_general_consumption import Source
+    from tests.unit.statistics.test_general_consumption import Fees, Source
     from tests.unit.statistics.test_router import FakeAuthentication
 
     from nexora.bootstrap.app import _register_error_handlers
@@ -268,7 +268,7 @@ def test_expired_token_http_410_without_sql() -> None:
     )
 
     source = Source([])
-    report = GeneralConsumptionReport(source, source)
+    report = GeneralConsumptionReport(source, source, fees=Fees())
     report.ser_laboral = SerLaboralCache(ttl_seconds=0.01)
     auth = FakeAuthentication()
     auth.permissions = frozenset({"statistics.administrative.general_consumption.view"})

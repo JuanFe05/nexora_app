@@ -9,6 +9,7 @@ from alembic import context
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
+import nexora.statistics.infrastructure.persistence.models as statistics_models  # noqa: F401
 from nexora.bootstrap.event_loop import loop_factory
 from nexora.bootstrap.settings import get_settings
 from nexora.identity_access.infrastructure.persistence import models  # noqa: F401

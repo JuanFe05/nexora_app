@@ -82,6 +82,14 @@ def admission(**values: Any) -> dict[str, Any]:
     } | values
 
 
+class Fees:
+    def __init__(self, values: dict[int, frozenset[int]] | None = None) -> None:
+        self.values = values if values is not None else {2026: frozenset({5000, 20100, 52800})}
+
+    async def snapshot(self) -> dict[int, frozenset[int]]:
+        return self.values.copy()
+
+
 class Source:
     def __init__(self, rows: list[dict[str, Any]]) -> None:
         self.rows = rows
@@ -144,7 +152,7 @@ async def test_admissions_mapping_totals_are_independent_and_stable() -> None:
         admission(vlr_ttl=Decimal("0.25")),
         admission(cnsctvo_admsn="A2", vlr_ttl=3),
     ]
-    result = await GeneralConsumptionReport(Source([]), Source(rows)).build(FILTER)
+    result = await GeneralConsumptionReport(Source([]), Source(rows), fees=Fees()).build(FILTER)
     assert [r["admision"] for r in result["admisiones"]] == ["A1", "A2", "A1", "A2"]
     assert [r["total_cntdd1"] for r in result["admisiones"]] == [Decimal("200.25"), 10, 0, 0]
     row = result["admisiones"][0]
@@ -236,7 +244,7 @@ async def test_indicator_math_uses_valid_invoices_once_and_all_fee_amounts() -> 
         invoice(estado="ABIERTO", vlr_lqdd_pcnte=999999),
         invoice(cnsctvo_dcto="P", emprs="PARTICULAR", vlr_frmas_pgo_tpo1="123.45"),
     ]
-    result = await GeneralConsumptionReport(Source(rows), Source([admission()])).build(FILTER)
+    result = await GeneralConsumptionReport(Source(rows), Source([admission()]), fees=Fees()).build(FILTER)
     assert [i["valor"] for i in result["indicadores"]] == [
         Decimal("123.45"),
         Decimal("312.25"),
@@ -255,7 +263,7 @@ async def test_indicator_math_uses_valid_invoices_once_and_all_fee_amounts() -> 
 
 async def test_unconfigured_year_and_injected_configuration() -> None:
     source = Source([invoice(fcha_dcto="2025-01-01", vlr_lqdd_pcnte=5000)])
-    report = GeneralConsumptionReport(source, Source([]))
+    report = GeneralConsumptionReport(source, Source([]), fees=Fees())
     with pytest.raises(
         UnconfiguredFeeYear, match="No hay cuotas moderadoras configuradas para la vigencia 2025"
     ):
@@ -263,7 +271,7 @@ async def test_unconfigured_year_and_injected_configuration() -> None:
     source.rows = [invoice(fcha_dcto="2025-01-01", estado="ABIERTO")]
     assert (await report.build(FILTER))["facturas"] == []
     custom = GeneralConsumptionReport(
-        Source([invoice(vlr_lqdd_pcnte=123)]), Source([]), fees={2026: frozenset({123})}
+        Source([invoice(vlr_lqdd_pcnte=123)]), Source([]), fees=Fees({2026: frozenset({123})})
     )
     assert (await custom.build(FILTER))["indicadores"][2]["valor"] == 123
 
@@ -282,7 +290,7 @@ async def test_queries_are_concurrent_filters_equal_and_cache_single_flight() ->
                 yield chunk
 
     invoices, admissions = Concurrent([invoice()]), Concurrent([admission()])
-    report = GeneralConsumptionReport(invoices, admissions, ttl_seconds=0.05)
+    report = GeneralConsumptionReport(invoices, admissions, fees=Fees(), ttl_seconds=0.05)
     first, second = await asyncio.gather(report.build(FILTER), report.build(FILTER))
     assert first == second
     assert invoices.calls == admissions.calls == [FILTER]
@@ -311,7 +319,7 @@ async def test_sql_adapters_use_the_same_real_filter_parameters() -> None:
 
     reader = Reader()
     report = GeneralConsumptionReport(
-        SqlServerDetailedInvoicesSource(reader), SqlServerAdmissionsSource(reader)
+        SqlServerDetailedInvoicesSource(reader), SqlServerAdmissionsSource(reader), fees=Fees()
     )
     result = await report.build(FILTER)
     assert result["total_facturas"] == result["total_admisiones"] == 1
@@ -350,7 +358,7 @@ async def test_etl_is_offloaded_and_failed_streams_are_closed(monkeypatch: Any) 
         return clean_record(row)
 
     monkeypatch.setattr(module, "clean_record", observed)
-    report = GeneralConsumptionReport(Source([invoice()]), Source([admission()]))
+    report = GeneralConsumptionReport(Source([invoice()]), Source([admission()]), fees=Fees())
     await report.build(FILTER)
     assert threads and all(thread != main_thread for thread in threads)
     await report.aclose()
@@ -372,7 +380,7 @@ async def test_etl_is_offloaded_and_failed_streams_are_closed(monkeypatch: Any) 
             raise RuntimeError("synthetic stream failure")
             yield []
 
-    failing = GeneralConsumptionReport(Failing([]), Waiting([]))
+    failing = GeneralConsumptionReport(Failing([]), Waiting([]), fees=Fees())
     with pytest.raises(RuntimeError, match="synthetic stream failure"):
         await failing.build(FILTER)
     assert closed.is_set()
@@ -381,7 +389,7 @@ async def test_etl_is_offloaded_and_failed_streams_are_closed(monkeypatch: Any) 
 
 def make_http(rows: list[dict[str, Any]] | None = None) -> Any:
     invoices, admissions = Source(rows if rows is not None else [invoice()]), Source([admission()])
-    report = GeneralConsumptionReport(invoices, admissions)
+    report = GeneralConsumptionReport(invoices, admissions, fees=Fees())
     auth = FakeAuthentication()
     auth.permissions = frozenset({PERMISSION})
     app = FastAPI()

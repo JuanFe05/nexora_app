@@ -30,6 +30,7 @@ from nexora.integration_management.application.ports import (
     ExternalSourceUnavailable,
 )
 from nexora.statistics.application.general_consumption import GeneralConsumptionReport
+from nexora.statistics.application.moderator_fees import FeeYearNotFound
 from nexora.statistics.domain.filters import InvalidReportFilter
 from nexora.statistics.domain.general_consumption import UnconfiguredFeeYear
 from nexora.statistics.infrastructure.admissions_source import SqlServerAdmissionsSource
@@ -37,11 +38,13 @@ from nexora.statistics.infrastructure.detailed_invoices_source import (
     SqlServerDetailedInvoicesSource,
 )
 from nexora.statistics.infrastructure.general_billing_source import GeneralBillingSource
+from nexora.statistics.infrastructure.persistence.repositories import DatabaseModeratorFeeSnapshot
 from nexora.statistics.presentation.http.v1.router import (
     admissions_router,
     bai_nutricion_cyd_router,
     general_billing_router,
     general_consumption_router,
+    moderator_fees_router,
     sivigila_router,
     statistics_router,
     triage_router,
@@ -134,6 +137,7 @@ def _register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(IncorrectCurrentPassword, current_password_handler)
     app.add_exception_handler(RequestValidationError, validation_handler)
     app.add_exception_handler(ResourceNotFound, not_found_handler)
+    app.add_exception_handler(FeeYearNotFound, not_found_handler)
     app.add_exception_handler(ConflictError, conflict_handler)
     app.add_exception_handler(InvalidCredentials, credentials_handler)
     app.add_exception_handler(AuthenticationThrottled, throttled_handler)
@@ -157,6 +161,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.general_consumption_report = GeneralConsumptionReport(
         SqlServerDetailedInvoicesSource(app.state.container.sqlserver),
         SqlServerAdmissionsSource(app.state.container.sqlserver),
+        fees=DatabaseModeratorFeeSnapshot(app.state.container.database.session),
     )
     app.add_middleware(
         CORSMiddleware,
@@ -176,6 +181,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(bai_nutricion_cyd_router, prefix=settings.api_prefix)
     app.include_router(general_billing_router, prefix=settings.api_prefix)
     app.include_router(general_consumption_router, prefix=settings.api_prefix)
+    app.include_router(moderator_fees_router, prefix=settings.api_prefix)
 
     @app.get("/health", tags=["operacion"], summary="Estado del servicio")
     async def health() -> dict[str, str]:

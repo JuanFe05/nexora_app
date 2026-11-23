@@ -91,8 +91,13 @@ async def clean_tables(settings: Settings) -> AsyncIterator[None]:
     engine = create_async_engine(settings.database_url)
     async with engine.begin() as connection:
         await connection.execute(
-            text("TRUNCATE iam.sesion, iam.asignacion_rol, iam.rol_permiso, iam.rol, iam.usuario")
+            text("TRUNCATE statistics.cuota_moderadora, iam.sesion, iam.asignacion_rol, "
+                 "iam.rol_permiso, iam.rol, iam.usuario")
         )
+        await connection.execute(text(
+            "INSERT INTO statistics.cuota_moderadora (vigencia, importes) "
+            "VALUES (2026, ARRAY[5000,20100,52800])"
+        ))
     await engine.dispose()
 
 

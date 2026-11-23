@@ -20,6 +20,9 @@ from nexora.statistics.presentation.http.v1.bai_nutricion_cyd_router import (
 from nexora.statistics.presentation.http.v1.general_consumption_router import (
     create_general_consumption_router,
 )
+from nexora.statistics.presentation.http.v1.moderator_fees_router import (
+    moderator_fees_router as moderator_fees_router,
+)
 from nexora.statistics.presentation.http.v1.report_router import create_report_router
 from nexora.statistics.presentation.http.v1.sivigila_router import create_sivigila_router
 

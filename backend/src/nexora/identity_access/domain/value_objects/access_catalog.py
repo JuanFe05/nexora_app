@@ -73,6 +73,8 @@ PERMISSION_CATALOG: tuple[PermissionSpec, ...] = (
     _statistics("resolutions.res_2175_2015.view", "Consultar Resolución 2175 de 2015"),
     _statistics("circulars.circular_06_2018.view", "Consultar Circular 06 de 2018"),
     _statistics("circulars.circular_21_2026.view", "Consultar Circular 21 de 2026"),
+    _statistics("administrative.moderator_fees.view", "Consultar Cuotas Moderadoras"),
+    _statistics("administrative.moderator_fees.manage", "Administrar Cuotas Moderadoras"),
     _statistics("administrative.general_consumption.view", "Consultar Consumo General"),
     _statistics("administrative.general_billing.view", "Consultar Facturación General"),
     _statistics("administrative.lab_consumption.view", "Consultar Consumo de Laboratorio"),

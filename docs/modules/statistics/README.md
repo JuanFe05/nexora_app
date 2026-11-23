@@ -206,9 +206,9 @@ incluso con admisiones intercaladas; se preserva el orden estable de llegada SQL
 
 Análisis clasifica el copago procesado por el año de `fcha_dcto`: iguales a los importes de cuota
 son cuotas moderadoras, el resto copagos; distingue las empresas exactas
-`SOS PGP MIR Y COR CONTRIBUTIVO` y `SOS PGP MIR Y COR SUBSIDIADO`. La configuración dedicada
-`configuration/general_consumption.py:MODERATOR_FEES` se inyecta al servicio: **2026 = 5000,
-20100, 52800**. Una fila válida de otro año sin configuración produce 422:
+`SOS PGP MIR Y COR CONTRIBUTIVO` y `SOS PGP MIR Y COR SUBSIDIADO`. Las cuotas se administran
+en Configuración → Cuotas Moderadoras y se leen desde PostgreSQL por vigencia. La migración
+siembra **2026 = 5000, 20100, 52800**. Una fila válida de otro año sin configuración produce 422:
 `No hay cuotas moderadoras configuradas para la vigencia 2025.` (año correspondiente).
 No extrapola cuotas; sin filas válidas no exige configuración. Fecha inválida en una factura
 válida también produce 422 porque no permite determinar su vigencia.
@@ -216,12 +216,48 @@ válida también produce 422 porque no permite determinar su vigencia.
 Ambas fuentes SQL existentes reciben el mismo `ReportFilter` y se consumen simultáneamente con
 `asyncio.gather`. Los bloques crudos pasan por archivos temporales privados que se cierran al
 terminar/fallar/cancelar; ETL, pickle, JSON, CSV y construcción de archivos se descargan a
-`asyncio.to_thread`. No hay cambios en SQL ni en PostgreSQL. Caché single-flight por filtro de
-vida de aplicación, TTL activo de 60 segundos y máximo dos entradas, compartida entre consulta
-y exportación; cierre elimina las entradas. El spool evita acumular los dos conjuntos crudos;
+`asyncio.to_thread`. No hay cambios en las consultas de SQL Server. Caché single-flight por
+filtro de vida de aplicación, TTL activo de 60 segundos y máximo dos entradas, compartida entre
+consulta y exportación. Cada operación lee una instantánea actual de cuotas con una sesión
+PostgreSQL propia que se cierra al terminar; el singleton nunca retiene sesiones de petición.
+La caché depende del contenido completo de esa instantánea: crear, editar o eliminar cuotas
+invalida inmediatamente las entradas locales, incluso cuando escribe otro worker. El cierre
+elimina las entradas. El spool evita acumular los dos conjuntos crudos;
 la respuesta completa calculada sí reside en memoria (contrato JSON sin paginación). Validar
 memoria/rendimiento de volúmenes de producción y las dos conexiones concurrentes con SQL Server
 real antes de desplegar.
+
+#### Cuotas moderadoras por vigencia
+
+Configuración → Cuotas Moderadoras (`/configuracion/cuotas-moderadoras`). API bajo
+`/api/v1/statistics/administrative/moderator-fees`:
+
+| Método | Ruta relativa | Contrato | Permiso |
+| --- | --- | --- | --- |
+| GET | `""` | Lista por vigencia descendente | `statistics.administrative.moderator_fees.view` |
+| PUT | `/{vigencia}` | Upsert `{ "importes": [5000, 20100, 52800] }`; responde 200 con la fila | `statistics.administrative.moderator_fees.manage` |
+| DELETE | `/{vigencia}` | 204 sin cuerpo; 404 si no existe | `statistics.administrative.moderator_fees.manage` |
+
+Fila de respuesta: `{ "vigencia": 2026, "importes": [5000, 20100, 52800],
+"actualizado_por": "Nombre Apellido", "actualizado_en": "2026-01-01T00:00:00Z" }`.
+Importes ordenados ascendentemente; `actualizado_por` es null para la siembra o si se elimina
+el usuario (FK nullable con `ON DELETE SET NULL`). Cada PUT registra el usuario autenticado y
+la fecha/hora UTC del cambio. Una sola fila PostgreSQL por año, en `statistics.cuota_moderadora`.
+No se guardan datos clínicos en esa tabla.
+
+Vigencia entera entre 2000 y 2100, inclusivos; entre 1 y 10 importes COP enteros estrictos,
+únicos y entre 1 y 10.000.000. Se rechazan booleanos, decimales y cadenas numéricas. Los errores
+son `{ "detail": "mensaje en español" }`: 422 para validación, 401 sin autenticación válida,
+403 sin el permiso específico. Ver no permite escribir y administrar no concede ver.
+Ambos permisos se siembran mediante el catálogo existente y se asignan a ADMINISTRADOR en el
+bootstrap idempotente; los demás roles necesitan asignación explícita. El identificador técnico
+del módulo del catálogo sigue siendo `statistics`, con nombres de permisos en español.
+
+La revisión `0004_moderator_fees`, posterior a `0003_fix_statistics_perms`, crea tabla,
+constraints, FK, función de unicidad y siembra 2026 con literales propios. El downgrade elimina
+estos objetos y sus datos. Los tests del informe inyectan un puerto de instantáneas de cuotas,
+no configuración estática. Las pruebas de migración PostgreSQL siguen el fixture de integración
+de base **de pruebas**; nunca ejecutar migraciones de verificación contra bases no destinadas a tests.
 
 #### Ser Laboral (CSV)
 

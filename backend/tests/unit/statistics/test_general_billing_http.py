@@ -269,6 +269,9 @@ def test_bootstrap_registers_app_scoped_source_and_cleans_it_at_shutdown(monkeyp
     class Database:
         disposed = False
 
+        def session(self) -> Any:
+            raise AssertionError("Facturación General no debe abrir una sesión de cuotas")
+
         async def dispose(self) -> None:
             self.disposed = True
 
