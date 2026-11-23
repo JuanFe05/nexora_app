@@ -244,7 +244,8 @@ async def test_indicator_math_uses_valid_invoices_once_and_all_fee_amounts() -> 
         invoice(estado="ABIERTO", vlr_lqdd_pcnte=999999),
         invoice(cnsctvo_dcto="P", emprs="PARTICULAR", vlr_frmas_pgo_tpo1="123.45"),
     ]
-    result = await GeneralConsumptionReport(Source(rows), Source([admission()]), fees=Fees()).build(FILTER)
+    report = GeneralConsumptionReport(Source(rows), Source([admission()]), fees=Fees())
+    result = await report.build(FILTER)
     assert [i["valor"] for i in result["indicadores"]] == [
         Decimal("123.45"),
         Decimal("312.25"),

@@ -162,13 +162,26 @@ las exportaciones de Análisis. No existe `GET /columns`.
   siete objetos `{clave, etiqueta, valor}` en orden: venta particular, copagos, cuotas
   moderadoras, copagos contributivo, cuotas contributivo, copagos subsidiado, cuotas subsidiado.
   Los valores COP y los importes de filas son números JSON, sin perder precisión Decimal.
-- `GET /export?formato=csv|xlsx`: Facturas Detalladas **seguidas de** Admisiones y,
-  con `ser_laboral_id` opcional, Ser Laboral al final; un solo
-  encabezado y una misma hoja/CSV (el escritor compartido abre otra hoja únicamente al alcanzar
-  el límite físico de Excel). Por defecto, las 40 columnas de Consumo en orden; `columnas` es
-  opcional y repetible (`clave:text|number|date`) y conserva el orden solicitado. Encabezados
-  legibles, BOM UTF-8 y separador `;` en CSV. Columnas desconocidas, tipos inválidos o duplicados:
-  422 antes de consultar. Nunca incluye indicadores.
+- `GET /export?formato=csv|xlsx`: `tablas` opcional y repetible admite `facturas`,
+  `admisiones`, `ser_laboral` (valor desconocido: 422). Solo escribe las tablas seleccionadas,
+  sin duplicados y siempre en ese orden, independientemente del orden de la solicitud.
+  Por ejemplo, `tablas=admisiones&tablas=facturas` exporta Facturas Detalladas y luego Admisiones.
+  Omitir `tablas` conserva el comportamiento anterior: Facturas + Admisiones y, con
+  `ser_laboral_id` opcional, Ser Laboral al final. Seleccionar explícitamente `ser_laboral`
+  exige token: si falta, 422 `Carga el CSV de Ser Laboral para exportarlo.`; desconocido o
+  expirado, 410. Si no se selecciona Ser Laboral, ignora `ser_laboral_id`. Exportar únicamente
+  Ser Laboral no construye el informe ni consulta SQL Server o cuotas moderadoras. Si incluye
+  Facturas o Admisiones, resuelve primero el token aplicable y después construye el informe;
+  una vigencia sin cuotas sigue produciendo 422 antes de enviar cabeceras.
+  Un solo encabezado y una misma hoja/CSV (el escritor compartido abre otra hoja únicamente
+  al alcanzar el límite físico de Excel). Por defecto, las 40 columnas de Consumo en orden;
+  `columnas` es opcional y repetible (`clave:text|number|date`) y conserva el orden solicitado.
+  Encabezados legibles, BOM UTF-8 y separador `;` en CSV. Columnas desconocidas, tipos inválidos
+  o duplicados: 422 antes de consultar. Nunca incluye indicadores.
+  Nombre completo (sin `tablas` o con las tres): `consumo-general_<inicio>_<fin>.<ext>`.
+  Para un subconjunto: `consumo-general-<tablas>_<inicio>_<fin>.<ext>`, con nombres
+  `facturas-detalladas`, `admisiones`, `ser-laboral` unidos por guion en el orden fijo;
+  por ejemplo, `consumo-general-facturas-detalladas-admisiones_2026-01-01_2026-01-31.csv`.
 - `POST /export/analysis/pdf` y `POST /export/analysis/xlsx`: body
   `{ "indicadores": [{"clave": "total_venta_particular", "etiqueta": "Total Venta Particular",
   "valor": 12345}], "titulo": "CONSUMO GENERAL", "periodo": "ENERO 2026" }`.
@@ -298,10 +311,12 @@ el cierre del informe durante el apagado cancela timers y libera filas. Cargas i
 alteran tokens existentes. No persiste archivos ni registros en PostgreSQL. Filas calculadas
 residen en memoria por el contrato JSON; valorar memoria de ocho cargas de tamaño máximo.
 
-`GET /export` con `ser_laboral_id` válido une Facturas + Admisiones + Ser Laboral en ese orden,
-un solo encabezado, mismas columnas seleccionadas, una hoja (salvo límite físico de Excel).
-Sin token conserva Facturas + Admisiones. Token desconocido/expirado/expulsado → 410 antes de
-consultar SQL: `{"detail": "El archivo de Ser Laboral expiró; cárgalo de nuevo."}`.
+`GET /export` sin `tablas` y con `ser_laboral_id` válido une Facturas + Admisiones + Ser Laboral
+en ese orden, un solo encabezado, mismas columnas seleccionadas, una hoja (salvo límite físico
+de Excel). Sin `tablas` ni token conserva Facturas + Admisiones. Con `tablas` solo exporta la
+selección explícita descrita arriba. Cuando corresponde resolver el token, si es desconocido,
+expirado o expulsado → 410 antes de consultar SQL:
+`{"detail": "El archivo de Ser Laboral expiró; cárgalo de nuevo."}`.
 La consulta general no invalida tokens de otros clientes; el frontend descarta su token al
 reconsultar. Son tokens portadores: deben mantenerse privados como los datos del informe.
 

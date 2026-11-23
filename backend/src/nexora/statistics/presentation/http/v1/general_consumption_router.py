@@ -122,7 +122,10 @@ def create_general_consumption_router(
         summary="Exportar Facturas, Admisiones y Ser Laboral opcional",
         description=(
             "40 columnas por defecto; columnas opcional y repetible: clave:tipo. "
-            "ser_laboral_id opcional agrega las filas cargadas al final; token expirado: 410."
+            "tablas opcional y repetible: facturas, admisiones, ser_laboral; sin duplicados "
+            "y en ese orden. Omitir tablas conserva la exportación completa anterior. "
+            "Seleccionar ser_laboral exige ser_laboral_id (422 si falta, 410 si expiró); "
+            "sin tablas, el token sigue siendo opcional. Solo Ser Laboral no consulta SQL. "
         ),
         response_class=StreamingResponse,
     )
@@ -132,6 +135,9 @@ def create_general_consumption_router(
         formato: Annotated[Literal["csv", "xlsx"], Query()],
         columnas: Annotated[list[str] | None, Query(max_length=40)] = None,
         ser_laboral_id: Annotated[str | None, Query()] = None,
+        tablas: Annotated[
+            list[Literal["facturas", "admisiones", "ser_laboral"]] | None, Query()
+        ] = None,
     ) -> StreamingResponse:
         known = {key: (label, kind) for key, label, kind in COLUMNS}
         parsed = (
@@ -154,18 +160,40 @@ def create_general_consumption_router(
             raise InvalidReportFilter(f"Columnas desconocidas: {', '.join(unknown)}.")
         if len({c.id for c in parsed}) != len(parsed):
             raise InvalidReportFilter("No se permiten columnas duplicadas.")
+        table_names = {
+            "facturas": "facturas-detalladas",
+            "admisiones": "admisiones",
+            "ser_laboral": "ser-laboral",
+        }
+        selected_tables = [name for name in table_names if tablas is None or name in tablas]
+        # Sin tablas se conserva el contrato anterior: Ser Laboral es opcional.
+        if tablas is not None and "ser_laboral" in selected_tables and ser_laboral_id is None:
+            raise HTTPException(422, "Carga el CSV de Ser Laboral para exportarlo.")
         # Resolver token antes de consultar SQL y antes de enviar cabeceras.
         try:
             laboral_rows = (
-                report.ser_laboral.rows(ser_laboral_id) if ser_laboral_id is not None else []
+                report.ser_laboral.rows(ser_laboral_id)
+                if "ser_laboral" in selected_tables and ser_laboral_id is not None
+                else []
             )
         except SerLaboralExpired as exc:
             raise HTTPException(410, str(exc)) from exc
         # Validar consultas y vigencias antes de enviar cabeceras, también en exportación.
-        result = await report.build(selected)
+        # Ser Laboral por sí solo no necesita SQL Server ni la instantánea de cuotas.
+        result = (
+            await report.build(selected)
+            if any(name in selected_tables for name in ("facturas", "admisiones"))
+            else {}
+        )
+        table_rows = {
+            "facturas": result.get("facturas", []),
+            "admisiones": result.get("admisiones", []),
+            "ser_laboral": laboral_rows,
+        }
 
         async def chunks() -> AsyncIterator[list[dict[str, Any]]]:
-            for rows in (result["facturas"], result["admisiones"], laboral_rows):
+            for name in selected_tables:
+                rows = table_rows[name]
                 for offset in range(0, len(rows), 2000):
                     yield [
                         {known[c.id][0]: row.get(c.id) for c in parsed}
@@ -187,7 +215,14 @@ def create_general_consumption_router(
                 async for block in writer(columns, chunks()):
                     yield block
 
-        filename = f"consumo-general_{selected.fecha_inicial}_{selected.fecha_final}.{extension}"
+        suffix = (
+            "-" + "-".join(table_names[name] for name in selected_tables)
+            if len(selected_tables) < len(table_names)
+            else ""
+        )
+        filename = (
+            f"consumo-general{suffix}_{selected.fecha_inicial}_{selected.fecha_final}.{extension}"
+        )
         return StreamingResponse(
             stream(),
             media_type=media_type,
