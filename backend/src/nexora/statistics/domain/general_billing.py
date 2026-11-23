@@ -1,8 +1,7 @@
 """Reglas puras de Facturación General, sin dependencias de framework.
 
 Los datos llegan tipados desde la consulta de SQL Server (fechas nativas o ISO, importes
-numéricos o decimales con punto). Las macros de `data_ips` (modCalculoEdad, modCalculosFactura y
-modProcesarFacturasDetalladas) son solo una guía de las reglas de negocio.
+numéricos o decimales con punto).
 """
 
 from calendar import monthrange
