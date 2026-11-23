@@ -7,7 +7,7 @@ from datetime import date
 from decimal import Decimal
 from typing import IO, Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,6 +19,7 @@ from nexora.statistics.application.general_consumption import (
     _thread,
 )
 from nexora.statistics.application.ports import CatalogOption
+from nexora.statistics.application.ser_laboral import SerLaboralExpired
 from nexora.statistics.domain.filters import InvalidReportFilter, ReportFilter
 from nexora.statistics.infrastructure.export_writers import WRITERS
 from nexora.statistics.infrastructure.general_consumption_exports import (
@@ -28,6 +29,7 @@ from nexora.statistics.infrastructure.general_consumption_exports import (
 from nexora.statistics.presentation.http.v1.report_router import _numeric_json, _parse_column
 
 PERMISSION = "statistics.administrative.general_consumption.view"
+MAX_SER_LABORAL_BYTES = 25 * 1024 * 1024
 
 
 class Indicator(BaseModel):
@@ -97,10 +99,31 @@ def create_general_consumption_router(
             content, media_type="application/json", headers={"Cache-Control": "no-store"}
         )
 
+    @router.post(
+        "/ser-laboral",
+        summary="Cargar CSV Ser Laboral",
+        description="Bytes CSV crudos (text/csv), máximo 25 MB; token válido 30 minutos.",
+        response_class=Response,
+    )
+    async def ser_laboral(request: Request, report: Report) -> Response:
+        content = bytearray()
+        async for block in request.stream():
+            if len(content) + len(block) > MAX_SER_LABORAL_BYTES:
+                raise HTTPException(413, "El archivo CSV excede el límite de 25 MB.")
+            content.extend(block)
+        result = await report.ser_laboral.load(bytes(content))
+        serialized = await asyncio.to_thread(_numeric_json, result)
+        return Response(
+            serialized, media_type="application/json", headers={"Cache-Control": "no-store"}
+        )
+
     @router.get(
         "/export",
-        summary="Exportar Facturas Detalladas y luego Admisiones",
-        description="40 columnas por defecto; columnas opcional y repetible: clave:tipo.",
+        summary="Exportar Facturas, Admisiones y Ser Laboral opcional",
+        description=(
+            "40 columnas por defecto; columnas opcional y repetible: clave:tipo. "
+            "ser_laboral_id opcional agrega las filas cargadas al final; token expirado: 410."
+        ),
         response_class=StreamingResponse,
     )
     async def export(
@@ -108,6 +131,7 @@ def create_general_consumption_router(
         selected: Filters,
         formato: Annotated[Literal["csv", "xlsx"], Query()],
         columnas: Annotated[list[str] | None, Query(max_length=40)] = None,
+        ser_laboral_id: Annotated[str | None, Query()] = None,
     ) -> StreamingResponse:
         known = {key: (label, kind) for key, label, kind in COLUMNS}
         parsed = (
@@ -130,12 +154,18 @@ def create_general_consumption_router(
             raise InvalidReportFilter(f"Columnas desconocidas: {', '.join(unknown)}.")
         if len({c.id for c in parsed}) != len(parsed):
             raise InvalidReportFilter("No se permiten columnas duplicadas.")
+        # Resolver token antes de consultar SQL y antes de enviar cabeceras.
+        try:
+            laboral_rows = (
+                report.ser_laboral.rows(ser_laboral_id) if ser_laboral_id is not None else []
+            )
+        except SerLaboralExpired as exc:
+            raise HTTPException(410, str(exc)) from exc
         # Validar consultas y vigencias antes de enviar cabeceras, también en exportación.
         result = await report.build(selected)
 
         async def chunks() -> AsyncIterator[list[dict[str, Any]]]:
-            for name in ("facturas", "admisiones"):
-                rows = result[name]
+            for rows in (result["facturas"], result["admisiones"], laboral_rows):
                 for offset in range(0, len(rows), 2000):
                     yield [
                         {known[c.id][0]: row.get(c.id) for c in parsed}

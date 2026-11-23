@@ -162,7 +162,8 @@ las exportaciones de Análisis. No existe `GET /columns`.
   siete objetos `{clave, etiqueta, valor}` en orden: venta particular, copagos, cuotas
   moderadoras, copagos contributivo, cuotas contributivo, copagos subsidiado, cuotas subsidiado.
   Los valores COP y los importes de filas son números JSON, sin perder precisión Decimal.
-- `GET /export?formato=csv|xlsx`: Facturas Detalladas **seguidas de** Admisiones, un solo
+- `GET /export?formato=csv|xlsx`: Facturas Detalladas **seguidas de** Admisiones y,
+  con `ser_laboral_id` opcional, Ser Laboral al final; un solo
   encabezado y una misma hoja/CSV (el escritor compartido abre otra hoja únicamente al alcanzar
   el límite físico de Excel). Por defecto, las 40 columnas de Consumo en orden; `columnas` es
   opcional y repetible (`clave:text|number|date`) y conserva el orden solicitado. Encabezados
@@ -187,7 +188,7 @@ de FACTURA AGRUPADA. En URGENCIAS exige empresa exactamente PARTICULAR o PARTICU
 en otros puntos exige admisión vacía/0. Solo las filas retenidas alimentan el ETL compartido
 (`clean_record`, `process_chunks`, con predicado opcional cuyo valor por defecto sigue siendo el
 de Facturación General), totales/pagos solo en la primera fila de la factura; edad y mes usan
-`fcha_dcto`. No se procesan CSV ni macros.
+`fcha_dcto`. Las fuentes SQL no procesan CSV ni macros; Ser Laboral tiene un importador independiente.
 
 Admisiones no aplica `fila_cumple`. Mapea empresa `emprsa`, número de documento y admisión
 `cnsctvo_admsn`, tipo de documento constante `ADMISION`, tipo de identificación `tpo_idntfccn`, fecha de documento e ingreso
@@ -221,6 +222,52 @@ y exportación; cierre elimina las entradas. El spool evita acumular los dos con
 la respuesta completa calculada sí reside en memoria (contrato JSON sin paginación). Validar
 memoria/rendimiento de volúmenes de producción y las dos conexiones concurrentes con SQL Server
 real antes de desplegar.
+
+#### Ser Laboral (CSV)
+
+`POST /api/v1/statistics/administrative/general-consumption/ser-laboral` recibe bytes crudos
+con `Content-Type: text/csv` (sin multipart). Lee el cuerpo incrementalmente y rechaza más de
+25 MiB (25 × 1024 × 1024 bytes) con 413: `El archivo CSV excede el límite de 25 MB.`.
+Respuesta 200: `{ser_laboral_id, filas, total, omitidas, advertencias}`; `filas` contiene las
+mismas 40 claves e importes numéricos; `omitidas` cuenta las filas no CERRADO. Exige el mismo
+permiso de Consumo General, no consulta SQL Server y no modifica Análisis.
+
+Procesa con `csv.reader` sobre un stream decodificado, separador coma e índices resueltos una
+sola vez, fuera del event loop (`asyncio.to_thread`). Admite UTF-8 con/sin BOM y, si falla la
+validación UTF-8 incremental, cp1252 (también descarta BOM en esa variante). No usa las macros.
+Solo `estado` trim/mayúsculas CERRADO; total por `cnsctvo_dcto` = suma exacta Decimal de
+`cntdd * vlr_untro` de las filas retenidas, únicamente en la primera aparición aunque las
+facturas estén intercaladas. Coma de miles y punto decimal (`10,500.00`, `1.00`); vacíos,
+no numéricos y valores no finitos se vuelven 0. Fecha documento `dd/mm/yyyy`; ingreso/egreso
+`m/d/yyyy h:mm:ss AM/PM`, sin depender del locale: salida ISO y fecha inválida vacía.
+
+Cabeceras requeridas (las demás, incluidos `A?o`, `Textbox37`, `Textbox54`, `vlr_factrdo`,
+se ignoran): `estado`, `sede`, `emprs`, `cnsctvo_dcto`, `dscrp_transcn`, `fcha_dcto`,
+`pnto_atncn_atncn`, `lna_prdcto`, `cdgo_prcdmnto`, `procedimiento`, `cc_afldo`, `afldo`,
+`genero`, `fcha_ingrso_pcnte`, `fcha_egrso_pcnte`, `prfsnl_salud_ordn`, `prfsnl_salud_rlza`,
+`cntdd`, `vlr_untro`, `usrio_mdfca`, `nmro_atrzcn_eps`. Faltantes → 422
+`Cabeceras requeridas faltantes: <lista>.`; duplicadas requeridas → 422. Sin filas CERRADO →
+422 `Ningún registro cumple los filtros.`. CSV mal formado/indecodificable → 422.
+
+Mapeo: `pnto_atncn_atncn` → `pnto_atncn`, `afldo` → `nombre_completo`,
+`fcha_egrso_pcnte` → `fcha_egreso`; admisión constante `"0"`, mes español de `fcha_dcto`.
+Sede/empresa/documento/tipo/línea/código/procedimiento/identificación/género/médicos/asesor/
+autorización conservan su correspondencia natural, texto normalizado a mayúsculas/trim.
+Prefijo, resolución, tipo identificación, nacimiento/edad/unidad/grupo, municipio/dirección
+ y diagnóstico quedan vacíos. Servicios/suministros/copago/pago particular/descuento son 0.
+
+Token opaco aleatorio (256 bits), caché en memoria de vida de aplicación: TTL fijo 30 minutos,
+máximo 8 entradas; expulsa la carga más antigua. Expiración activa y comprobación monotónica;
+el cierre del informe durante el apagado cancela timers y libera filas. Cargas inválidas no
+alteran tokens existentes. No persiste archivos ni registros en PostgreSQL. Filas calculadas
+residen en memoria por el contrato JSON; valorar memoria de ocho cargas de tamaño máximo.
+
+`GET /export` con `ser_laboral_id` válido une Facturas + Admisiones + Ser Laboral en ese orden,
+un solo encabezado, mismas columnas seleccionadas, una hoja (salvo límite físico de Excel).
+Sin token conserva Facturas + Admisiones. Token desconocido/expirado/expulsado → 410 antes de
+consultar SQL: `{"detail": "El archivo de Ser Laboral expiró; cárgalo de nuevo."}`.
+La consulta general no invalida tokens de otros clientes; el frontend descarta su token al
+reconsultar. Son tokens portadores: deben mantenerse privados como los datos del informe.
 
 ### Notificación SIVIGILA
 

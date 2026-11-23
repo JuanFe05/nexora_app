@@ -209,6 +209,10 @@ class GeneralConsumptionReport:
     ) -> None:
         if ttl_seconds <= 0 or max_entries < 1:
             raise ValueError("El TTL y el máximo de entradas deben ser positivos.")
+        # Import local: el procesador Ser Laboral reutiliza las columnas de este módulo.
+        from nexora.statistics.application.ser_laboral import SerLaboralCache
+
+        self.ser_laboral = SerLaboralCache()
         self._invoices, self._admissions = invoices, admissions
         self._fees = dict(fees)
         self._ttl, self._maximum = ttl_seconds, max_entries
@@ -267,6 +271,7 @@ class GeneralConsumptionReport:
             return result
 
     async def aclose(self) -> None:
+        self.ser_laboral.close()
         async with self._lock:
             for filters in list(self._cache):
                 self._expire(filters)
