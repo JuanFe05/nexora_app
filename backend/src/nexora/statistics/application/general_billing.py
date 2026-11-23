@@ -1,6 +1,6 @@
 """ETL de Facturación General en streaming: una factura a la vez, filtrando antes de totalizar."""
 
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from decimal import Decimal
 from typing import Any
 
@@ -94,7 +94,9 @@ def clean_record(raw: Row) -> Row:
     return row
 
 
-async def process_chunks(chunks: AsyncIterator[list[Row]]) -> AsyncGenerator[Row]:
+async def process_chunks(
+    chunks: AsyncIterator[list[Row]], *, matches: Callable[[Row], bool] = row_matches
+) -> AsyncGenerator[Row]:
     """Consume SQL una sola vez; solo las filas de la factura en curso ocupan memoria.
 
     La consulta entrega las filas de cada factura de forma contigua. Una fila defectuosa se
@@ -108,7 +110,7 @@ async def process_chunks(chunks: AsyncIterator[list[Row]]) -> AsyncGenerator[Row
         async for chunk in chunks:
             for raw in chunk:
                 try:
-                    if not row_matches(raw):
+                    if not matches(raw):
                         continue
                     key = invoice_key(raw)
                     row = clean_record(raw)

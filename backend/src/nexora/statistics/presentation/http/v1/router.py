@@ -5,6 +5,7 @@ from fastapi import Request
 from nexora.identity_access.presentation.http.v1.dependencies.auth import ContainerDep
 from nexora.statistics.application.detailed_invoices import DetailedInvoicesReport
 from nexora.statistics.application.general_billing import COLUMNS
+from nexora.statistics.application.general_consumption import GeneralConsumptionReport
 from nexora.statistics.application.report import Report
 from nexora.statistics.application.sivigila import SivigilaReport
 from nexora.statistics.infrastructure.admissions_source import SqlServerAdmissionsSource
@@ -13,9 +14,23 @@ from nexora.statistics.infrastructure.detailed_invoices_source import (
 )
 from nexora.statistics.infrastructure.triage_source import SqlServerTriageSource
 from nexora.statistics.infrastructure.vital_signs_source import SqlServerVitalSignsSource
+from nexora.statistics.presentation.http.v1.bai_nutricion_cyd_router import (
+    create_bai_nutricion_cyd_router,
+)
+from nexora.statistics.presentation.http.v1.general_consumption_router import (
+    create_general_consumption_router,
+)
 from nexora.statistics.presentation.http.v1.report_router import create_report_router
-from nexora.statistics.presentation.http.v1.bai_nutricion_cyd_router import create_bai_nutricion_cyd_router
 from nexora.statistics.presentation.http.v1.sivigila_router import create_sivigila_router
+
+
+def get_general_consumption_report(request: Request) -> GeneralConsumptionReport:
+    return request.app.state.general_consumption_report  # type: ignore[no-any-return]
+
+
+general_consumption_router = create_general_consumption_router(
+    provider=get_general_consumption_report
+)
 
 
 def get_general_billing_report(request: Request) -> Report:

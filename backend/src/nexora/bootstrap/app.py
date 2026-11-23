@@ -29,12 +29,19 @@ from nexora.integration_management.application.ports import (
     ExternalQueryFailed,
     ExternalSourceUnavailable,
 )
+from nexora.statistics.application.general_consumption import GeneralConsumptionReport
 from nexora.statistics.domain.filters import InvalidReportFilter
+from nexora.statistics.domain.general_consumption import UnconfiguredFeeYear
+from nexora.statistics.infrastructure.admissions_source import SqlServerAdmissionsSource
+from nexora.statistics.infrastructure.detailed_invoices_source import (
+    SqlServerDetailedInvoicesSource,
+)
 from nexora.statistics.infrastructure.general_billing_source import GeneralBillingSource
 from nexora.statistics.presentation.http.v1.router import (
     admissions_router,
-    general_billing_router,
     bai_nutricion_cyd_router,
+    general_billing_router,
+    general_consumption_router,
     sivigila_router,
     statistics_router,
     triage_router,
@@ -57,6 +64,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             if source is not None:
                 await source.aclose()
         finally:
+            await app.state.general_consumption_report.aclose()
             container.sqlserver.dispose()
             await container.database.dispose()
 
@@ -122,6 +130,7 @@ def _register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ExternalSourceUnavailable, external_unavailable_handler)
     app.add_exception_handler(ExternalQueryFailed, external_query_handler)
     app.add_exception_handler(InvalidReportFilter, report_filter_handler)
+    app.add_exception_handler(UnconfiguredFeeYear, report_filter_handler)
     app.add_exception_handler(IncorrectCurrentPassword, current_password_handler)
     app.add_exception_handler(RequestValidationError, validation_handler)
     app.add_exception_handler(ResourceNotFound, not_found_handler)
@@ -145,6 +154,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.container = build_container(settings)
     app.state.general_billing_source = GeneralBillingSource(app.state.container.sqlserver)
+    app.state.general_consumption_report = GeneralConsumptionReport(
+        SqlServerDetailedInvoicesSource(app.state.container.sqlserver),
+        SqlServerAdmissionsSource(app.state.container.sqlserver),
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.allowed_origins),
@@ -162,6 +175,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(sivigila_router, prefix=settings.api_prefix)
     app.include_router(bai_nutricion_cyd_router, prefix=settings.api_prefix)
     app.include_router(general_billing_router, prefix=settings.api_prefix)
+    app.include_router(general_consumption_router, prefix=settings.api_prefix)
 
     @app.get("/health", tags=["operacion"], summary="Estado del servicio")
     async def health() -> dict[str, str]:

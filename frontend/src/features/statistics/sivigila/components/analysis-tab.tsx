@@ -14,7 +14,7 @@ const cell = "border-b border-gray-100 px-3 py-2.5 text-right tabular-nums white
 export function AnalysisTableView({ table, totalRowIndexes, id }: { table: AnalysisTable; totalRowIndexes?: number[]; id: string }) {
   return (
     <Card className="min-w-0 space-y-4">
-      <div className="max-w-full overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
+      <div className="custom-scrollbar max-w-full overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
         <table aria-label={table.titulo} id={id} className="w-full min-w-max border-collapse text-sm">
           <thead>
             <tr className="bg-gray-50 text-gray-600 dark:bg-white/[0.03] dark:text-gray-300">

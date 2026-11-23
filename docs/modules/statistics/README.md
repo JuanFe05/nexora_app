@@ -12,6 +12,7 @@ almacena los datos consultados.
 | Signos Vitales | `/estadistica/informes/signos-vitales` | `/api/v1/statistics/reports/vital-signs` | `statistics.reports.vital_signs.view` |
 | Admisiones (Urgencias) | `/estadistica/informes/admisiones` | `/api/v1/statistics/reports/admissions` | `statistics.reports.admissions.view` |
 | Triaje (Urgencias) | `/estadistica/informes/triaje` | `/api/v1/statistics/reports/triage` | `statistics.reports.triage.view` |
+| Consumo General | `/estadistica/administrativa/consumo-general` | `/api/v1/statistics/administrative/general-consumption` | `statistics.administrative.general_consumption.view` |
 
 Admisiones usa el periodo de **fecha de admision**, 59 columnas (alias de `Admisiones.sql`), los filtros
 Sede, Empresa y Linea de Producto, paginacion con desempate estable y exportacion CSV/XLSX derivada del
@@ -36,7 +37,6 @@ Menus del sidebar sin vistas todavia, cada opcion con su permiso reservado (desh
 | Resoluciones | Resolución 2175 de 2015 | `statistics.resolutions.res_2175_2015.view` |
 | Circulares | Circular 06 de 2018 | `statistics.circulars.circular_06_2018.view` |
 | Circulares | Circular 21 de 2026 | `statistics.circulars.circular_21_2026.view` |
-| Gestion Administrativa | Consumo General | `statistics.administrative.general_consumption.view` |
 | Gestion Administrativa | Facturación General | `statistics.administrative.general_billing.view` |
 | Gestion Administrativa | Consumo de Laboratorio | `statistics.administrative.lab_consumption.view` |
 | Gestion Administrativa | Gestión de Incapacidades | `statistics.administrative.disability_management.view` |
@@ -148,6 +148,79 @@ expirar, expulsar o cerrar elimina sus archivos (un export activo conserva su ar
 cerrar su lector). La memoria del ETL está acotada por factura y la del índice a 8 bytes/fila.
 No cambia Facturas Detalladas ni almacena resultados en PostgreSQL. La consulta y su
 contigüidad/rendimiento aún deben verificarse contra SQL Server real.
+
+### Consumo General
+
+API: `/api/v1/statistics/administrative/general-consumption`. Permiso existente e independiente:
+`statistics.administrative.general_consumption.view`, exigido en **todas** las rutas, incluidas
+las exportaciones de Análisis. No existe `GET /columns`.
+
+- `GET /filters/sites`, `/filters/companies`, `/filters/product-lines`: catálogos compartidos.
+- `GET ""`: fechas inclusivas `fecha_inicial`, `fecha_final` obligatorias y filtros repetibles
+  `sedes`, `empresas`, `lineas` opcionales. Responde `{indicadores, facturas, admisiones,
+  advertencias, total_facturas, total_admisiones}` sin paginación; `indicadores` contiene los
+  siete objetos `{clave, etiqueta, valor}` en orden: venta particular, copagos, cuotas
+  moderadoras, copagos contributivo, cuotas contributivo, copagos subsidiado, cuotas subsidiado.
+  Los valores COP y los importes de filas son números JSON, sin perder precisión Decimal.
+- `GET /export?formato=csv|xlsx`: Facturas Detalladas **seguidas de** Admisiones, un solo
+  encabezado y una misma hoja/CSV (el escritor compartido abre otra hoja únicamente al alcanzar
+  el límite físico de Excel). Por defecto, las 40 columnas de Consumo en orden; `columnas` es
+  opcional y repetible (`clave:text|number|date`) y conserva el orden solicitado. Encabezados
+  legibles, BOM UTF-8 y separador `;` en CSV. Columnas desconocidas, tipos inválidos o duplicados:
+  422 antes de consultar. Nunca incluye indicadores.
+- `POST /export/analysis/pdf` y `POST /export/analysis/xlsx`: body
+  `{ "indicadores": [{"clave": "total_venta_particular", "etiqueta": "Total Venta Particular",
+  "valor": 12345}], "titulo": "CONSUMO GENERAL", "periodo": "ENERO 2026" }`.
+  Solo indicadores (hasta siete), título/periodo opcionales; rechaza filas de detalle y campos
+  adicionales con 422. PDF Carta horizontal y Excel de una sola hoja Análisis, estilos azules
+  de SIVIGILA, importes COP con separadores de miles; no consultan SQL Server.
+
+**Contrato corregido con `data_ips/Consumo General.docx`:** son **40 columnas**, no las 44 de
+Facturación General: `application/general_consumption.py:COLUMNS` conserva sus claves, etiquetas
+ y orden excepto `cnsctvo_fctra_agrpda`, `no_remision`, `fcha_rmsn`, `no_envio`.
+Facturación General conserva intactas sus 44 columnas y comportamiento. La clave `usrio_mdfca`
+(Asesor / Facturador) en Consumo procede de **`usrio_realiza`** en Facturas; en Admisiones procede
+de `usro_mdfccn`.
+
+Facturas usa `fila_cumple`: estado normalizado CERRADO, código distinto de 2/3 y documento distinto
+de FACTURA AGRUPADA. En URGENCIAS exige empresa exactamente PARTICULAR o PARTICULAR FISIO NATURA;
+en otros puntos exige admisión vacía/0. Solo las filas retenidas alimentan el ETL compartido
+(`clean_record`, `process_chunks`, con predicado opcional cuyo valor por defecto sigue siendo el
+de Facturación General), totales/pagos solo en la primera fila de la factura; edad y mes usan
+`fcha_dcto`. No se procesan CSV ni macros.
+
+Admisiones no aplica `fila_cumple`. Mapea empresa `emprsa`, número de documento y admisión
+`cnsctvo_admsn`, tipo de documento constante `ADMISION`, tipo de identificación `tpo_idntfccn`, fecha de documento e ingreso
+`fcha_admsn`, salida `fcha_slda_admsn`, punto constante URGENCIAS y prefijo vacío. Nombre completo,
+edad, unidad DÍAS/MESES/AÑOS, curso de vida y mes reutilizan Facturación General, con referencia
+en `fcha_admsn`. Médicos `prfsnl_ordna`/`prfsnl_rlza`, Dx `cd_dx`/`dx`, procedimiento `prcdmnto`,
+valor unitario `vlr_srvco`; copago/pago particular/descuento son 0. Otros campos disponibles
+conservan su correspondencia natural; texto no disponible queda vacío.
+
+**Importe por fila de Admisiones:** se utiliza **`vlr_ttl`**, porque la consulta real calcula
+`CAST(det.cntdd * det.vlr_untro AS BIGINT)`: equivale exactamente al `cntdd1` de Facturas.
+No se suma `vlr_srvco` (unitario) ni honorarios `vlr_hnrrio`. Un diccionario de totales y un
+conjunto de admisiones consumidas asignan la suma solo a la primera fila de cada `cnsctvo_admsn`,
+incluso con admisiones intercaladas; se preserva el orden estable de llegada SQL.
+
+Análisis clasifica el copago procesado por el año de `fcha_dcto`: iguales a los importes de cuota
+son cuotas moderadoras, el resto copagos; distingue las empresas exactas
+`SOS PGP MIR Y COR CONTRIBUTIVO` y `SOS PGP MIR Y COR SUBSIDIADO`. La configuración dedicada
+`configuration/general_consumption.py:MODERATOR_FEES` se inyecta al servicio: **2026 = 5000,
+20100, 52800**. Una fila válida de otro año sin configuración produce 422:
+`No hay cuotas moderadoras configuradas para la vigencia 2025.` (año correspondiente).
+No extrapola cuotas; sin filas válidas no exige configuración. Fecha inválida en una factura
+válida también produce 422 porque no permite determinar su vigencia.
+
+Ambas fuentes SQL existentes reciben el mismo `ReportFilter` y se consumen simultáneamente con
+`asyncio.gather`. Los bloques crudos pasan por archivos temporales privados que se cierran al
+terminar/fallar/cancelar; ETL, pickle, JSON, CSV y construcción de archivos se descargan a
+`asyncio.to_thread`. No hay cambios en SQL ni en PostgreSQL. Caché single-flight por filtro de
+vida de aplicación, TTL activo de 60 segundos y máximo dos entradas, compartida entre consulta
+y exportación; cierre elimina las entradas. El spool evita acumular los dos conjuntos crudos;
+la respuesta completa calculada sí reside en memoria (contrato JSON sin paginación). Validar
+memoria/rendimiento de volúmenes de producción y las dos conexiones concurrentes con SQL Server
+real antes de desplegar.
 
 ### Notificación SIVIGILA
 

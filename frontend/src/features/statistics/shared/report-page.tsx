@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ColumnVisibilityMenu, DataTable, ExportMenu, usePagedQuery, type DataTableColumn, type PagedQueryParams } from "@/components/shared/data-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card } from "@/components/ui/card";
@@ -11,6 +11,8 @@ import type { ReportFilters as Filters } from "./types";
 
 export type ReportDefinition<TRow> = {
   idPrefix: string;
+  /** Header icon; defaults to the bar chart. */
+  icon?: ReactNode;
   title: string;
   description: string;
   filename: string;
@@ -79,7 +81,7 @@ export function ReportPage<TRow>({ report }: { report: ReportDefinition<TRow> })
   const [consulting, setConsulting] = useState(false);
   return (
     <div className="min-w-0 space-y-6">
-      <PageHeader icon={<ChartBarIcon />} title={report.title} description={report.description} />
+      <PageHeader icon={report.icon ?? <ChartBarIcon />} title={report.title} description={report.description} />
       <ReportFilters idPrefix={report.idPrefix} api={report.api} productLineFilter={report.productLineFilter} consulting={consulting} hasResults={Boolean(applied)} onConsult={(filters) => setApplied((current) => ({ filters, revision: (current?.revision ?? 0) + 1 }))} onClear={() => setApplied(null)} />
       {applied ? <ReportResults key={applied.revision} report={report} filters={applied.filters} visibleColumns={visibleColumns} onVisibleColumnsChange={setVisibleColumns} onLoadingChange={setConsulting} /> : (
         <Card>

@@ -80,7 +80,7 @@ export const navigation: NavigationSection[] = [
         label: "Gestión Administrativa",
         icon: BriefcaseIcon,
         items: [
-          { label: "Consumo General", requiredPermission: PERMISSIONS.generalConsumptionView },
+          { label: "Consumo General", path: "/estadistica/administrativa/consumo-general", requiredPermission: PERMISSIONS.generalConsumptionView },
           { label: "Facturación General", path: "/estadistica/administrativa/facturacion-general", requiredPermission: PERMISSIONS.generalBillingView },
           { label: "Consumo de Laboratorio", requiredPermission: PERMISSIONS.labConsumptionView },
           { label: "Gestión de Incapacidades", requiredPermission: PERMISSIONS.disabilityManagementView },

@@ -198,7 +198,8 @@ it.each(Object.entries(MENUS))("%s: sin permisos no aparece y con un permiso mue
   const button = screen.getByRole("button", { name: menu });
   fireEvent.click(button);
   const panel = document.getElementById(button.getAttribute("aria-controls") as string) as HTMLElement;
-  expect(within(panel).getByText(options[0][0])).toHaveAttribute("aria-disabled", "true");
+  if (menu === "Gestión Administrativa") expect(within(panel).getByRole("link", { name: "Consumo General" })).toHaveAttribute("href", "/estadistica/administrativa/consumo-general");
+  else expect(within(panel).getByText(options[0][0])).toHaveAttribute("aria-disabled", "true");
   for (const [label] of options.slice(1)) expect(within(panel).queryByText(label)).not.toBeInTheDocument();
 });
 
@@ -207,12 +208,20 @@ it("habilita Facturación General solo con su permiso y conserva las demás opci
   const { unmount } = mount();
   fireEvent.click(screen.getByRole("button", { name: "Gestión Administrativa" }));
   expect(screen.getByRole("link", { name: "Facturación General" })).toHaveAttribute("href", "/estadistica/administrativa/facturacion-general");
-  expect(screen.getByText("Consumo General")).toHaveAttribute("aria-disabled", "true");
+  expect(screen.getByRole("link", { name: "Consumo General" })).toHaveAttribute("href", "/estadistica/administrativa/consumo-general");
   unmount();
   auth.permissions = ["statistics.administrative.general_consumption.view"];
   mount();
   fireEvent.click(screen.getByRole("button", { name: "Gestión Administrativa" }));
   expect(screen.queryByText("Facturación General")).not.toBeInTheDocument();
+});
+
+it("oculta Consumo General sin su permiso independiente", () => {
+  auth.permissions = ["statistics.administrative.general_billing.view"];
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "Gestión Administrativa" }));
+  expect(screen.queryByText("Consumo General")).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Facturación General" })).toBeVisible();
 });
 
 it("expandido: isotipo antes de NEXORA, alineados verticalmente y centrados", () => {
