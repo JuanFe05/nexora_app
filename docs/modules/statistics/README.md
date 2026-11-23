@@ -162,7 +162,7 @@ validación y clasificación y devuelve Análisis y todas las pestañas; cambiar
 localmente no vuelve a consultar. Las reglas proceden de `Grupos_Edades.bas` y `Grupos_DX.bas`
 y se implementan en `domain/sivigila.py` y `application/sivigila.py`: los tres diagnósticos se
 clasifican independientemente, sin duplicar una atención dentro de un evento, y General incluye
-todas las atenciones. Meses/Días pertenecen a «Menor de 1 Año»; sexo no reconocido no se asigna
+todas las atenciones. Solo se consideran atenciones cuya especialidad es «MEDICINA GENERAL» (sin distinguir mayúsculas); las demás se ignoran en todas las pestañas y tablas. Meses/Días pertenecen a «Menor de 1 Año»; sexo no reconocido no se asigna
 en el análisis por sexo.
 
 Semana y periodo siguen `Notificaciones.bas`: la semana 1 empieza el primer domingo del año (una

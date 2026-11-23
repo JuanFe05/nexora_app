@@ -57,6 +57,7 @@ COLUMNS = (
     ("especialidad", "Especialidad", "text"),
 )
 GROUP_LABELS = {EVENT_IRA: "Grupo IRA", EVENT_EDA: "Grupo EDA"}
+REQUIRED_SPECIALTY = "MEDICINA GENERAL"
 DX_FIELDS = ("cdgo_dgnstco", "cdgo_dgnstco_rl_1", "cdgo_dgnstco_rl_2")
 
 
@@ -162,6 +163,8 @@ def process_rows(
 
     for raw in rows:
         try:
+            if _text(raw.get("especialidad")).upper() != REQUIRED_SPECIALTY:
+                continue  # solo cuenta MEDICINA GENERAL; las demás se ignoran
             row, events = clean_record(raw)
             sex = normalize_sex(raw.get("gener"))
         except Exception:  # un registro defectuoso no debe detener el resto

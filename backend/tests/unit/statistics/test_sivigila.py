@@ -46,7 +46,7 @@ def record(**overrides: Any) -> dict[str, Any]:
         "fcha_ncmnto": "1990-05-10", "fcha_atncn": "2026-10-06", "edad": 36, "tipo_edad": "Años",
         "cdgo_dgnstco": "Z000", "diagnostico": "", "cdgo_dgnstco_rl_1": "", "diagnostico_rl_1": "",
         "cdgo_dgnstco_rl_2": "", "diagnostico_rl_2": "", "profesional_salud": "Dr. A",
-        "especialidad": "General",
+        "especialidad": "MEDICINA GENERAL",
     }  # fmt: skip
     return base | overrides
 
@@ -212,3 +212,15 @@ def test_consult_runs_one_query_with_dates_and_filters(http: Any) -> None:
 def test_reversed_dates_are_rejected(http: Any) -> None:
     client, _, _ = http
     assert get(client, fecha_inicial="2026-02-01").status_code == 422
+
+
+def test_only_medicina_general_rows_are_counted() -> None:
+    rows = [
+        record(cdgo_dgnstco="J00X"),
+        record(cdgo_dgnstco="J00X", especialidad="PEDIATRIA"),
+        record(cdgo_dgnstco="J00X", especialidad=""),
+        record(cdgo_dgnstco="J00X", especialidad=" medicina  general "),
+    ]
+    result = process_rows(rows, fallback_date=date(2026, 10, 6))
+    assert result.total_registros == 2
+    assert len(result.pestanas["ira"]) == 2
