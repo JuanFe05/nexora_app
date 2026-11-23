@@ -30,6 +30,7 @@ vi.mock("@/features/users/pages/users-page", () => ({
 vi.mock("@/features/permissions/pages/permissions-page", () => ({
   default: () => <h1>Permisos</h1>,
 }));
+vi.mock("@/features/moderator-fees/pages/moderator-fees-page", () => ({ default: () => <h1>Cuotas Moderadoras</h1> }));
 vi.mock("@/features/roles/pages/roles-page", () => ({
   default: () => <h1>Roles</h1>,
 }));
@@ -65,6 +66,7 @@ const settings = [
   ["usuarios", "Usuarios"],
   ["permisos", "Permisos"],
   ["roles", "Roles"],
+  ["cuotas-moderadoras", "Cuotas Moderadoras"],
 ];
 describe("páginas protegidas", () => {
   it("permite Triaje con su permiso independiente", async () => {
@@ -162,18 +164,19 @@ describe("páginas protegidas", () => {
         permisos: "permissions",
         roles: "roles",
       }[path];
-      auth.permissions = resource ? [`identity.${resource}.view`] : [];
+      auth.permissions = path === "cuotas-moderadoras" ? ["statistics.administrative.moderator_fees.view"] : resource ? [`identity.${resource}.view`] : [];
       mount(`/configuracion/${path}`);
       expect(await screen.findByRole("heading", { name: title })).toBeVisible();
     },
   );
-  it.each(["usuarios", "permisos", "roles"])(
-    "sin view redirige desde %s a Inicio aunque tenga delete",
+  it.each(["usuarios", "permisos", "roles", "cuotas-moderadoras"])(
+    "sin view redirige desde %s a Inicio aunque tenga delete o manage",
     async (path) => {
       auth.permissions = [
         "identity.users.delete",
         "identity.roles.delete",
         "identity.permissions.delete",
+        "statistics.administrative.moderator_fees.manage",
       ];
       const router = mount(`/configuracion/${path}`);
       expect(

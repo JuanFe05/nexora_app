@@ -138,6 +138,12 @@ export const navigation: NavigationSection[] = [
         icon: KeyIcon,
         requiredPermission: PERMISSIONS.permissionsView,
       },
+      {
+        label: "Cuotas Moderadoras",
+        path: "/configuracion/cuotas-moderadoras",
+        icon: DocumentTextIcon,
+        requiredPermission: PERMISSIONS.moderatorFeesView,
+      },
     ],
   },
 ];

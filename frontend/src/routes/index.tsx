@@ -17,6 +17,7 @@ const UsersPage = lazy(() => import("@/features/users/pages/users-page"));
 const PermissionsPage = lazy(
   () => import("@/features/permissions/pages/permissions-page"),
 );
+const ModeratorFeesPage = lazy(() => import("@/features/moderator-fees/pages/moderator-fees-page"));
 const RolesPage = lazy(() => import("@/features/roles/pages/roles-page"));
 const DetailedInvoicesPage = lazy(
   () =>
@@ -56,6 +57,12 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <HomePage /> },
           { path: "/configuracion/perfil", element: <ProfilePage /> },
+          {
+            element: <RequirePermission permission={PERMISSIONS.moderatorFeesView} />,
+            children: [
+              { path: "/configuracion/cuotas-moderadoras", element: <ModeratorFeesPage /> },
+            ],
+          },
           {
             element: (
               <RequirePermission

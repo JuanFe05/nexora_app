@@ -11,7 +11,7 @@ const { auth } = vi.hoisted(() => ({ auth: { permissions: [] as string[], hasPer
 vi.mock("@/features/auth/use-auth", () => ({ useAuth: () => auth }));
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 afterEach(cleanup);
-beforeEach(() => { auth.permissions = ["identity.users.view", "identity.roles.view", "identity.permissions.view", "statistics.reports.vital_signs.view"]; });
+beforeEach(() => { auth.permissions = ["identity.users.view", "identity.roles.view", "identity.permissions.view", "statistics.reports.vital_signs.view", "statistics.administrative.moderator_fees.view"]; });
 
 function mount(open = true) {
   return render(<MemoryRouter><SidebarProvider defaultOpen={open}><AppSidebar /></SidebarProvider></MemoryRouter>);
@@ -23,19 +23,19 @@ it("configura secciones e iconos tipados para cada entrada", () => {
   for (const section of navigation) for (const item of section.items) expect(item.icon).toEqual(expect.any(Function));
 });
 
-it("todos los permisos view muestran las cuatro opciones de configuración y los títulos", () => {
+it("todos los permisos view muestran las cinco opciones de configuración y los títulos", () => {
   mount();
   for (const title of ["ESTADÍSTICA", "CONFIGURACIONES"]) expect(screen.getByRole("heading", { name: title })).toHaveClass("menu-group-title");
-  for (const [label, path] of [["Perfil de usuario", "perfil"], ["Usuarios", "usuarios"], ["Permisos", "permisos"], ["Roles", "roles"]]) {
+  for (const [label, path] of [["Perfil de usuario", "perfil"], ["Usuarios", "usuarios"], ["Permisos", "permisos"], ["Roles", "roles"], ["Cuotas Moderadoras", "cuotas-moderadoras"]]) {
     expect(screen.getByRole("link", { name: label })).toHaveAttribute("href", `/configuracion/${path}`);
   }
-  expect(screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/configuracion/"))).toHaveLength(4);
+  expect(screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/configuracion/"))).toHaveLength(5);
 });
 
 it("lista Roles antes que Permisos en Configuraciones", () => {
   mount();
   const labels = screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/configuracion/")).map((link) => link.textContent?.trim());
-  expect(labels).toEqual(["Perfil de usuario", "Usuarios", "Roles", "Permisos"]);
+  expect(labels).toEqual(["Perfil de usuario", "Usuarios", "Roles", "Permisos", "Cuotas Moderadoras"]);
 });
 
 it.each([
@@ -43,12 +43,14 @@ it.each([
   { permissions: ["identity.users.view"], visible: ["Usuarios"] },
   { permissions: ["identity.roles.view"], visible: ["Roles"] },
   { permissions: ["identity.permissions.view"], visible: ["Permisos"] },
+  { permissions: ["statistics.administrative.moderator_fees.view"], visible: ["Cuotas Moderadoras"] },
+  { permissions: ["statistics.administrative.moderator_fees.manage"], visible: [] },
   { permissions: ["identity.users.delete", "identity.roles.delete", "identity.permissions.delete"], visible: [] },
 ])("filtra por permisos efectivos: $permissions", ({ permissions, visible }) => {
   auth.permissions = permissions;
   mount();
   expect(screen.getByRole("link", { name: "Perfil de usuario" })).toBeVisible();
-  for (const label of ["Usuarios", "Permisos", "Roles"]) {
+  for (const label of ["Usuarios", "Permisos", "Roles", "Cuotas Moderadoras"]) {
     if (visible.includes(label)) expect(screen.getByRole("link", { name: label })).toBeVisible();
     else expect(screen.queryByRole("link", { name: label })).not.toBeInTheDocument();
   }

@@ -15,6 +15,8 @@ export const PERMISSIONS = {
   circular062018View: "statistics.circulars.circular_06_2018.view",
   circular212026View: "statistics.circulars.circular_21_2026.view",
   generalConsumptionView: "statistics.administrative.general_consumption.view",
+  moderatorFeesView: "statistics.administrative.moderator_fees.view",
+  moderatorFeesManage: "statistics.administrative.moderator_fees.manage",
   generalBillingView: "statistics.administrative.general_billing.view",
   labConsumptionView: "statistics.administrative.lab_consumption.view",
   disabilityManagementView: "statistics.administrative.disability_management.view",
