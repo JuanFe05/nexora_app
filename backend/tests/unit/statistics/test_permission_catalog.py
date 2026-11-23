@@ -21,6 +21,7 @@ CODES = [
     "statistics.administrative.quality_surveys.view",
     "statistics.administrative.management_secretariat.view",
     "statistics.administrative.sivigila.view",
+    "statistics.administrative.bai_nutricion_cyd.view",
 ]
 
 

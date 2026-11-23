@@ -34,6 +34,7 @@ from nexora.statistics.infrastructure.general_billing_source import GeneralBilli
 from nexora.statistics.presentation.http.v1.router import (
     admissions_router,
     general_billing_router,
+    bai_nutricion_cyd_router,
     sivigila_router,
     statistics_router,
     triage_router,
@@ -159,6 +160,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admissions_router, prefix=settings.api_prefix)
     app.include_router(triage_router, prefix=settings.api_prefix)
     app.include_router(sivigila_router, prefix=settings.api_prefix)
+    app.include_router(bai_nutricion_cyd_router, prefix=settings.api_prefix)
     app.include_router(general_billing_router, prefix=settings.api_prefix)
 
     @app.get("/health", tags=["operacion"], summary="Estado del servicio")

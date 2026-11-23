@@ -176,6 +176,7 @@ const MENUS = {
     ["Encuestas de Calidad", "statistics.administrative.quality_surveys.view"],
     ["Secretaría Gerencia", "statistics.administrative.management_secretariat.view"],
     ["Notificación SIVIGILA", "statistics.administrative.sivigila.view"],
+    ["BAI Nutrición CYD", "statistics.administrative.bai_nutricion_cyd.view"],
   ],
 } as const;
 

@@ -23,19 +23,22 @@ export default function AppSidebar() {
     return { ...section, items: gated ? [] : section.items.filter(allowed), groups: gated ? [] : groups };
   }).filter((section) => section.items.length > 0 || section.groups.length > 0);
 
+  const heading = (text: string) => (
+    <h2 className="menu-group-title mb-4 flex text-xs leading-5 text-gray-400 uppercase">
+      {showContent ? text : (
+        <svg aria-hidden="true" className="mx-auto size-6" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+        </svg>
+      )}
+    </h2>
+  );
   return (
     <Sidebar side="left">
       <AppSidebarHeader showContent={showContent} />
       <SidebarContent className="overflow-y-auto px-5 duration-300 ease-linear">
         {sections.map((section) => (
           <nav key={section.title} className="mb-6" aria-label={section.title}>
-            <h2 className="menu-group-title mb-4 flex text-xs leading-5 text-gray-400 uppercase">
-              {showContent ? section.title : (
-                <svg aria-hidden="true" className="mx-auto size-6" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
-                </svg>
-              )}
-            </h2>
+            {section.itemsTitle ? heading(section.itemsTitle) : heading(section.title)}
             <ul className="flex flex-col gap-2">
               {section.items.map((item) => {
                 const active = pathname === item.path;
@@ -50,6 +53,7 @@ export default function AppSidebar() {
                   </li>
                 );
               })}
+              {section.itemsTitle && section.groups.length > 0 && <li className="list-none pt-2">{heading(section.title)}</li>}
               {section.groups?.map((group) => (
                 <SidebarGroup key={group.label} group={group} pathname={pathname} showContent={showContent} onNavigate={() => setOpenMobile(false)} />
               ))}

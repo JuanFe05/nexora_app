@@ -21,6 +21,7 @@ export const PERMISSIONS = {
   qualitySurveysView: "statistics.administrative.quality_surveys.view",
   managementSecretariatView: "statistics.administrative.management_secretariat.view",
   sivigilaView: "statistics.administrative.sivigila.view",
+  baiNutricionCydView: "statistics.administrative.bai_nutricion_cyd.view",
   usersView: "identity.users.view",
   usersCreate: "identity.users.create",
   usersUpdate: "identity.users.update",

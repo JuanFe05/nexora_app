@@ -35,6 +35,8 @@ export type NavigationGroup = {
 };
 export type NavigationSection = {
   title: string;
+  /** Encabezado opcional sobre las entradas directas; `title` pasa a encabezar los grupos. */
+  itemsTitle?: string;
   items: NavigationItem[];
   groups?: NavigationGroup[];
   /** La sección (y sus entradas públicas) solo se muestra si algún grupo tiene opciones visibles. */
@@ -44,6 +46,7 @@ export type NavigationSection = {
 export const navigation: NavigationSection[] = [
   {
     title: "ESTADÍSTICA",
+    itemsTitle: "PRINCIPAL",
     requiresVisibleGroup: true,
     items: [{ label: "Inicio", path: "/", icon: LayoutGridIcon, public: true }],
     groups: [
@@ -84,6 +87,7 @@ export const navigation: NavigationSection[] = [
           { label: "Encuestas de Calidad", requiredPermission: PERMISSIONS.qualitySurveysView },
           { label: "Secretaría Gerencia", requiredPermission: PERMISSIONS.managementSecretariatView },
           { label: "Notificación SIVIGILA", path: "/estadistica/administrativa/notificacion-sivigila", requiredPermission: PERMISSIONS.sivigilaView },
+          { label: "BAI Nutrición CYD", requiredPermission: PERMISSIONS.baiNutricionCydView },
         ],
       },
       {

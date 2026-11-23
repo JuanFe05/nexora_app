@@ -14,6 +14,7 @@ from nexora.statistics.infrastructure.detailed_invoices_source import (
 from nexora.statistics.infrastructure.triage_source import SqlServerTriageSource
 from nexora.statistics.infrastructure.vital_signs_source import SqlServerVitalSignsSource
 from nexora.statistics.presentation.http.v1.report_router import create_report_router
+from nexora.statistics.presentation.http.v1.bai_nutricion_cyd_router import create_bai_nutricion_cyd_router
 from nexora.statistics.presentation.http.v1.sivigila_router import create_sivigila_router
 
 
@@ -84,4 +85,8 @@ sivigila_router = create_sivigila_router(
     prefix="/statistics/administrative/sivigila",
     permission="statistics.administrative.sivigila.view",
     provider=get_sivigila_report,
+)
+bai_nutricion_cyd_router = create_bai_nutricion_cyd_router(
+    prefix="/statistics/administrative/bai-nutricion-cyd",
+    permission="statistics.administrative.bai_nutricion_cyd.view",
 )
