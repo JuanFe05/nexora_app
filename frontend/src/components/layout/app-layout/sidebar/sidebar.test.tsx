@@ -218,6 +218,19 @@ it("habilita Facturación General solo con su permiso y conserva las demás opci
   expect(screen.queryByText("Facturación General")).not.toBeInTheDocument();
 });
 
+it("habilita Consumo de Laboratorio solo con su permiso y conserva Consumo General", () => {
+  auth.permissions = ["statistics.administrative.lab_consumption.view", "statistics.administrative.general_consumption.view"];
+  const { unmount } = mount();
+  fireEvent.click(screen.getByRole("button", { name: "Gestión Administrativa" }));
+  expect(screen.getByRole("link", { name: "Consumo de Laboratorio" })).toHaveAttribute("href", "/estadistica/administrativa/consumo-laboratorio");
+  expect(screen.getByRole("link", { name: "Consumo General" })).toHaveAttribute("href", "/estadistica/administrativa/consumo-general");
+  unmount();
+  auth.permissions = ["statistics.administrative.general_consumption.view"];
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "Gestión Administrativa" }));
+  expect(screen.queryByText("Consumo de Laboratorio")).not.toBeInTheDocument();
+});
+
 it("oculta Consumo General sin su permiso independiente", () => {
   auth.permissions = ["statistics.administrative.general_billing.view"];
   mount();

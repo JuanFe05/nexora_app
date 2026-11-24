@@ -41,6 +41,7 @@ vi.mock(
 vi.mock("@/features/statistics/vital-signs/pages/vital-signs-page", () => ({ default: () => <h1>Signos Vitales</h1> }));
 vi.mock("@/features/statistics/admissions/pages/admissions-page", () => ({ default: () => <h1>Admisiones</h1> }));
 vi.mock("@/features/statistics/triage/pages/triage-page", () => ({ default: () => <h1>Triaje</h1> }));
+vi.mock("@/features/statistics/lab-consumption/pages/lab-consumption-page", () => ({ default: () => <h1>Consumo de Laboratorio</h1> }));
 afterEach(cleanup);
 beforeEach(() => {
   auth.status = "authenticated";
@@ -69,6 +70,24 @@ const settings = [
   ["cuotas-moderadoras", "Cuotas Moderadoras"],
 ];
 describe("páginas protegidas", () => {
+  it("permite Consumo de Laboratorio con su permiso existente", async () => {
+    auth.permissions = ["statistics.administrative.lab_consumption.view"];
+    mount("/estadistica/administrativa/consumo-laboratorio");
+    expect(await screen.findByRole("heading", { name: "Consumo de Laboratorio" })).toBeVisible();
+  });
+  it.each([{ permissions: [] }, { permissions: ["statistics.administrative.general_consumption.view"] }])("oculta Consumo de Laboratorio sin permiso propio: $permissions", async ({ permissions }) => {
+    auth.permissions = permissions;
+    const router = mount("/estadistica/administrativa/consumo-laboratorio");
+    expect(await screen.findByRole("heading", { name: "Inicio" })).toBeVisible();
+    expect(router.state.location.pathname).toBe("/");
+  });
+  it("exige sesión para Consumo de Laboratorio", async () => {
+    auth.status = "anonymous";
+    auth.permissions = ["statistics.administrative.lab_consumption.view"];
+    const router = mount("/estadistica/administrativa/consumo-laboratorio");
+    expect(await screen.findByRole("button", { name: "Iniciar sesión" })).toBeVisible();
+    expect(router.state.location.pathname).toBe("/signin");
+  });
   it("permite Triaje con su permiso independiente", async () => {
     auth.permissions = ["statistics.reports.triage.view"];
     mount("/estadistica/informes/triaje");

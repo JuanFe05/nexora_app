@@ -1,0 +1,20 @@
+export type LabConsumptionRow = {
+  cnsctvo_dcto: string;
+  cdgo_prcdmnto: string;
+  lna_prdcto: string;
+  procedimiento: string;
+  cntdd: number;
+  fcha_ingrso_pcnte: string;
+  fcha_dcto: string;
+  admision: string;
+  estado: string;
+  emprs: string;
+  dscrp_transcn: string;
+  sede: string;
+};
+export type AnnarRow = { codigo_centro_costo: string; nombre_centro_costos: string; nombre_examen: string; cantidad: number; empresa: string; punto_atencion: string };
+export type AnnarAnalysis = { seccion: string; descripcion: string; cantidad: number };
+export type LabTable = "facturas" | "admisiones" | "ser_laboral" | "annar_lab";
+export type LabConsumptionReport = { facturas: LabConsumptionRow[]; admisiones: LabConsumptionRow[]; total_facturas: number; total_admisiones: number; advertencias: string[] };
+export type SerLaboralReport = { ser_laboral_id: string; filas: LabConsumptionRow[]; total: number; omitidas: number; advertencias: string[] };
+export type AnnarLabReport = { annar_lab_id: string; filas: AnnarRow[]; total: number; advertencias: string[]; analisis_annar: AnnarAnalysis[] };

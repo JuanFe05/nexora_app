@@ -82,7 +82,7 @@ export const navigation: NavigationSection[] = [
         items: [
           { label: "Consumo General", path: "/estadistica/administrativa/consumo-general", requiredPermission: PERMISSIONS.generalConsumptionView },
           { label: "Facturación General", path: "/estadistica/administrativa/facturacion-general", requiredPermission: PERMISSIONS.generalBillingView },
-          { label: "Consumo de Laboratorio", requiredPermission: PERMISSIONS.labConsumptionView },
+          { label: "Consumo de Laboratorio", path: "/estadistica/administrativa/consumo-laboratorio", requiredPermission: PERMISSIONS.labConsumptionView },
           { label: "Gestión de Incapacidades", requiredPermission: PERMISSIONS.disabilityManagementView },
           { label: "Encuestas de Calidad", requiredPermission: PERMISSIONS.qualitySurveysView },
           { label: "Secretaría Gerencia", requiredPermission: PERMISSIONS.managementSecretariatView },

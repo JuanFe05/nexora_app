@@ -28,6 +28,10 @@ const VitalSignsPage = lazy(
   () => import("@/features/statistics/vital-signs/pages/vital-signs-page"),
 );
 
+const LabConsumptionPage = lazy(
+  () => import("@/features/statistics/lab-consumption/pages/lab-consumption-page"),
+);
+
 const GeneralConsumptionPage = lazy(
   () => import("@/features/statistics/general-consumption/pages/general-consumption-page"),
 );
@@ -82,6 +86,15 @@ export const routes: RouteObject[] = [
               {
                 path: "/estadistica/informes/signos-vitales",
                 element: <VitalSignsPage />,
+              },
+            ],
+          },
+          {
+            element: <RequirePermission permission={PERMISSIONS.labConsumptionView} />,
+            children: [
+              {
+                path: "/estadistica/administrativa/consumo-laboratorio",
+                element: <LabConsumptionPage />,
               },
             ],
           },
