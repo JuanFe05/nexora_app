@@ -13,6 +13,7 @@ almacena los datos consultados.
 | Admisiones (Urgencias) | `/estadistica/informes/admisiones` | `/api/v1/statistics/reports/admissions` | `statistics.reports.admissions.view` |
 | Triaje (Urgencias) | `/estadistica/informes/triaje` | `/api/v1/statistics/reports/triage` | `statistics.reports.triage.view` |
 | Consumo General | `/estadistica/administrativa/consumo-general` | `/api/v1/statistics/administrative/general-consumption` | `statistics.administrative.general_consumption.view` |
+| Consumo de Laboratorio | `/estadistica/administrativa/consumo-laboratorio` | `/api/v1/statistics/administrative/lab-consumption` | `statistics.administrative.lab_consumption.view` |
 
 Admisiones usa el periodo de **fecha de admision**, 59 columnas (alias de `Admisiones.sql`), los filtros
 Sede, Empresa y Linea de Producto, paginacion con desempate estable y exportacion CSV/XLSX derivada del
@@ -38,7 +39,6 @@ Menus del sidebar sin vistas todavia, cada opcion con su permiso reservado (desh
 | Circulares | Circular 06 de 2018 | `statistics.circulars.circular_06_2018.view` |
 | Circulares | Circular 21 de 2026 | `statistics.circulars.circular_21_2026.view` |
 | Gestion Administrativa | Facturación General | `statistics.administrative.general_billing.view` |
-| Gestion Administrativa | Consumo de Laboratorio | `statistics.administrative.lab_consumption.view` |
 | Gestion Administrativa | Gestión de Incapacidades | `statistics.administrative.disability_management.view` |
 | Gestion Administrativa | Encuestas de Calidad | `statistics.administrative.quality_surveys.view` |
 | Gestion Administrativa | Secretaría Gerencia | `statistics.administrative.management_secretariat.view` |
@@ -259,7 +259,7 @@ la fecha/hora UTC del cambio. Una sola fila PostgreSQL por año, en `statistics.
 No se guardan datos clínicos en esa tabla.
 
 Vigencia entera entre 2000 y 2100, inclusivos; entre 1 y 10 importes COP enteros estrictos,
-únicos y entre 1 y 10.000.000. Se rechazan booleanos, decimales y cadenas numéricas. Los errores
+únicos y entre 1 y 1.000.000. Se rechazan booleanos, decimales y cadenas numéricas. Los errores
 son `{ "detail": "mensaje en español" }`: 422 para validación, 401 sin autenticación válida,
 403 sin el permiso específico. Ver no permite escribir y administrar no concede ver.
 Ambos permisos se siembran mediante el catálogo existente y se asignan a ADMINISTRADOR en el
@@ -271,6 +271,19 @@ constraints, FK, función de unicidad y siembra 2026 con literales propios. El d
 estos objetos y sus datos. Los tests del informe inyectan un puerto de instantáneas de cuotas,
 no configuración estática. Las pruebas de migración PostgreSQL siguen el fixture de integración
 de base **de pruebas**; nunca ejecutar migraciones de verificación contra bases no destinadas a tests.
+
+La revisión posterior `0005_moderator_fees_limit` reemplaza únicamente el CHECK
+`ck_cuota_moderadora_importes_validos` para reducir el máximo a 1.000.000 COP, conservando
+las restricciones de dimensionalidad, cantidad, nulos y mínimo. El downgrade restaura
+10.000.000 COP. No modifica la revisión histórica ni transforma datos: si existen importes
+superiores a 1.000.000, PostgreSQL rechazará el upgrade; deben revisarse antes del despliegue.
+Esta revisión se ha verificado solo mediante SQL offline, sin ejecutarla contra una base.
+
+El formulario de creación/edición usa controles TailAdmin, con −/+ y flechas de teclado en
+pasos de 1.000 COP limitados a los extremos, sin impedir escribir importes exactos. Muestra
+miles `es-CO` al salir del campo y dígitos al enfocarlo, manteniendo enteros en la API.
+La vigencia queda bloqueada con candado al editar; errores inline accesibles, foco al primer
+campo inválido, límite de 10 importes y bloqueo con spinner mientras guarda. Incluye modo oscuro.
 
 #### Ser Laboral (CSV)
 
@@ -319,6 +332,102 @@ expirado o expulsado → 410 antes de consultar SQL:
 `{"detail": "El archivo de Ser Laboral expiró; cárgalo de nuevo."}`.
 La consulta general no invalida tokens de otros clientes; el frontend descarta su token al
 reconsultar. Son tokens portadores: deben mantenerse privados como los datos del informe.
+
+### Consumo de Laboratorio
+
+API: `/api/v1/statistics/administrative/lab-consumption`; todas sus rutas requieren el
+permiso existente `statistics.administrative.lab_consumption.view` (401 sin sesión, 403 sin
+permiso; el de Consumo General no lo concede). Módulos paralelos de dominio/aplicación/HTTP,
+servicio de vida de aplicación y limpieza de ambas cachés al apagar; no cambia las reglas de
+Facturación General ni Consumo General. No depende de cuotas moderadoras.
+
+- `GET /filters/sites`, `/filters/companies`: catálogos compartidos. No ofrece selector ni
+  catálogo HTTP de líneas. `GET ""` exige `fecha_inicial`, `fecha_final` inclusivas y admite
+  `sedes`/`empresas` opcionales repetibles. Resuelve los ids actuales de `tbLineasProductos`
+  cuyo nombre contiene LABORATORIO (sin distinguir mayúsculas), construye un `ReportFilter`
+  con esos `lineas` para **ambas** fuentes SQL existentes y las ejecuta con `asyncio.gather`.
+  Un `lineas` enviado por el cliente nunca reemplaza esa restricción. Sin líneas devuelve
+  listas vacías y `advertencias: ["No hay líneas de producto de LABORATORIO configuradas."]`,
+  sin ejecutar los informes SQL. Además verifica `lna_prdcto` en Python.
+- Respuesta: `{facturas, admisiones, total_facturas, total_admisiones, advertencias}`. Cada
+  fila tiene exactamente las doce claves de la tabla siguiente, en ese orden. Texto en
+  mayúsculas/trim, fechas ISO (inválidas vacías), cantidades JSON numéricas exactas.
+
+| Clave común | Encabezado | Facturas | Admisiones | Ser Laboral |
+| --- | --- | --- | --- | --- |
+| `cnsctvo_dcto` | Transacción / Factura / Admisión | `cnsctvo_dcto` | `cnsctvo_admsn` | `cnsctvo_dcto` |
+| `cdgo_prcdmnto` | CUPS | `cdgo_prcdmnto` | `cdgo_prcdmnto` | `cdgo_prcdmnto` |
+| `lna_prdcto` | Tipo Procedimiento | `lna_prdcto` | `lna_prdcto` | `lna_prdcto` |
+| `procedimiento` | Nombre Procedimiento | `procedimiento` | `prcdmnto` | `procedimiento` |
+| `cntdd` | Cantidad | `cntdd` | `cntdd` | `cntdd` |
+| `fcha_ingrso_pcnte` | Fecha Ingreso | `fcha_ingrso_pcnte` | `fcha_admsn` | `fcha_dcto` |
+| `fcha_dcto` | Fecha Factura | `fcha_dcto` | `fcha_slda_admsn` | `fcha_dcto` |
+| `admision` | Admisión | `admision` | `cnsctvo_admsn` | vacío |
+| `estado` | Estado Documento | `estado` | `estdo_admsn` | CERRADO |
+| `emprs` | Empresa | `emprs` | `emprsa` | `emprs` |
+| `dscrp_transcn` | Tipo Documento | `dscrp_transcn` | constante **ADMISIÓN** | `dscrp_transcn` |
+| `sede` | Sede | `sede` | `sede` | `sede` |
+
+Facturas reutiliza `domain.general_consumption.fila_cumple` sin modificarlo y añade la
+guardia LABORATORIO; Admisiones solo aplica la guardia (incluye estados abiertos).
+El spool y los workers compartidos de Consumo General mantienen SQL y ETL fuera del event loop;
+los archivos temporales se cierran también al fallar/cancelar. No se cachean consultas SQL en
+este informe; las cargas sí se cachean por token. El resultado JSON completo reside en memoria.
+
+- `POST /ser-laboral`: cuerpo CSV crudo, máximo 25 MiB. Reutiliza el parser de Consumo General
+  (mismas cabeceras requeridas/errores 422, BOM/cp1252, dinero `10,500.00`, fechas del CSV).
+  Retiene solo CERRADO + línea LABORATORIO, cero filas → 422
+  `Ningún registro cumple los filtros.`; `omitidas` cuenta ambos motivos. Respuesta
+  `{ser_laboral_id, filas, total, omitidas, advertencias}`; doce claves, sin análisis.
+- `POST /annar-lab`: cuerpo BIFF `.xls` crudo (`application/vnd.ms-excel`), máximo 25 MiB;
+  lectura `xlrd.open_workbook(on_demand=True)` de una sola hoja en `asyncio.to_thread`.
+  Nueva dependencia **xlrd>=2.0.1** (lock: 2.0.2; instalada con `cd backend && uv add 'xlrd>=2.0.1'`).
+  Cabeceras verificadas contra el XLS real: Sede, Nombre Sede, Cliente, Nombre Cliente,
+  Cen.Costo, Nombre Centro de Costos, Medico, Nombre Medico, Seccion, Nombre de la Sección,
+  Examen, Nombre del Examen, Nivel, Valor. Matching sin acentos/NBSP/espacios y tolerancia a
+  variantes mal codificadas de Sección; faltantes → 422
+  `Cabeceras requeridas faltantes: <lista>.`; requeridas duplicadas → 422. XLS inválido →
+  422 `El archivo XLS de ANNAR LAB no es válido.`. Filas completamente vacías omitidas,
+  sin filtro de estado ni línea; valores trim (conserva mayúsculas/minúsculas originales).
+  Respuesta `{annar_lab_id, filas, total, advertencias, analisis_annar}`. Seis claves:
+  `codigo_centro_costo` ← Seccion; `nombre_centro_costos` ← Nombre de la Sección;
+  `nombre_examen` ← Nombre del Examen; `cantidad` = 1; `empresa` ← Nombre Cliente;
+  `punto_atencion` ← Nombre Centro de Costos. Análisis por **(código, descripción)**, cantidad
+  de filas, orden numérico del código, con objetos `{seccion, descripcion, cantidad}`.
+  Datos Aplicativo lo agrupa el frontend localmente por CUPS sobre las tres listas comunes;
+  no existe `analisis_aplicativo` en las respuestas del backend.
+
+Ambas cargas usan la caché compartida SerLaboralCache con procesador/clave de respuesta/error
+inyectables, manteniendo sus valores por defecto para Consumo General. Por cada pipeline:
+TTL fijo 30 minutos, máximo 8 cargas, expulsión de la más antigua, tokens aleatorios de 256 bits,
+expiración activa y monotónica, sin almacenamiento persistente. Cargas inválidas no publican
+ni expulsan tokens. El frontend descarta los tokens al reconsultar; no invalida otros clientes.
+Más de 25 MiB se rechaza incrementalmente con 413 antes de continuar leyendo el cuerpo;
+exactamente 25 MiB se admite. Valorar memoria de ocho cargas por cada pipeline.
+
+`GET /export?formato=csv|xlsx` comparte los filtros de fechas/sede/empresa y exportadores seguros
+CSV/XLSX (sin indicadores). `tablas` repetible: `facturas`, `admisiones`, `ser_laboral`;
+deduplica y ordena siempre así, un único encabezado de doce columnas y una hoja (salvo límite
+físico de Excel). Omitir `tablas` selecciona las tres; Ser Laboral es opcional sin token,
+como en Consumo General. `tablas=annar_lab` solo se permite individualmente, con sus seis
+columnas: Código Centro de Costo, Nombre Centro de Costos, Nombre del Examen, Cantidad,
+Empresa, Punto Atención. `columnas=clave:text|number|date` repetible es opcional; conserva el
+orden solicitado, rechaza desconocidas/duplicadas con 422 antes de SQL.
+
+Seleccionar explícitamente una tabla importada exige su token: 422
+`Carga el CSV de Ser Laboral para exportarlo.` o `Carga el XLS de ANNAR LAB para exportarlo.`.
+Token desconocido/expirado/expulsado → 410 `El archivo de Ser Laboral expiró; cárgalo de nuevo.`
+o `El archivo de ANNAR LAB expiró; cárgalo de nuevo.`. Ignora ambos tokens cuando su tabla no
+está seleccionada; resuelve los aplicables antes de SQL/cabeceras. Ser Laboral solo o ANNAR
+solo nunca consulta SQL. `annar_lab` mezclada con otra tabla → 422
+`ANNAR LAB solo puede exportarse individualmente.`. Nombre unido:
+`consumo-laboratorio_<inicio>_<fin>.<ext>`; subconjuntos:
+`consumo-laboratorio-<tablas>_<inicio>_<fin>.<ext>` con los nombres `facturas-detalladas`,
+`admisiones`, `ser-laboral` o `annar-lab` unidos por guiones en orden fijo.
+
+Pruebas sintéticas: `tests/unit/statistics/test_lab_consumption.py`. Los archivos originales
+CSV/XLS/DOCX de `data_ips` son solo fuentes locales de validación, no fixtures ni artefactos
+versionados. Pendiente comprobar consultas y rendimiento contra SQL Server real.
 
 ### Notificación SIVIGILA
 
