@@ -50,6 +50,34 @@ async function queryReport() {
   await screen.findByRole("table", { name: "Indicadores de consumo general" });
 }
 
+it("renders the combined export bar only for a successfully loaded report", async () => {
+  render(<GeneralConsumptionPage />);
+  function expectHidden() {
+    expect(screen.queryByRole("button", { name: "Exportar datos unidos", hidden: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Exportación de datos unidos", hidden: true })).not.toBeInTheDocument();
+  }
+  expectHidden();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Consultar" })).toBeEnabled());
+  let resolve!: (value: GeneralConsumptionReport) => void;
+  let reject!: (error: Error) => void;
+  vi.mocked(httpClient.get).mockImplementation(() => new Promise((done, fail) => { resolve = done as typeof resolve; reject = fail; }));
+  dates(); fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
+  expectHidden();
+  await act(async () => resolve(report));
+  expect(within(screen.getByRole("region", { name: "Exportación de datos unidos" })).getByRole("button", { name: "Exportar datos unidos" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
+  expectHidden();
+  await act(async () => reject(new ApiError(502, "private detail", null)));
+  await screen.findByRole("alert");
+  expectHidden();
+  fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+  expectHidden();
+  await act(async () => resolve(report));
+  expect(screen.getByRole("button", { name: "Exportar datos unidos" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Limpiar" }));
+  expectHidden();
+});
+
 it("validates five filters and waits for Consultar before making one report request", async () => {
   render(<GeneralConsumptionPage />);
   await waitFor(() => expect(screen.getByRole("button", { name: "Consultar" })).toBeEnabled());
@@ -168,7 +196,7 @@ it("reports a safe error, retries, and clears results", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo consultar el informe. La fuente de datos no está disponible. Intenta de nuevo.");
   expect(screen.queryByText("private detail")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Cargar CSV Ser Laboral" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Exportar datos unidos" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Exportar datos unidos" })).not.toBeInTheDocument();
   vi.mocked(httpClient.get).mockResolvedValue(report);
   fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
   await screen.findByRole("table", { name: "Indicadores de consumo general" });
@@ -183,7 +211,7 @@ it("gates upload on successful consultation and places it immediately before Con
   const load = screen.getByRole("button", { name: "Cargar CSV Ser Laboral" });
   expect(load).toBeDisabled();
   expect(load.nextElementSibling).toHaveTextContent("Consultar");
-  expect(screen.getByRole("button", { name: "Exportar datos unidos" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Exportar datos unidos" })).not.toBeInTheDocument();
   expect(screen.getByLabelText("Archivo CSV Ser Laboral")).toHaveAttribute("accept", ".csv");
   await waitFor(() => expect(screen.getByRole("button", { name: "Consultar" })).toBeEnabled());
   let resolve!: (value: GeneralConsumptionReport) => void;
@@ -346,7 +374,7 @@ it("prevents individual downloads during upload and consultation", async () => {
   let resolveReport!: (value: GeneralConsumptionReport) => void;
   vi.mocked(httpClient.get).mockImplementation(() => new Promise((done) => { resolveReport = done as typeof resolveReport; }));
   fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
-  expect(screen.getByRole("button", { name: "Exportar datos unidos" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Exportar datos unidos" })).not.toBeInTheDocument();
   for (const { label } of tableExports) expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
   expect(httpClient.getBlob).not.toHaveBeenCalled();
   await act(async () => resolveReport(report));

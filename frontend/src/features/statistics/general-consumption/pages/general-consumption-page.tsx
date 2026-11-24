@@ -102,10 +102,10 @@ export default function GeneralConsumptionPage() {
         </Button>
       } onConsult={consult} onClear={() => { discardUpload(); setApplied(null); setState({ status: "idle" }); setTab("analisis"); }} />
       {uploadError && <p role="alert" className="text-sm text-error-600 dark:text-error-400">{uploadError}</p>}
-      <section aria-label="Exportación de datos unidos" className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/3">
+      {ready && <section aria-label="Exportación de datos unidos" className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/3">
         <p className="text-sm text-gray-500 dark:text-gray-400">Incluye Facturas Detalladas + Admisiones{serLaboral ? " + Ser Laboral" : ""} en un solo archivo.</p>
         <ExportMenu key={applied?.revision ?? "idle"} label="Exportar datos unidos" columns={generalConsumptionExportColumns} visibleIds={visible} disabled={!ready || uploading} exportFile={exportData} />
-      </section>
+      </section>}
       {consulting && <Card role="status" aria-live="polite" className="flex items-center gap-3"><Spinner aria-hidden="true" role="presentation" /><span className="text-sm text-gray-500 dark:text-gray-400">Consultando y procesando registros…</span></Card>}
       {state.status === "error" && <Card role="alert" className="space-y-3"><p className="text-sm text-error-600 dark:text-error-400">{state.message}</p><button type="button" onClick={() => { if (applied) consult(applied.filters); }} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">Reintentar</button></Card>}
       {report && <div className="min-w-0 space-y-4">

@@ -46,7 +46,8 @@ No se consulta `/columns` ni se modifica Facturación General.
   `{ indicadores: [...] }` por `POST /export/analysis/pdf` o
   `POST /export/analysis/xlsx`. La respuesta Blob se descarga sin enviar filas.
 - La barra de acciones sobre las pestañas, alineada a la derecha, contiene
-  **Exportar datos unidos** (S16), deshabilitado antes de una consulta exitosa.
+  **Exportar datos unidos** (S16). La barra solo se renderiza tras una consulta
+  exitosa; se oculta al limpiar, durante una nueva consulta y si esta falla.
   El texto auxiliar muestra las fuentes incluidas. Este menú descarga por
   `GET /export?formato=csv|xlsx`, con los filtros **aplicados** y `columnas` en el
   orden de las 40 columnas (todas o visibles). El backend genera un archivo con
