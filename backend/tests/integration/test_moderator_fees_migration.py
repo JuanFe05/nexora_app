@@ -1,4 +1,4 @@
-"""Ida/vuelta de 0004 exclusivamente con el fixture PostgreSQL de pruebas."""
+"""Ida/vuelta de cuotas y su límite exclusivamente con PostgreSQL de pruebas."""
 
 from argparse import Namespace
 
@@ -32,13 +32,31 @@ def test_moderator_fees_migration_upgrade_downgrade_upgrade(settings: Settings) 
         assert row[:3] == (2026, [5000, 20100, 52800], None)
         assert row[3].tzinfo is not None
         for year, amounts in [(1999, [1]), (2101, [1]), (2027, []), (2027, [1, 1]),
-                              (2027, [0]), (2027, [10_000_001]), (2027, [None]),
+                              (2027, [0]), (2027, [1_000_001]), (2027, [None]),
                               (2027, list(range(1, 12)))]:
             with pytest.raises(DBAPIError), engine.begin() as connection:
                 connection.execute(text(
                     "INSERT INTO statistics.cuota_moderadora (vigencia, importes) "
                     "VALUES (:year, :amounts)"
                 ), {"year": year, "amounts": amounts})
+        with engine.begin() as connection:
+            connection.execute(text(
+                "INSERT INTO statistics.cuota_moderadora (vigencia, importes) "
+                "VALUES (2027, ARRAY[1, 1000000])"
+            ))
+        command.downgrade(config, "0004_moderator_fees")
+        with engine.begin() as connection:
+            connection.execute(text(
+                "UPDATE statistics.cuota_moderadora SET importes = ARRAY[10000000] "
+                "WHERE vigencia = 2027"
+            ))
+        with pytest.raises(DBAPIError):
+            command.upgrade(config, "head")
+        with engine.begin() as connection:
+            connection.execute(text(
+                "DELETE FROM statistics.cuota_moderadora WHERE vigencia = 2027"
+            ))
+        command.upgrade(config, "head")
         command.downgrade(config, "0003_fix_statistics_perms")
         assert "statistics" not in inspect(engine).get_schema_names()
         command.upgrade(config, "head")

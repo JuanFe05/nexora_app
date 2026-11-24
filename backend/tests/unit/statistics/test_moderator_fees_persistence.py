@@ -38,6 +38,26 @@ def test_migration_upgrade_and_downgrade_offline() -> None:
     assert sql.index("DROP TABLE") < sql.index("DROP FUNCTION") < sql.index("DROP SCHEMA")
 
 
+def test_amount_limit_migration_is_reversible_offline() -> None:
+    migration = importlib.import_module("nexora.migrations.versions.0005_moderator_fees_limit")
+    assert migration.down_revision == "0004_moderator_fees"
+    for operation, limit in [(migration.upgrade, 1_000_000), (migration.downgrade, 10_000_000)]:
+        output = io.StringIO()
+        context = MigrationContext.configure(
+            dialect=postgresql.dialect(), opts={"as_sql": True, "output_buffer": output},
+        )
+        with Operations.context(context):
+            operation()
+        sql = output.getvalue()
+        assert "DROP CONSTRAINT ck_cuota_moderadora_importes_validos" in sql
+        assert "ADD CONSTRAINT ck_cuota_moderadora_importes_validos CHECK" in sql
+        for invariant in ("array_ndims(importes) = 1", "cardinality(importes) BETWEEN 1 AND 10",
+                          "array_position(importes, NULL) IS NULL", "1 <= ALL(importes)",
+                          f"{limit} >= ALL(importes)"):
+            assert invariant in sql
+        assert "UPDATE " not in sql and "DELETE " not in sql
+
+
 async def test_application_adapter_opens_closes_each_session_even_on_error() -> None:
     sessions: list[Any] = []
     closed: list[Any] = []

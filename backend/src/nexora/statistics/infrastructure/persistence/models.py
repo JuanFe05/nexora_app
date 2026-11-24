@@ -17,7 +17,7 @@ class ModeratorFeeModel(Base):
         CheckConstraint(
             "array_ndims(importes) = 1 AND cardinality(importes) BETWEEN 1 AND 10 "
             "AND array_position(importes, NULL) IS NULL "
-            "AND 1 <= ALL(importes) AND 10000000 >= ALL(importes)",
+            "AND 1 <= ALL(importes) AND 1000000 >= ALL(importes)",
             name="importes_validos",
         ),
         CheckConstraint("statistics.importes_unicos(importes)", name="importes_unicos"),

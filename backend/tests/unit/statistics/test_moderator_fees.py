@@ -84,7 +84,7 @@ def http() -> Any:
 
 def test_upsert_list_delete_and_audit(http: Any) -> None:
     client, repository, transaction, _ = http
-    for year, amounts in [(2000, [1]), (2100, [10_000_000]), (2026, [52800, 5000, 20100])]:
+    for year, amounts in [(2000, [1]), (2100, [1_000_000]), (2026, [52800, 5000, 20100])]:
         response = client.put(f"{BASE}/{year}", json={"importes": amounts})
         assert response.status_code == 200
         assert response.json() == {
@@ -116,8 +116,8 @@ def test_upsert_list_delete_and_audit(http: Any) -> None:
     ("2026", {"importes": []}, "Debe indicar entre 1 y 10 importes."),
     ("2026", {"importes": list(range(1, 12))}, "Debe indicar entre 1 y 10 importes."),
     ("2026", {"importes": [1, 1]}, "Los importes deben ser únicos."),
-    *[("2026", {"importes": [value]}, "Los importes deben ser enteros entre 1 y 10000000.")
-      for value in (0, -1, 10_000_001)],
+    *[("2026", {"importes": [value]}, "Los importes deben ser enteros entre 1 y 1000000.")
+      for value in (0, -1, 1_000_001, 10_000_000)],
     *[("2026", {"importes": [value]}, "La solicitud de cuotas moderadoras no es válida.")
       for value in (True, 1.5, "5000", None)],
     ("2026", {}, "La solicitud de cuotas moderadoras no es válida."),

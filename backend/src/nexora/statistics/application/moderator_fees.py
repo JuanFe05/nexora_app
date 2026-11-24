@@ -11,6 +11,8 @@ from nexora.identity_access.application.ports.security import Clock
 from nexora.identity_access.application.ports.transaction import Transaction
 from nexora.statistics.domain.filters import InvalidReportFilter
 
+MAX_AMOUNT = 1_000_000
+
 
 class FeeYearNotFound(Exception):
     """La vigencia que se intenta eliminar no existe."""
@@ -48,8 +50,8 @@ def validate_year(year: int) -> None:
 def validate_amounts(amounts: list[int]) -> tuple[int, ...]:
     if not 1 <= len(amounts) <= 10:
         raise InvalidReportFilter("Debe indicar entre 1 y 10 importes.")
-    if any(type(amount) is not int or not 1 <= amount <= 10_000_000 for amount in amounts):
-        raise InvalidReportFilter("Los importes deben ser enteros entre 1 y 10000000.")
+    if any(type(amount) is not int or not 1 <= amount <= MAX_AMOUNT for amount in amounts):
+        raise InvalidReportFilter(f"Los importes deben ser enteros entre 1 y {MAX_AMOUNT}.")
     if len(set(amounts)) != len(amounts):
         raise InvalidReportFilter("Los importes deben ser únicos.")
     return tuple(sorted(amounts))
