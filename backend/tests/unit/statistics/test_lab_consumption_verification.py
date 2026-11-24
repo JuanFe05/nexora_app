@@ -1,4 +1,4 @@
-"""Regresiones independientes de ANNAR LAB: archivos inválidos y exportación sin SQL."""
+"""Regresiones independientes de ANNAR LAB: archivos inválidos y exportación agrupada."""
 
 from fastapi.testclient import TestClient
 from tests.unit.statistics.test_lab_consumption import (
@@ -22,7 +22,7 @@ def test_truncated_zip_sent_as_xls_returns_422(http):  # noqa: F811
     assert response.json() == {"detail": "El archivo XLS de ANNAR LAB no es válido."}
 
 
-def test_grouped_import_exports_without_sql(http):  # noqa: F811
+def test_annar_import_exports_in_grouped_download(http):  # noqa: F811
     client, invoices, admissions, _, _ = http
     response = upload(
         client,
@@ -35,6 +35,6 @@ def test_grouped_import_exports_without_sql(http):  # noqa: F811
         ("2", 2),
         ("10", 1),
     ]
-    response = export(client, tablas="annar_lab", annar_lab_id=body["annar_lab_id"])
+    response = export(client, annar_lab_id=body["annar_lab_id"])
     assert response.status_code == 200
-    assert invoices.calls == admissions.calls == []
+    assert len(invoices.calls) == len(admissions.calls) == 1

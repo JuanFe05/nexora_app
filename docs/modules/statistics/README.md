@@ -405,27 +405,54 @@ ni expulsan tokens. El frontend descarta los tokens al reconsultar; no invalida 
 Más de 25 MiB se rechaza incrementalmente con 413 antes de continuar leyendo el cuerpo;
 exactamente 25 MiB se admite. Valorar memoria de ocho cargas por cada pipeline.
 
-`GET /export?formato=csv|xlsx` comparte los filtros de fechas/sede/empresa y exportadores seguros
-CSV/XLSX (sin indicadores). `tablas` repetible: `facturas`, `admisiones`, `ser_laboral`;
-deduplica y ordena siempre así, un único encabezado de doce columnas y una hoja (salvo límite
-físico de Excel). Omitir `tablas` selecciona las tres; Ser Laboral es opcional sin token,
-como en Consumo General. `tablas=annar_lab` solo se permite individualmente, con sus seis
-columnas: Código Centro de Costo, Nombre Centro de Costos, Nombre del Examen, Cantidad,
-Empresa, Punto Atención. `columnas=clave:text|number|date` repetible es opcional; conserva el
-orden solicitado, rechaza desconocidas/duplicadas con 422 antes de SQL.
+`GET /export?formato=csv|xlsx` comparte los filtros de fechas/sede/empresa y **siempre**
+produce una descarga agrupada, nunca un archivo por fuente. `tablas` se acepta (incluso
+repetido) y se ignora, por compatibilidad con los botones individuales anteriores.
 
-Seleccionar explícitamente una tabla importada exige su token: 422
-`Carga el CSV de Ser Laboral para exportarlo.` o `Carga el XLS de ANNAR LAB para exportarlo.`.
-Token desconocido/expirado/expulsado → 410 `El archivo de Ser Laboral expiró; cárgalo de nuevo.`
-o `El archivo de ANNAR LAB expiró; cárgalo de nuevo.`. Ignora ambos tokens cuando su tabla no
-está seleccionada; resuelve los aplicables antes de SQL/cabeceras. Ser Laboral solo o ANNAR
-solo nunca consulta SQL. `annar_lab` mezclada con otra tabla → 422
-`ANNAR LAB solo puede exportarse individualmente.`. Nombre unido:
-`consumo-laboratorio_<inicio>_<fin>.<ext>`; subconjuntos:
-`consumo-laboratorio-<tablas>_<inicio>_<fin>.<ext>` con los nombres `facturas-detalladas`,
-`admisiones`, `ser-laboral` o `annar-lab` unidos por guiones en orden fijo.
+- XLSX: un libro con exactamente dos hojas: **Datos Aplicativo** y **ANNAR LAB**.
+  Datos Aplicativo contiene Facturas Detalladas, luego Admisiones y finalmente Ser Laboral
+  si se suministra `ser_laboral_id`; un solo encabezado de doce columnas. ANNAR LAB contiene
+  todos los registros del token `annar_lab_id`, con seis encabezados: Código Centro de Costo,
+  Nombre Centro de Costos, Nombre del Examen, Cantidad, Empresa, Punto Atención.
+  Sin token ANNAR la hoja existe con sus encabezados, sin filas.
+- CSV: un ZIP (`application/zip`) con `Datos_Aplicativo.csv` y `ANNAR_LAB.csv`, mismo contenido
+  que las hojas, separador `;` y UTF-8 con BOM en **cada** archivo, incluso sin filas.
+- `columnas=clave:text|number|date` repetible afecta solo a Datos Aplicativo; conserva el
+  orden solicitado y rechaza desconocidas/duplicadas/tipos inválidos con 422 antes de SQL.
+- Ambos tokens son opcionales, independientemente de `tablas`. Todo token suministrado se
+  resuelve antes de SQL/cabeceras. Desconocido/expirado/expulsado → 410 con los mensajes
+  existentes `El archivo de Ser Laboral expiró; cárgalo de nuevo.` o
+  `El archivo de ANNAR LAB expiró; cárgalo de nuevo.`; omitirlo ya no genera 422.
+- Las dos fuentes SQL se ejecutan una sola vez por descarga, en paralelo. Se conservan las
+  cachés de importación; los archivos se construyen en un worker y temporales del sistema,
+  se transmiten por bloques y se cierran al terminar/cancelar. Sin nuevas dependencias.
+  Un resultado XLSX que exceda el límite físico de filas de una hoja se rechaza con 422,
+  nunca se divide silenciosamente en hojas adicionales.
+- Nombre: `consumo-laboratorio_<inicio>_<fin>.xlsx` o `.zip`.
 
-Pruebas sintéticas: `tests/unit/statistics/test_lab_consumption.py`. Los archivos originales
+`POST /export/analysis/xlsx` recibe, sin consultar SQL:
+
+```json
+{
+  "aplicativo": [{"cups": "001", "descripcion": "HEMOGRAMA", "cantidad": 12500.5}],
+  "annar": [{"seccion": "10", "descripcion": "HEMATOLOGÍA", "cantidad": 22508}],
+  "titulo": "CONSUMO DE LABORATORIO",
+  "periodo": "ENERO 2026"
+}
+```
+
+Devuelve `analisis-consumo-laboratorio.xlsx`, una hoja **Análisis** con ambas tablas separadas
+por títulos **Datos Aplicativo** y **ANNAR LAB**, cabeceras CUPS/Descripción/Cantidad y
+Sección/Descripción/Cantidad, cantidades numéricas con separador de miles, bordes y estilo azul
+como Consumo General. Mismo permiso del módulo, `Cache-Control: no-store`.
+Las dos listas son obligatorias (pueden estar vacías), máximo 10.000 filas por tabla;
+`cups`/`seccion` son texto de hasta 100 caracteres, `descripcion` hasta 500 y `cantidad`
+finita con máximo 38 dígitos y 10 decimales. `titulo` y `periodo` opcionales (predeterminados
+CONSUMO DE LABORATORIO y vacío), hasta 120/180 caracteres. Forma/campos adicionales/límites
+inválidos → 422. Los textos se escapan para XML y no se ejecutan como fórmulas.
+
+Pruebas sintéticas: `tests/unit/statistics/test_lab_consumption.py` y
+`tests/unit/statistics/test_lab_exports.py`. Los archivos originales
 CSV/XLS/DOCX de `data_ips` son solo fuentes locales de validación, no fixtures ni artefactos
 versionados. Pendiente comprobar consultas y rendimiento contra SQL Server real.
 

@@ -11,12 +11,12 @@ import { downloadBlob, ExportError, type ExportColumn, type ExportFormat } from 
 import { reportError } from "../../shared/report-utils";
 import type { ReportFilters } from "../../shared/types";
 import { labConsumptionApi } from "../api/lab-consumption-api";
-import { annarColumns, annarExportColumns, defaultAnnarColumns, defaultLabColumns, labColumns, labExportColumns } from "../columns";
+import { annarColumns, defaultAnnarColumns, defaultLabColumns, labColumns, labExportColumns } from "../columns";
 import { AnalysisTab } from "../components/analysis-tab";
 import { ConsumptionFilters } from "../components/consumption-filters";
 import { ConsumptionTable } from "../components/consumption-table";
 import { ImportDialog } from "../components/import-dialog";
-import type { AnnarLabReport, LabConsumptionReport, LabTable, SerLaboralReport } from "../types";
+import type { AnnarLabReport, LabConsumptionReport, SerLaboralReport } from "../types";
 const TABS = [{ value: "analisis", label: "Análisis" }, { value: "facturas", label: "Facturas Detalladas" }, { value: "admisiones", label: "Admisiones" }, { value: "ser-laboral", label: "Ser Laboral" }, { value: "annar-lab", label: "ANNAR LAB" }];
 type State = { status: "idle" | "loading" } | { status: "error"; message: string } | { status: "ready"; report: LabConsumptionReport };
 export default function LabConsumptionPage() {
@@ -51,25 +51,24 @@ export default function LabConsumptionPage() {
     setState({ status: "loading" });
     setApplied((current) => ({ filters, revision: (current?.revision ?? 0) + 1 }));
   }
-  async function exportData(columns: readonly ExportColumn[], format: ExportFormat, signal: AbortSignal, table?: LabTable) {
+  async function exportData(columns: readonly ExportColumn[], format: ExportFormat, signal: AbortSignal) {
     if (!applied) return;
     try {
-      const tokens = { serLaboralId: !table || table === "ser_laboral" ? serLaboral?.ser_laboral_id : undefined, annarLabId: table === "annar_lab" ? annarLab?.annar_lab_id : undefined };
-      const file = await labConsumptionApi.download(applied.filters, columns, format, signal, tokens, table ? [table] : undefined);
-      if (!signal.aborted) downloadBlob(file, `consumo-laboratorio${table ? `-${table.replaceAll("_", "-")}` : ""}_${applied.filters.startDate}_${applied.filters.endDate}.${format}`);
+      const tokens = { serLaboralId: serLaboral?.ser_laboral_id, annarLabId: annarLab?.annar_lab_id };
+      const { file, name } = await labConsumptionApi.download(applied.filters, columns, format, signal, tokens);
+      if (!signal.aborted) downloadBlob(file, name);
     } catch (error) {
       if (!signal.aborted && error instanceof ApiError && error.status === 410) {
-        const annar = table === "annar_lab";
-        if (annar) setAnnarLab(null); else setSerLaboral(null);
-        const message = `El archivo de ${annar ? "ANNAR LAB" : "Ser Laboral"} expiró; cárgalo de nuevo.`;
+        // A grouped export can reference either token; the response need not identify the expired one.
+        setSerLaboral(null); setAnnarLab(null);
+        const message = "Un archivo importado expiró; cárgalo de nuevo. Vuelve a importar Ser Laboral y ANNAR LAB.";
         setUploadError(message); throw new ExportError(message);
       }
       throw error;
     }
   }
-  function tableExport(table: LabTable, count: number) {
-    const annar = table === "annar_lab";
-    return <ExportMenu label="Exportar" columns={annar ? annarExportColumns : labExportColumns} visibleIds={annar ? annarVisible : visible} disabled={!ready || uploading || count === 0} exportFile={(columns, format, signal) => exportData(columns, format, signal, table)} />;
+  function tableExport(count: number) {
+    return <ExportMenu label="Exportar" columns={labExportColumns} visibleIds={visible} disabled={!ready || uploading || count === 0} exportFile={exportData} />;
   }
   const report = state.status === "ready" ? state.report : null;
   return <div className="min-w-0 space-y-6">
@@ -78,7 +77,7 @@ export default function LabConsumptionPage() {
     {importController && <ImportDialog controller={importController} onClose={closeImport} onPending={setUploading} onSerLaboral={setSerLaboral} onAnnarLab={setAnnarLab} onSuccess={(value) => { closeImport(); setTab(value); setUploadError(null); }} />}
     {uploadError && <p role="alert" className="text-sm text-error-600 dark:text-error-400">{uploadError}</p>}
     {ready && <section aria-label="Exportación de datos unidos" className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/3">
-      <p className="text-sm text-gray-500 dark:text-gray-400">Incluye Facturas Detalladas + Admisiones{serLaboral ? " + Ser Laboral" : ""} en un solo archivo. ANNAR LAB se exporta individualmente.</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400">Excel incluye las hojas Datos Aplicativo (Facturas Detalladas + Admisiones + Ser Laboral importado) y ANNAR LAB. CSV descarga un ZIP con Datos_Aplicativo.csv y ANNAR_LAB.csv. Las columnas seleccionadas corresponden a Datos Aplicativo.</p>
       <ExportMenu key={applied?.revision ?? "idle"} label="Exportar datos unidos" columns={labExportColumns} visibleIds={visible} disabled={!ready || uploading} exportFile={exportData} />
     </section>}
     {state.status === "loading" && <Card role="status" className="flex items-center gap-3"><Spinner aria-hidden="true" role="presentation" /><span className="text-sm text-gray-500 dark:text-gray-400">Consultando y procesando registros…</span></Card>}
@@ -88,10 +87,10 @@ export default function LabConsumptionPage() {
       <Tabs value={tab} onValueChange={(value) => setTab(String(value))} className="min-w-0">
         <TabsList aria-label="Pestañas de Consumo de Laboratorio">{TABS.map(({ value, label }) => <TabsTrigger key={value} value={value}>{label}{value !== "analisis" && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-white/10 dark:text-gray-300">{value === "facturas" ? report.total_facturas : value === "admisiones" ? report.total_admisiones : value === "ser-laboral" ? serLaboral?.total ?? 0 : annarLab?.total ?? 0}</span>}</TabsTrigger>)}</TabsList>
         <TabsPanel value="analisis"><AnalysisTab facturas={report.facturas} admisiones={report.admisiones} serLaboral={serLaboral?.filas ?? []} annar={annarLab?.analisis_annar ?? []} /></TabsPanel>
-        <TabsPanel value="facturas"><ConsumptionTable key={`facturas-${applied?.revision}`} title="Facturas Detalladas" rows={report.facturas} columns={labColumns} visible={visible} onVisibleChange={setVisible} exportAction={tableExport("facturas", report.facturas.length)} /></TabsPanel>
-        <TabsPanel value="admisiones"><ConsumptionTable key={`admisiones-${applied?.revision}`} title="Admisiones" rows={report.admisiones} columns={labColumns} visible={visible} onVisibleChange={setVisible} exportAction={tableExport("admisiones", report.admisiones.length)} /></TabsPanel>
-        <TabsPanel value="ser-laboral">{serLaboral ? <div className="space-y-4"><div role="status" className="text-sm text-gray-600 dark:text-gray-300"><p>Total: {serLaboral.total} · Omitidas: {serLaboral.omitidas}</p>{serLaboral.advertencias.map((warning, i) => <p key={`${i}-${warning}`}>{warning}</p>)}</div><ConsumptionTable key={serLaboral.ser_laboral_id} title="Ser Laboral" rows={serLaboral.filas} columns={labColumns} visible={visible} onVisibleChange={setVisible} exportAction={tableExport("ser_laboral", serLaboral.filas.length)} /></div> : <Card><p className="text-sm text-gray-500 dark:text-gray-400">Importa un CSV Ser Laboral para ver los registros.</p></Card>}</TabsPanel>
-        <TabsPanel value="annar-lab">{annarLab ? <div className="space-y-4"><div role="status" className="text-sm text-gray-600 dark:text-gray-300"><p>Total: {annarLab.total}</p>{annarLab.advertencias.map((warning, i) => <p key={`${i}-${warning}`}>{warning}</p>)}</div><ConsumptionTable key={annarLab.annar_lab_id} title="ANNAR LAB" rows={annarLab.filas} columns={annarColumns} visible={annarVisible} onVisibleChange={setAnnarVisible} exportAction={tableExport("annar_lab", annarLab.filas.length)} /></div> : <Card><p className="text-sm text-gray-500 dark:text-gray-400">Importa un archivo ANNAR LAB para ver los registros.</p></Card>}</TabsPanel>
+        <TabsPanel value="facturas"><ConsumptionTable key={`facturas-${applied?.revision}`} title="Facturas Detalladas" rows={report.facturas} columns={labColumns} visible={visible} onVisibleChange={setVisible} exportAction={tableExport(report.facturas.length)} /></TabsPanel>
+        <TabsPanel value="admisiones"><ConsumptionTable key={`admisiones-${applied?.revision}`} title="Admisiones" rows={report.admisiones} columns={labColumns} visible={visible} onVisibleChange={setVisible} exportAction={tableExport(report.admisiones.length)} /></TabsPanel>
+        <TabsPanel value="ser-laboral">{serLaboral ? <div className="space-y-4"><div role="status" className="text-sm text-gray-600 dark:text-gray-300"><p>Total: {serLaboral.total} · Omitidas: {serLaboral.omitidas}</p>{serLaboral.advertencias.map((warning, i) => <p key={`${i}-${warning}`}>{warning}</p>)}</div><ConsumptionTable key={serLaboral.ser_laboral_id} title="Ser Laboral" rows={serLaboral.filas} columns={labColumns} visible={visible} onVisibleChange={setVisible} exportAction={tableExport(serLaboral.filas.length)} /></div> : <Card><p className="text-sm text-gray-500 dark:text-gray-400">Importa un CSV Ser Laboral para ver los registros.</p></Card>}</TabsPanel>
+        <TabsPanel value="annar-lab">{annarLab ? <div className="space-y-4"><div role="status" className="text-sm text-gray-600 dark:text-gray-300"><p>Total: {annarLab.total}</p>{annarLab.advertencias.map((warning, i) => <p key={`${i}-${warning}`}>{warning}</p>)}</div><ConsumptionTable key={annarLab.annar_lab_id} title="ANNAR LAB" rows={annarLab.filas} columns={annarColumns} visible={annarVisible} onVisibleChange={setAnnarVisible} exportAction={tableExport(annarLab.filas.length)} /></div> : <Card><p className="text-sm text-gray-500 dark:text-gray-400">Importa un archivo ANNAR LAB para ver los registros.</p></Card>}</TabsPanel>
       </Tabs>
     </div>}
     {state.status === "idle" && <Card><h2 className="text-lg font-semibold text-gray-800 dark:text-white/90">Resultados</h2><p className="text-sm text-gray-500 dark:text-gray-400">Selecciona un período y presiona Consultar.</p></Card>}

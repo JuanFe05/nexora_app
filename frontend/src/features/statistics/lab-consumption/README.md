@@ -16,7 +16,14 @@ Datos Aplicativo suma localmente `cntdd` por `cdgo_prcdmnto` de Facturas + Admis
 
 La barra `Exportar datos unidos` solo se renderiza tras una consulta exitosa; se oculta al limpiar, durante una nueva consulta y si esta falla.
 
-Cada tabla de detalle coloca `Exportar` después de `Columnas visibles`, con `tablas` y únicamente el token correspondiente. `Exportar datos unidos` omite `tablas`, incluye Ser Laboral cuando está cargado y nunca incluye ANNAR LAB ni su token. Se conservan las fechas y filtros de la consulta aplicada, no los cambios aún no consultados. Una respuesta 410 elimina los datos/token del archivo vencido y solicita volver a importarlo.
+Cada tabla de detalle coloca `Exportar` después de `Columnas visibles`. Todas las acciones, incluida `Exportar datos unidos`, usan `GET /export?formato=csv|xlsx&...` sin `tablas` y envían ambos tokens (`ser_laboral_id` / `annar_lab_id`) cuando están importados. `columnas` siempre corresponde a Datos Aplicativo: todas o las visibles en las tablas de Facturas/Admisiones/Ser Laboral, incluso al exportar desde ANNAR LAB. Su visibilidad propia solo afecta a la tabla ANNAR LAB.
+
+- Excel descarga **un libro** con las hojas `Datos Aplicativo` (Facturas + Admisiones + Ser Laboral) y `ANNAR LAB`.
+- CSV descarga **un ZIP** con `Datos_Aplicativo.csv` y `ANNAR_LAB.csv`.
+- Se usa el nombre de `Content-Disposition` (`filename*` UTF-8 tiene prioridad sobre `filename`); si falta o no es válido, `consumo-laboratorio_<ini>_<fin>.xlsx|zip`. En despliegues cross-origin el backend debe exponer esa cabecera.
+- Se conservan las fechas y filtros de la consulta aplicada, no los cambios aún no consultados. Una respuesta 410 elimina ambos datos/tokens importados y solicita volver a importarlos, pues la descarga agrupada no identifica necesariamente cuál venció.
+
+En Análisis, `Exportar a Excel` envía `POST /export/analysis/xlsx` con `{ aplicativo: [{ cups, descripcion, cantidad }], annar: [{ seccion, descripcion, cantidad }] }`, utilizando las mismas filas que muestran las tablas: las sumas locales ordenadas y `analisis_annar` sin reagruparlo. La respuesta blob se descarga como `analisis-consumo-laboratorio.xlsx`. El botón queda deshabilitado si ambas tablas están vacías o durante la descarga (con spinner); un error permite reintentar sin perder los datos. Al desmontar Análisis se aborta la exportación pendiente.
 
 API: `/statistics/administrative/lab-consumption`, con `/filters/sites`, `/filters/companies`, `/ser-laboral`, `/annar-lab` y `/export`. El transporte crudo local conserva las garantías del cliente HTTP compartido (sesión, refresh, credenciales y errores), siguiendo el patrón de Consumo General sin modificarlo.
 

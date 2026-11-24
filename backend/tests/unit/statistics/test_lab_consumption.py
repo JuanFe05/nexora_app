@@ -402,7 +402,7 @@ def test_ser_missing_headers_invalid_load_preserves_token(http: Any) -> None:
     assert response.status_code == 422
     assert response.json() == {"detail": "Cabeceras requeridas faltantes: nmro_atrzcn_eps."}
     assert export(client, tablas="ser_laboral", ser_laboral_id=token).status_code == 200
-    assert invoices.calls == admissions.calls == []
+    assert len(invoices.calls) == len(admissions.calls) == 1
 
 
 def test_annar_actual_xls_mapping_normalized_headers_analysis(http: Any) -> None:
@@ -454,7 +454,7 @@ def test_annar_missing_headers_listed_and_token_preserved(http: Any, missing: st
     assert response.status_code == 422
     assert response.json() == {"detail": f"Cabeceras requeridas faltantes: {missing}."}
     assert export(client, tablas="annar_lab", annar_lab_id=token).status_code == 200
-    assert invoices.calls == admissions.calls == []
+    assert len(invoices.calls) == len(admissions.calls) == 1
 
 
 @pytest.mark.parametrize("suffix", ["/ser-laboral", "/annar-lab"])
@@ -486,7 +486,7 @@ def test_annar_invalid_workbook_422(http: Any, content: bytes) -> None:
         ["ser_laboral", "admisiones", "facturas"],
     ],
 )
-def test_exports_fixed_order_header_filename_no_sql_for_import_only(
+def test_exports_always_grouped(
     http: Any,
     formato: str,
     tables: list[str] | None,
@@ -494,11 +494,7 @@ def test_exports_fixed_order_header_filename_no_sql_for_import_only(
     client, invoices, admissions, _, _ = http
     ser = upload(client, "/ser-laboral", csv_bytes([raw(lna_prdcto="LABORATORIO")])).json()
     annar = upload(client, "/annar-lab", xls_bytes([annar_row()])).json()
-    selected = [
-        t
-        for t in ("facturas", "admisiones", "ser_laboral", "annar_lab")
-        if (tables is None and t != "annar_lab") or (tables is not None and t in tables)
-    ]
+    selected = ["facturas", "admisiones", "ser_laboral"]
     params = {} if tables is None else {"tablas": tables}
     response = export(
         client,
@@ -508,9 +504,11 @@ def test_exports_fixed_order_header_filename_no_sql_for_import_only(
         **params,
     )
     assert response.status_code == 200, response.text if formato == "csv" else "xlsx failed"
-    labels = ANNAR_LABELS if tables == ["annar_lab"] else LABELS
+    labels = LABELS
     if formato == "csv":
-        rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig")), delimiter=";"))
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            content = archive.read("Datos_Aplicativo.csv").decode("utf-8-sig")
+        rows = list(csv.reader(io.StringIO(content), delimiter=";"))
         assert rows[0] == list(labels)
         assert len(rows) == len(selected) + 1
         assert [r[0] for r in rows[1:]] == [
@@ -519,24 +517,17 @@ def test_exports_fixed_order_header_filename_no_sql_for_import_only(
         ]
     else:
         with zipfile.ZipFile(io.BytesIO(response.content)) as book:
-            assert "xl/worksheets/sheet2.xml" not in book.namelist()
+            assert "xl/worksheets/sheet2.xml" in book.namelist()
             xml = ET.fromstring(book.read("xl/worksheets/sheet1.xml"))  # noqa: S314
         ns = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
         rows = xml.findall("s:sheetData/s:row", ns)
         assert len(rows) == len(selected) + 1
         assert [t.text for t in rows[0].findall("s:c/s:is/s:t", ns)] == list(labels)
-    names = {
-        "facturas": "facturas-detalladas",
-        "admisiones": "admisiones",
-        "ser_laboral": "ser-laboral",
-        "annar_lab": "annar-lab",
-    }
-    suffix = "" if len(selected) == 3 else "-" + "-".join(names[t] for t in selected)
+    extension = "zip" if formato == "csv" else "xlsx"
     assert response.headers["content-disposition"] == (
-        f'attachment; filename="consumo-laboratorio{suffix}_2026-01-01_2026-01-31.{formato}"'
+        f'attachment; filename="consumo-laboratorio_2026-01-01_2026-01-31.{extension}"'
     )
-    expected = int(any(t in selected for t in ("facturas", "admisiones")))
-    assert len(invoices.calls) == len(admissions.calls) == expected
+    assert len(invoices.calls) == len(admissions.calls) == 1
 
 
 @pytest.mark.parametrize(
@@ -550,8 +541,6 @@ def test_export_required_and_expired_tokens_before_sql(
     http: Any, table: str, token: str, message: str
 ) -> None:
     client, invoices, admissions, _, _ = http
-    missing = export(client, tablas=table)
-    assert missing.status_code == 422 and missing.json() == {"detail": message}
     expired = export(client, tablas=table, **{token: "expired"})
     assert expired.status_code == 410
     expected = (
@@ -561,19 +550,19 @@ def test_export_required_and_expired_tokens_before_sql(
     )
     assert expired.json() == {"detail": expected}
     assert invoices.calls == admissions.calls == []
-    ignored = export(client, tablas="facturas", **{token: "expired"})
-    assert ignored.status_code == 200
+    rejected = export(client, tablas="facturas", **{token: "expired"})
+    assert rejected.status_code == 410
+    assert invoices.calls == admissions.calls == []
 
 
 def test_combined_without_ser_token_optional_and_annar_may_not_mix(http: Any) -> None:
     client, invoices, admissions, _, _ = http
-    assert export(client, tablas=["annar_lab", "facturas"]).status_code == 422
-    assert invoices.calls == admissions.calls == []
-    response = export(client, annar_lab_id="ignored")
+    response = export(client, tablas=["annar_lab", "facturas"])
     assert response.status_code == 200
-    assert (
-        len(list(csv.reader(io.StringIO(response.content.decode("utf-8-sig")), delimiter=";"))) == 3
-    )
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        content = archive.read("Datos_Aplicativo.csv").decode("utf-8-sig")
+    assert len(list(csv.reader(io.StringIO(content), delimiter=";"))) == 3
+    assert len(invoices.calls) == len(admissions.calls) == 1
 
 
 @pytest.mark.parametrize(
@@ -585,6 +574,7 @@ def test_combined_without_ser_token_optional_and_annar_may_not_mix(http: Any) ->
         ("POST", "/ser-laboral"),
         ("POST", "/annar-lab"),
         ("GET", "/export"),
+        ("POST", "/export/analysis/xlsx"),
     ],
 )
 def test_all_routes_require_existing_permission(http: Any, method: str, suffix: str) -> None:

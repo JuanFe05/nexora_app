@@ -1,14 +1,11 @@
 import { useState } from "react";
-import { FormDialog } from "@/components/shared/form-dialog";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DocumentTextIcon, LayoutGridIcon, LoaderCircleIcon } from "@/icons";
 import { ApiError } from "@/lib/http/api-error";
 import { labConsumptionApi } from "../api/lab-consumption-api";
 import type { AnnarLabReport, SerLaboralReport } from "../types";
-type Result = { status: "success"; total: number; omitidas?: number; warnings: string[] } | { status: "error"; message: string };
-function ResultMessage({ result, label }: { result?: Result; label: string }) {
-  if (!result) return null;
-  if (result.status === "error") return <p role="alert" className="text-sm text-error-600 dark:text-error-400">{result.message}</p>;
-  return <div role="status" className="text-sm text-gray-600 dark:text-gray-300"><p>{label}: {result.total} registros importados.{result.omitidas !== undefined && ` Omitidas: ${result.omitidas}.`}</p>{result.warnings.length > 0 && <ul className="list-disc pl-5">{result.warnings.map((warning, i) => <li key={`${i}-${warning}`}>{warning}</li>)}</ul>}</div>;
-}
+import { FileDropCard, type FileImportResult } from "./file-drop-card";
 /** Each selected file owns its outcome. Successful files aren't resubmitted on partial retries. */
 export function ImportDialog({ onClose, controller, onPending, onSerLaboral, onAnnarLab, onSuccess }: {
   onClose: () => void; controller: AbortController; onPending: (pending: boolean) => void;
@@ -16,18 +13,19 @@ export function ImportDialog({ onClose, controller, onPending, onSerLaboral, onA
 }) {
   const [ser, setSer] = useState<File | null>(null);
   const [annar, setAnnar] = useState<File | null>(null);
-  const [serResult, setSerResult] = useState<Result>();
-  const [annarResult, setAnnarResult] = useState<Result>();
+  const [serResult, setSerResult] = useState<FileImportResult>();
+  const [annarResult, setAnnarResult] = useState<FileImportResult>();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string>();
+  const canImport = Boolean((ser && serResult?.status !== "success") || (annar && annarResult?.status !== "success"));
   async function submit() {
-    if (pending) return;
-    if (!ser && !annar) { setError("Selecciona al menos un archivo."); return; }
-    setError(undefined); setPending(true); onPending(true);
+    if (pending || !canImport || controller.signal.aborted) return;
+    setPending(true); onPending(true);
+    if (ser && serResult?.status !== "success") setSerResult({ status: "processing" });
+    if (annar && annarResult?.status !== "success") setAnnarResult({ status: "processing" });
     const { signal } = controller;
     const jobs: Promise<{ success: boolean; tab: string }>[] = [];
-    function failure(error: unknown): Result {
-      return { status: "error", message: error instanceof ApiError && (error.status === 422 || error.status === 413) ? error.message : "No se pudo importar el archivo. Intenta de nuevo." };
+    function failure(error: unknown): FileImportResult {
+      return { status: "error", message: error instanceof ApiError ? error.message : "No se pudo importar el archivo. Intenta de nuevo." };
     }
     if (ser && serResult?.status !== "success") jobs.push(labConsumptionApi.uploadSerLaboral(ser, signal).then((result) => {
       if (!signal.aborted) { onSerLaboral(result); setSerResult({ status: "success", total: result.total, omitidas: result.omitidas, warnings: result.advertencias }); }
@@ -42,11 +40,25 @@ export function ImportDialog({ onClose, controller, onPending, onSerLaboral, onA
     setPending(false); onPending(false);
     if (results.length && results.every((result) => result.success)) onSuccess(results[0].tab);
   }
-  return <FormDialog open onOpenChange={(open) => { if (!open) onClose(); }} title="Importar archivos" description="Selecciona uno o ambos archivos. Cada archivo se procesa por separado." formId="lab-consumption-import" submitLabel="Importar" pendingLabel="Importando…" pending={pending}>
-    <form id="lab-consumption-import" onSubmit={(event) => { event.preventDefault(); void submit(); }} className="space-y-5">
-      <div className="space-y-2"><label htmlFor="lab-ser-file" className="block text-sm font-medium text-gray-700 dark:text-gray-300">CSV Ser Laboral</label><input id="lab-ser-file" type="file" accept=".csv" disabled={pending} className="block w-full text-sm text-gray-700 dark:text-gray-300" onChange={(event) => { setSer(event.target.files?.[0] ?? null); setSerResult(undefined); }} /><ResultMessage result={serResult} label="Ser Laboral" /></div>
-      <div className="space-y-2"><label htmlFor="lab-annar-file" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Excel ANNAR LAB</label><input id="lab-annar-file" type="file" accept=".xls" disabled={pending} className="block w-full text-sm text-gray-700 dark:text-gray-300" onChange={(event) => { setAnnar(event.target.files?.[0] ?? null); setAnnarResult(undefined); }} /><ResultMessage result={annarResult} label="ANNAR LAB" /></div>
-      {error && <p role="alert" className="text-sm text-error-600 dark:text-error-400">{error}</p>}
-    </form>
-  </FormDialog>;
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open && !pending) onClose(); }}>
+      <DialogContent aria-busy={pending} showCloseButton={!pending} className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-6 overflow-hidden sm:max-w-4xl">
+        <DialogHeader className="gap-2 pr-7">
+          <DialogTitle className="text-xl">Importar archivos</DialogTitle>
+          <DialogDescription>Selecciona uno o ambos archivos. Cada archivo se procesa por separado.</DialogDescription>
+        </DialogHeader>
+        <div className="-mx-2 overflow-y-auto px-2 py-1">
+          <form id="lab-consumption-import" onSubmit={(event) => { event.preventDefault(); void submit(); }} className="grid items-start gap-5 md:grid-cols-2">
+            <FileDropCard id="lab-ser-file" title="CSV de Ser Laboral" inputLabel="CSV Ser Laboral" accept=".csv" hint="Formato aceptado: CSV (.csv)" icon={<DocumentTextIcon className="size-6" />} file={ser} onFileChange={(file) => { setSer(file); setSerResult(undefined); }} disabled={pending} result={serResult} resultLabel="Ser Laboral" />
+            <FileDropCard id="lab-annar-file" title="Excel 97-2003 de ANNAR LAB" inputLabel="Excel ANNAR LAB" accept=".xls" hint="Formato aceptado: Excel 97-2003 (.xls), no .xlsx" icon={<LayoutGridIcon className="size-6" />} file={annar} onFileChange={(file) => { setAnnar(file); setAnnarResult(undefined); }} disabled={pending} result={annarResult} resultLabel="ANNAR LAB" />
+          </form>
+          <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">Si un archivo falla, podrás reintentar sin volver a enviar el que ya se importó.</p>
+        </div>
+        <DialogFooter className="border-t border-gray-200 px-6 py-4 dark:border-gray-800">
+          <Button type="button" variant="outline" disabled={pending} onClick={onClose}>Cancelar</Button>
+          <Button type="submit" form="lab-consumption-import" disabled={pending || !canImport}>{pending && <LoaderCircleIcon aria-hidden="true" className="size-5 animate-spin motion-reduce:animate-none" />}{pending ? "Importando…" : "Importar"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }

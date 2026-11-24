@@ -1,5 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
+import { downloadBlob } from "@/lib/table-export";
+import { labConsumptionApi } from "../api/lab-consumption-api";
 import { formatNumber } from "../../shared/report-columns";
 import type { AnnarAnalysis, LabConsumptionRow } from "../types";
 
@@ -15,6 +19,10 @@ function AnalysisTable({ title, codeLabel, rows, empty }: { title: string; codeL
   </Card>;
 }
 export function AnalysisTab({ facturas, admisiones, serLaboral, annar }: { facturas: LabConsumptionRow[]; admisiones: LabConsumptionRow[]; serLaboral: LabConsumptionRow[]; annar: AnnarAnalysis[] }) {
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => controller.current?.abort(), []);
   const aplicativo = useMemo(() => {
     const groups = new Map<string, AnnarAnalysis>();
     for (const rows of [facturas, admisiones, serLaboral]) for (const row of rows) {
@@ -25,8 +33,37 @@ export function AnalysisTab({ facturas, admisiones, serLaboral, annar }: { factu
     }
     return [...groups.values()].sort((a, b) => b.cantidad - a.cantidad);
   }, [facturas, admisiones, serLaboral]);
-  return <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-2">
-    <AnalysisTable title="Datos Aplicativo" codeLabel="CUPS" rows={aplicativo} empty="No hay datos del aplicativo para analizar." />
-    <AnalysisTable title="Annar Lab" codeLabel="Código Sección" rows={annar} empty="Importa un archivo ANNAR LAB para ver el análisis." />
+  async function exportAnalysis() {
+    if (controller.current || (!aplicativo.length && !annar.length)) return;
+    const abort = new AbortController();
+    controller.current = abort;
+    setExporting(true); setError(null);
+    try {
+      const body = {
+        aplicativo: aplicativo.map(({ seccion, descripcion, cantidad }) => ({ cups: seccion, descripcion, cantidad })),
+        annar: annar.map(({ seccion, descripcion, cantidad }) => ({ seccion, descripcion, cantidad })),
+      };
+      const file = await labConsumptionApi.downloadAnalysis(body, abort.signal);
+      if (!abort.signal.aborted) downloadBlob(file, "analisis-consumo-laboratorio.xlsx");
+    } catch {
+      if (!abort.signal.aborted) setError("No se pudo exportar el análisis. Intenta de nuevo.");
+    } finally {
+      if (controller.current === abort) {
+        controller.current = null;
+        if (!abort.signal.aborted) setExporting(false);
+      }
+    }
+  }
+  return <div className="min-w-0 space-y-4">
+    <div className="flex flex-wrap items-center justify-end gap-3">
+      <Button type="button" variant="outline" disabled={exporting || (!aplicativo.length && !annar.length)} aria-busy={exporting} onClick={() => void exportAnalysis()}>
+        {exporting && <Spinner aria-hidden="true" role="presentation" />}Exportar a Excel
+      </Button>
+      {error && <p role="alert" className="w-full text-sm text-error-600 dark:text-error-400">{error}</p>}
+    </div>
+    <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-2">
+      <AnalysisTable title="Datos Aplicativo" codeLabel="CUPS" rows={aplicativo} empty="No hay datos del aplicativo para analizar." />
+      <AnalysisTable title="Annar Lab" codeLabel="Código Sección" rows={annar} empty="Importa un archivo ANNAR LAB para ver el análisis." />
+    </div>
   </div>;
 }
