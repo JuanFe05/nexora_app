@@ -68,11 +68,11 @@ describe("Cuotas Moderadoras", () => {
     await loaded(); await create();
     change("Vigencia", "2027"); change("Importe 1", "1");
     await userEvent.click(screen.getByRole("button", { name: "Agregar importe" }));
-    change("Importe 2", "10000000");
+    change("Importe 2", "1000000");
     await userEvent.click(screen.getByRole("button", { name: "Agregar importe" }));
     await userEvent.click(screen.getByRole("button", { name: "Quitar importe 3" }));
     await save();
-    expect(api.saveModeratorFees).toHaveBeenCalledExactlyOnceWith(2027, [1, 10000000]);
+    expect(api.saveModeratorFees).toHaveBeenCalledExactlyOnceWith(2027, [1, 1000000]);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByText("Vigencia creada correctamente.")).toBeVisible();
     expect(api.listModeratorFees).toHaveBeenCalledTimes(2);
@@ -107,10 +107,10 @@ describe("Cuotas Moderadoras", () => {
     expect(screen.getByLabelText("Vigencia")).toHaveFocus();
     expect(api.saveModeratorFees).not.toHaveBeenCalled(); expect(api.listModeratorFees).toHaveBeenCalledTimes(1);
   });
-  it.each(["", "0", "-1", "1.5", "10000001"])("rejects invalid importe %s accessibly without mutating or reloading", async value => {
+  it.each(["", "0", "-1", "1.5", "1000001", "10000000"])("rejects invalid importe %s accessibly without mutating or reloading", async value => {
     await loaded(); await create(); change("Vigencia", "2027"); change("Importe 1", value); await save();
     expect(screen.getByLabelText("Importe 1")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText("Importe 1")).toHaveAccessibleDescription("El importe debe ser un entero entre 1 y 10.000.000.");
+    expect(screen.getByLabelText("Importe 1")).toHaveAccessibleDescription("El importe debe ser un entero entre 1 y 1.000.000.");
     expect(screen.getByLabelText("Importe 1")).toHaveFocus();
     expect(api.saveModeratorFees).not.toHaveBeenCalled(); expect(api.listModeratorFees).toHaveBeenCalledTimes(1);
   });
