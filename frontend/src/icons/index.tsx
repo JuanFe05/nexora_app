@@ -1,6 +1,7 @@
 import type { SVGProps } from "react";
 export type IconProps = SVGProps<SVGSVGElement>;
 
+export { FlaskIcon } from "./flask";
 export { MenuTwoIcon } from "./menu-two";
 export { XIcon } from "./x";
 export { MoonIcon } from "./moon";
