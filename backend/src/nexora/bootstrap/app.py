@@ -30,6 +30,7 @@ from nexora.integration_management.application.ports import (
     ExternalSourceUnavailable,
 )
 from nexora.statistics.application.general_consumption import GeneralConsumptionReport
+from nexora.statistics.application.lab_consumption import LabConsumptionReport
 from nexora.statistics.application.moderator_fees import FeeYearNotFound
 from nexora.statistics.domain.filters import InvalidReportFilter
 from nexora.statistics.domain.general_consumption import UnconfiguredFeeYear
@@ -44,6 +45,7 @@ from nexora.statistics.presentation.http.v1.router import (
     bai_nutricion_cyd_router,
     general_billing_router,
     general_consumption_router,
+    lab_consumption_router,
     moderator_fees_router,
     sivigila_router,
     statistics_router,
@@ -68,6 +70,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await source.aclose()
         finally:
             await app.state.general_consumption_report.aclose()
+            await app.state.lab_consumption_report.aclose()
             container.sqlserver.dispose()
             await container.database.dispose()
 
@@ -163,6 +166,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         SqlServerAdmissionsSource(app.state.container.sqlserver),
         fees=DatabaseModeratorFeeSnapshot(app.state.container.database.session),
     )
+    app.state.lab_consumption_report = LabConsumptionReport(
+        SqlServerDetailedInvoicesSource(app.state.container.sqlserver),
+        SqlServerAdmissionsSource(app.state.container.sqlserver),
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.allowed_origins),
@@ -181,6 +188,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(bai_nutricion_cyd_router, prefix=settings.api_prefix)
     app.include_router(general_billing_router, prefix=settings.api_prefix)
     app.include_router(general_consumption_router, prefix=settings.api_prefix)
+    app.include_router(lab_consumption_router, prefix=settings.api_prefix)
     app.include_router(moderator_fees_router, prefix=settings.api_prefix)
 
     @app.get("/health", tags=["operacion"], summary="Estado del servicio")

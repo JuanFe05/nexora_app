@@ -6,6 +6,7 @@ import csv
 import io
 import secrets
 from collections import OrderedDict
+from collections.abc import Callable
 from time import monotonic
 from typing import Any
 
@@ -133,10 +134,19 @@ class SerLaboralCache:
     Solo publicar entradas tras completar un procesamiento válido, sin modificar otras cargas.
     """
 
-    def __init__(self, *, ttl_seconds: float = 1800, max_entries: int = 8) -> None:
+    def __init__(
+        self,
+        *,
+        ttl_seconds: float = 1800,
+        max_entries: int = 8,
+        processor: Callable[[bytes], dict[str, Any]] | None = None,
+        result_key: str = "ser_laboral_id",
+        expired: type[SerLaboralExpired] = SerLaboralExpired,
+    ) -> None:
         if ttl_seconds <= 0 or max_entries < 1:
             raise ValueError("El TTL y el máximo de entradas deben ser positivos.")
         self._ttl, self._maximum = ttl_seconds, max_entries
+        self._processor, self._result_key, self._expired = processor, result_key, expired
         self._entries: OrderedDict[
             str, tuple[dict[str, Any], float, asyncio.TimerHandle]
         ] = OrderedDict()
@@ -147,23 +157,23 @@ class SerLaboralCache:
             entry[2].cancel()
 
     async def load(self, content: bytes) -> dict[str, Any]:
-        result = await asyncio.to_thread(process_csv, content)
+        result = await asyncio.to_thread(self._processor or process_csv, content)
         if self._closed:
-            raise SerLaboralExpired
+            raise self._expired
         while len(self._entries) >= self._maximum:
             self._expire(next(iter(self._entries)))
         token = secrets.token_urlsafe(32)
         timer = asyncio.get_running_loop().call_later(self._ttl, self._expire, token)
         self._entries[token] = (result, monotonic() + self._ttl, timer)
-        return {"ser_laboral_id": token, **result}
+        return {self._result_key: token, **result}
 
     def rows(self, token: str) -> list[dict[str, Any]]:
         entry = self._entries.get(token)
         if entry is None:
-            raise SerLaboralExpired
+            raise self._expired
         if entry[1] <= monotonic():
             self._expire(token)
-            raise SerLaboralExpired
+            raise self._expired
         rows: list[dict[str, Any]] = entry[0]["filas"]
         return rows
 
