@@ -20,7 +20,7 @@ it("exports exactly the displayed local sums and backend ANNAR rows, with pendin
   const applicationRows = within(screen.getByRole("table", { name: "Datos Aplicativo" })).getAllByRole("row").slice(1);
   expect(applicationRows.map((row) => row.textContent)).toEqual(["00901HEMOGRAMA9", "902OTRO1"]);
   const annarTable = within(screen.getByRole("table", { name: "Annar Lab" }));
-  expect(annarTable.getByRole("columnheader", { name: "Código Examen" })).toBeVisible();
+  expect(annarTable.getByRole("columnheader", { name: "Código" })).toBeVisible();
   const annarRows = annarTable.getAllByRole("row").slice(1);
   expect(annarRows[0]).toHaveTextContent("02AGRUPACIÓN ANNAR7");
   const button = screen.getByRole("button", { name: "Exportar a Excel" });

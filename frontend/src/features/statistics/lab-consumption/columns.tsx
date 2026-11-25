@@ -17,6 +17,7 @@ export const labColumns = createReportColumns<keyof LabConsumptionRow>([
 export const annarColumns = createReportColumns<keyof AnnarRow>([
   ["codigo_centro_costo", "Código Centro de Costo", "text"],
   ["nombre_centro_costos", "Nombre Centro de Costos", "text"],
+  ["examen", "Examen", "text"],
   ["nombre_examen", "Nombre del Examen", "longtext"],
   ["cantidad", "Cantidad", "number"],
   ["empresa", "Empresa", "text"],

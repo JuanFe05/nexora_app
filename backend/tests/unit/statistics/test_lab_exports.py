@@ -117,7 +117,7 @@ def test_analysis_layout_values_and_no_sql(http: Any) -> None:
         assert [s.attrib["name"] for s in workbook.findall("s:sheets/s:sheet", NS)] == ["Análisis"]
         assert sheet_rows(book, 1) == [
             [BODY["titulo"]], [BODY["periodo"]], ["Datos Aplicativo", "ANNAR LAB"],
-            ["CUPS", "Descripción", "Cantidad", "Código Examen", "Descripción", "Cantidad"],
+            ["CUPS", "Descripción", "Cantidad", "Código", "Descripción", "Cantidad"],
             ["001", "HEMOGRAMA", "12500.5", "10", "HEMATOLOGÍA", "22508"],
         ]
         styles = book.read("xl/styles.xml").decode()
@@ -178,7 +178,7 @@ def test_analysis_accepts_legacy_section_key(http: Any) -> None:
     assert response.status_code == 200
     with zipfile.ZipFile(io.BytesIO(response.content)) as book:
         assert sheet_rows(book, 1)[3] == [
-            "CUPS", "Descripción", "Cantidad", "Código Examen", "Descripción", "Cantidad",
+            "CUPS", "Descripción", "Cantidad", "Código", "Descripción", "Cantidad",
         ]
         assert sheet_rows(book, 1)[4][3:] == ["10", "HEMATOLOGÍA", "22508"]
     assert http[1].calls == http[2].calls == []

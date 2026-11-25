@@ -17,7 +17,7 @@ const path = "/statistics/administrative/lab-consumption";
 const row = (changes: Partial<LabConsumptionRow> = {}): LabConsumptionRow => ({ cnsctvo_dcto: "0001", cdgo_prcdmnto: "901", lna_prdcto: "LABORATORIO", procedimiento: "HEMOGRAMA", cntdd: 2, fcha_ingrso_pcnte: "2026-01-02", fcha_dcto: "2026-01-03", admision: "10", estado: "CERRADO", emprs: "EMPRESA", dscrp_transcn: "FACTURA", sede: "CENTRO", ...changes });
 let report: LabConsumptionReport;
 const ser = () => ({ ser_laboral_id: "ser-token", filas: [row({ cntdd: 4, procedimiento: "OTRA DESCRIPCIÓN" })], total: 1, omitidas: 2, advertencias: ["Advertencia CSV"] });
-const annar = () => ({ annar_lab_id: "annar-token", filas: [{ codigo_centro_costo: "02", nombre_centro_costos: "QUÍMICA", nombre_examen: "GLUCOSA", cantidad: 1, empresa: "CLIENTE", punto_atencion: "NORTE" }], total: 1, advertencias: ["Advertencia Excel"], analisis_annar: [{ examen: "02", descripcion: "AGRUPACIÓN ANNAR", cantidad: 7 }] });
+const annar = () => ({ annar_lab_id: "annar-token", filas: [{ codigo_centro_costo: "02", nombre_centro_costos: "QUÍMICA", examen: "902", nombre_examen: "GLUCOSA", cantidad: 1, empresa: "CLIENTE", punto_atencion: "NORTE" }], total: 1, advertencias: ["Advertencia Excel"], analisis_annar: [{ examen: "02", descripcion: "AGRUPACIÓN ANNAR", cantidad: 7 }] });
 afterEach(cleanup);
 beforeEach(() => {
   vi.resetAllMocks();
@@ -76,11 +76,12 @@ it("matches import styling to Consultar and preserves both imports made before t
 });
 it.each(["Ser Laboral", "ANNAR LAB"] as const)("reveals all tabs and %s results without a query, with empty query views and an explicit reset", async (source) => {
   render(<LabConsumptionPage />);
+  const tabLabel = source === "ANNAR LAB" ? "Annar Lab" : source;
   const dialog = await open(source === "Ser Laboral", source === "ANNAR LAB");
   fireEvent.click(within(dialog).getByRole("button", { name: "Importar" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(screen.getAllByRole("tab")).toHaveLength(5);
-  expect(screen.getByRole("tab", { name: new RegExp(`^${source}`) })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tab", { name: new RegExp(`^${tabLabel}`) })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByText(source === "Ser Laboral" ? "OTRA DESCRIPCIÓN" : "GLUCOSA")).toBeVisible();
   expect(screen.getByRole("button", { name: "Exportar" })).toBeDisabled();
   expect(vi.mocked(httpClient.get).mock.calls.some(([url]) => url.startsWith(`${path}?`))).toBe(false);
@@ -102,6 +103,7 @@ it.each(["Ser Laboral", "ANNAR LAB"] as const)("reveals all tabs and %s results 
 });
 it.each(["Ser Laboral", "ANNAR LAB"] as const)("keeps successful %s data when the other import fails without a query", async (source) => {
   render(<LabConsumptionPage />);
+  const tabLabel = source === "ANNAR LAB" ? "Annar Lab" : source;
   if (source === "Ser Laboral") vi.mocked(labConsumptionApi.uploadAnnarLab).mockRejectedValueOnce(new ApiError(422, "Archivo inválido", null));
   else vi.mocked(labConsumptionApi.uploadSerLaboral).mockRejectedValueOnce(new ApiError(422, "Archivo inválido", null));
   const dialog = await open();
@@ -109,7 +111,7 @@ it.each(["Ser Laboral", "ANNAR LAB"] as const)("keeps successful %s data when th
   expect(await within(dialog).findByText("Archivo inválido")).toBeVisible();
   await waitFor(() => expect(within(dialog).getByRole("button", { name: "Cancelar" })).toBeEnabled());
   fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
-  expect(screen.getByRole("tab", { name: new RegExp(`^${source}`) })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tab", { name: new RegExp(`^${tabLabel}`) })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByText(source === "Ser Laboral" ? "OTRA DESCRIPCIÓN" : "GLUCOSA")).toBeVisible();
   const failed = await open(source !== "Ser Laboral", source !== "ANNAR LAB");
   if (source === "Ser Laboral") vi.mocked(labConsumptionApi.uploadAnnarLab).mockRejectedValueOnce(new ApiError(422, "Otro error", null));
@@ -163,7 +165,7 @@ it("uses only four filters, five line tabs and locally sums all application sour
   expect(screen.queryByText("Línea de Producto")).not.toBeInTheDocument();
   expect(screen.getAllByRole("combobox", { name: /seleccionadas/ })).toHaveLength(2);
   expect(screen.getByRole("button", { name: "Importar archivos" }).nextElementSibling).toHaveTextContent("Consultar");
-  expect(screen.getAllByRole("tab").map((tab) => tab.textContent?.replace(/\d+$/, ""))).toEqual(["Análisis", "Facturas Detalladas", "Admisiones", "Ser Laboral", "ANNAR LAB"]);
+  expect(screen.getAllByRole("tab").map((tab) => tab.textContent?.replace(/\d+$/, ""))).toEqual(["Análisis", "Facturas Detalladas", "Admisiones", "Ser Laboral", "Annar Lab"]);
   let first = within(screen.getByRole("table", { name: "Datos Aplicativo" })).getAllByRole("row")[1];
   expect(first).toHaveTextContent("901HEMOGRAMA5");
   expect(screen.getByText("Importa un archivo ANNAR LAB para ver el análisis.")).toBeVisible();
@@ -200,7 +202,7 @@ it("requires at least one file and starts both uploads in parallel, keeping per-
   fireEvent.click(within(dialog).getByRole("button", { name: "Importar" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(labConsumptionApi.uploadSerLaboral).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole("tab", { name: /^ANNAR LAB/ })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tab", { name: /^Annar Lab/ })).toHaveAttribute("aria-selected", "true");
   expect(await screen.findByText("GLUCOSA")).toBeVisible();
 });
 it.each([413, 422])("keeps upload %s details inside the modal and permits Excel alone", async (status) => {
@@ -214,18 +216,18 @@ it.each([413, 422])("keeps upload %s details inside the modal and permits Excel 
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   expect(await screen.findByText("GLUCOSA")).toBeVisible();
 });
-it("renders 12/6 columns, local pagination and visibility, with grouped exports after Columnas visibles and both tokens", async () => {
+it("renders 12/7 columns, local pagination and visibility, with grouped exports after Columnas visibles and both tokens", async () => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   report.facturas = Array.from({ length: 11 }, (_, i) => row({ cnsctvo_dcto: `FACT-${i}` }));
   await query();
   const dialog = await open(); fireEvent.click(within(dialog).getByRole("button", { name: "Importar" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  for (const [tab, table, count] of [[/^Facturas Detalladas/, "facturas", 12], [/^Admisiones/, "admisiones", 12], [/^Ser Laboral/, "ser_laboral", 12], [/^ANNAR LAB/, "annar_lab", 6]] as const) {
+  for (const [tab, table, count] of [[/^Facturas Detalladas/, "facturas", 12], [/^Admisiones/, "admisiones", 12], [/^Ser Laboral/, "ser_laboral", 12], [/^Annar Lab/, "annar_lab", 7]] as const) {
     await user.click(screen.getByRole("tab", { name: tab }));
     const button = await screen.findByRole("button", { name: "Exportar" });
     expect(screen.getAllByRole("columnheader")).toHaveLength(count);
     expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual(table === "annar_lab"
-      ? ["Código Centro de Costo", "Nombre Centro de Costos", "Nombre del Examen", "Cantidad", "Empresa", "Punto Atención"]
+      ? ["Código Centro de Costo", "Nombre Centro de Costos", "Examen", "Nombre del Examen", "Cantidad", "Empresa", "Punto Atención"]
       : ["Transacción / Factura / Admisión", "CUPS", "Tipo Procedimiento", "Nombre Procedimiento", "Cantidad", "Fecha Ingreso", "Fecha Factura", "Admisión", "Estado Documento", "Empresa", "Tipo Documento", "Sede"]);
     expect(screen.getByRole("button", { name: "Columnas visibles" }).compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     if (table === "facturas") {
@@ -264,7 +266,7 @@ it.each(["ser_laboral", "annar_lab", "united"] as const)("discards imported data
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   await query(); const dialog = await open(); fireEvent.click(within(dialog).getByRole("button", { name: "Importar" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  await user.click(screen.getByRole("tab", { name: table === "ser_laboral" ? /^Ser Laboral/ : /^ANNAR LAB/ }));
+  await user.click(screen.getByRole("tab", { name: table === "ser_laboral" ? /^Ser Laboral/ : /^Annar Lab/ }));
   vi.mocked(httpClient.getWithMeta).mockRejectedValueOnce(new ApiError(410, "private detail", null));
   await exportCsv(user, table === "united" ? "Exportar datos unidos" : "Exportar");
   await waitFor(() => expect(screen.getAllByRole("alert").some((alert) => /expiró; cárgalo de nuevo/.test(alert.textContent ?? ""))).toBe(true));
@@ -273,7 +275,7 @@ it.each(["ser_laboral", "annar_lab", "united"] as const)("discards imported data
   expect(downloadBlob).not.toHaveBeenCalled();
   await user.click(screen.getByRole("tab", { name: /^Ser Laboral/ }));
   expect(await screen.findByText("Importa un CSV Ser Laboral para ver los registros.")).toBeVisible();
-  await user.click(screen.getByRole("tab", { name: /^ANNAR LAB/ }));
+  await user.click(screen.getByRole("tab", { name: /^Annar Lab/ }));
   expect(await screen.findByText("Importa un archivo ANNAR LAB para ver los registros.")).toBeVisible();
   vi.mocked(httpClient.getWithMeta).mockClear();
   await exportCsv(user, "Exportar datos unidos");
@@ -315,7 +317,7 @@ it("exports Datos Aplicativo visible columns even from the ANNAR tab", async () 
   await user.click(screen.getByRole("button", { name: "Columnas visibles" }));
   await user.click(screen.getByRole("checkbox", { name: "Sede" }));
   await user.keyboard("{Escape}");
-  await user.click(screen.getByRole("tab", { name: /^ANNAR LAB/ }));
+  await user.click(screen.getByRole("tab", { name: /^Annar Lab/ }));
   await user.click(screen.getByRole("button", { name: "Exportar" }));
   fireEvent.click(await screen.findByRole("menuitem", { name: /Columnas visibles \(11\)/ }));
   fireEvent.click(await screen.findByRole("menuitem", { name: "CSV" }));
@@ -386,8 +388,8 @@ it("preserves successful sources during a failed requery and retry, then clears 
   expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo consultar el informe.");
   expect(screen.queryByText("private detail")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Exportar datos unidos" })).not.toBeInTheDocument();
-  for (const [source, text] of [["Ser Laboral", "OTRA DESCRIPCIÓN"], ["ANNAR LAB", "GLUCOSA"]]) {
-    fireEvent.click(screen.getByRole("tab", { name: new RegExp(`^${source}`) }));
+  for (const [tabLabel, text] of [["Ser Laboral", "OTRA DESCRIPCIÓN"], ["Annar Lab", "GLUCOSA"]]) {
+    fireEvent.click(screen.getByRole("tab", { name: new RegExp(`^${tabLabel}`) }));
     expect(await screen.findByText(text)).toBeVisible();
     expect(screen.getByRole("button", { name: "Exportar" })).toBeDisabled();
   }

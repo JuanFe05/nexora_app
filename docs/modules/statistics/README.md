@@ -405,12 +405,13 @@ este informe; las cargas sí se cachean por token. El resultado JSON completo re
   `El archivo XLSX de ANNAR LAB no es válido.`. Más/menos de una hoja → 422
   `El archivo XLS de ANNAR LAB debe tener una sola hoja.` (XLSX usa `XLSX` en el mensaje). Filas completamente vacías omitidas,
   sin filtro de estado ni línea; valores trim (conserva mayúsculas/minúsculas originales).
-  Respuesta `{annar_lab_id, filas, total, advertencias, analisis_annar}`. Seis claves:
+  Respuesta `{annar_lab_id, filas, total, advertencias, analisis_annar}`. Siete claves:
   `codigo_centro_costo` ← Seccion; `nombre_centro_costos` ← Nombre de la Sección;
-  `nombre_examen` ← Nombre del Examen; `cantidad` = 1; `empresa` ← Nombre Cliente;
-  `punto_atencion` ← Nombre Centro de Costos. Análisis ANNAR por **(Examen, Nombre del Examen)**,
-  con cantidad de filas, orden numérico de código, respuesta `{examen, descripcion, cantidad}`.
-  El detalle continúa proyectando Seccion y Nombre de la Sección en sus campos de centro de costo.
+  `examen` ← Examen; `nombre_examen` ← Nombre del Examen; `cantidad` = 1;
+  `empresa` ← Nombre Cliente; `punto_atencion` ← Nombre Centro de Costos. El detalle conserva
+  la proyección por sección/centro de costo. El análisis ANNAR agrupa por **(Examen, Nombre del Examen)**,
+  cuenta filas, ordena por código numérico y omite filas con Examen o Nombre del Examen vacíos;
+  respuesta `{examen, descripcion, cantidad}`.
   Datos Aplicativo lo agrupa el frontend localmente por CUPS sobre las tres listas comunes;
   no existe `analisis_aplicativo` en las respuestas del backend.
 
@@ -459,8 +460,8 @@ repetido) y se ignora, por compatibilidad con los botones individuales anteriore
 ```
 
 Devuelve `analisis-consumo-laboratorio.xlsx`, una hoja **Análisis** con **Datos Aplicativo** en
-A:C y **ANNAR LAB** en E:G, separadas por la columna D vacía. Conserva los títulos/cabeceras,
-los bordes y el estilo azul como Consumo General; las cantidades son celdas numéricas con
+A:C y **ANNAR LAB** en E:G, separadas por la columna D vacía. ANNAR usa las cabeceras
+Código/Descripción/Cantidad. Conserva los títulos, bordes y estilo azul como Consumo General; las cantidades son celdas numéricas con
 formato General, sin separadores decimales opcionales al final. Mismo permiso del módulo, `Cache-Control: no-store`.
 Las dos listas son obligatorias (pueden estar vacías), máximo 10.000 filas por tabla;
 `cups`/`examen` son texto de hasta 100 caracteres (`seccion` se acepta como alias legacy), `descripcion` hasta 500 y `cantidad`

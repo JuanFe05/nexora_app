@@ -38,6 +38,7 @@ REQUIRED_HEADERS = (
 COLUMNS = (
     ("codigo_centro_costo", "Código Centro de Costo", "text"),
     ("nombre_centro_costos", "Nombre Centro de Costos", "text"),
+    ("examen", "Examen", "text"),
     ("nombre_examen", "Nombre del Examen", "text"),
     ("cantidad", "Cantidad", "number"),
     ("empresa", "Empresa", "text"),
@@ -100,13 +101,15 @@ def _process_rows(values: Iterable[Iterable[Any]]) -> dict[str, Any]:
             {
                 "codigo_centro_costo": section_code,
                 "nombre_centro_costos": section_description,
+                "examen": exam_code,
                 "nombre_examen": exam_description,
                 "cantidad": 1,
                 "empresa": fields["Nombre Cliente"],
                 "punto_atencion": fields["Nombre Centro de Costos"],
             }
         )
-        groups[(exam_code, exam_description)] += 1
+        if exam_code and exam_description:
+            groups[(exam_code, exam_description)] += 1
     return {
         "filas": rows,
         "total": len(rows),

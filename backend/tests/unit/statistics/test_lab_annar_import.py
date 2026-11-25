@@ -162,8 +162,8 @@ async def test_real_app_cors_streamed_ole_import_and_shutdown(
         assert body == {
             "annar_lab_id": body["annar_lab_id"],
             "filas": [{"codigo_centro_costo": "10", "nombre_centro_costos": "Sección diez",
-                       "nombre_examen": "Examen", "cantidad": 1, "empresa": "Empresa",
-                       "punto_atencion": "Punto"}],
+                       "examen": "E", "nombre_examen": "Examen", "cantidad": 1,
+                       "empresa": "Empresa", "punto_atencion": "Punto"}],
             "total": 1,
             "advertencias": [],
             "analisis_annar": [{"examen": "E", "descripcion": "Examen", "cantidad": 1}],

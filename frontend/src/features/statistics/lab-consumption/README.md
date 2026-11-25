@@ -14,7 +14,7 @@ Ruta: `/estadistica/administrativa/consumo-laboratorio`. Requiere el permiso exi
 
 ## Análisis y exportación
 
-Datos Aplicativo suma localmente `cntdd` por `cdgo_prcdmnto` de Facturas + Admisiones + Ser Laboral. Conserva la primera descripción no vacía y ordena por cantidad descendente. Annar Lab utiliza `analisis_annar` del backend.
+Datos Aplicativo suma localmente `cntdd` por `cdgo_prcdmnto` de Facturas + Admisiones + Ser Laboral. Conserva la primera descripción no vacía y ordena por cantidad descendente. Annar Lab utiliza `analisis_annar` del backend, agrupado por `Examen` + `Nombre del Examen`; filas con cualquiera de esos campos vacíos no incrementan Cantidad. La pestaña `Annar Lab` incluye la columna `Examen` en el detalle y muestra `Código`, `Descripción`, `Cantidad` en el análisis.
 
 La barra `Exportar datos unidos` solo se renderiza tras una consulta exitosa; se oculta al limpiar, durante una nueva consulta y si esta falla. Importar sin consultar permite ver resultados, pero no habilita la exportación agrupada ni los botones `Exportar` de detalle. No contiene el texto explicativo largo; conserva la misma acción de descarga.
 

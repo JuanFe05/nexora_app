@@ -40,9 +40,9 @@ def test_duplicate_required_headers_clear_error_and_preserve_token(
     assert saved.status_code == 200
     with zipfile.ZipFile(io.BytesIO(saved.content)) as archive:
         assert archive.read("ANNAR_LAB.csv").decode("utf-8-sig").splitlines() == [
-            "Código Centro de Costo;Nombre Centro de Costos;Nombre del Examen;Cantidad;Empresa;"
-            "Punto Atención",
-            "10;Sección diez;Examen;1;Empresa;Punto",
+            "Código Centro de Costo;Nombre Centro de Costos;Examen;Nombre del Examen;"
+            "Cantidad;Empresa;Punto Atención",
+            "10;Sección diez;E;Examen;1;Empresa;Punto",
         ]
 
 
@@ -103,7 +103,7 @@ def test_replacement_failure_at_capacity_preserves_all_public_tokens(
         assert saved.status_code == 200
         with zipfile.ZipFile(io.BytesIO(saved.content)) as archive:
             assert archive.read("ANNAR_LAB.csv").decode("utf-8-sig").splitlines()[1:] == [
-                f"{index};Sección diez;Examen;1;Empresa;Punto",
+                f"{index};Sección diez;E;Examen;1;Empresa;Punto",
             ]
     assert len(invoices.calls) == len(admissions.calls) == 8
 

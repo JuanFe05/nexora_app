@@ -64,7 +64,7 @@ export function AnalysisTab({ facturas, admisiones, serLaboral, annar }: { factu
     </div>
     <div className="grid min-w-0 grid-cols-1 items-start gap-5 xl:grid-cols-2">
       <AnalysisTable title="Datos Aplicativo" codeLabel="CUPS" rows={aplicativo} empty="No hay datos del aplicativo para analizar." />
-      <AnalysisTable title="Annar Lab" codeLabel="Código Examen" rows={annar.map(({ examen, descripcion, cantidad }) => ({ codigo: examen, descripcion, cantidad }))} empty="Importa un archivo ANNAR LAB para ver el análisis." />
+      <AnalysisTable title="Annar Lab" codeLabel="Código" rows={annar.map(({ examen, descripcion, cantidad }) => ({ codigo: examen, descripcion, cantidad }))} empty="Importa un archivo ANNAR LAB para ver el análisis." />
     </div>
   </div>;
 }

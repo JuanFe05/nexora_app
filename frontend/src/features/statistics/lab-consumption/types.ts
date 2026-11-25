@@ -12,7 +12,7 @@ export type LabConsumptionRow = {
   dscrp_transcn: string;
   sede: string;
 };
-export type AnnarRow = { codigo_centro_costo: string; nombre_centro_costos: string; nombre_examen: string; cantidad: number; empresa: string; punto_atencion: string };
+export type AnnarRow = { codigo_centro_costo: string; nombre_centro_costos: string; examen: string; nombre_examen: string; cantidad: number; empresa: string; punto_atencion: string };
 export type AnnarAnalysis = { examen: string; descripcion: string; cantidad: number };
 export type AnalysisExport = { aplicativo: { cups: string; descripcion: string; cantidad: number }[]; annar: AnnarAnalysis[] };
 export type LabTable = "facturas" | "admisiones" | "ser_laboral" | "annar_lab";

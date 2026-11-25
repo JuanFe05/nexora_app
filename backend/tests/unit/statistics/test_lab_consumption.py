@@ -79,6 +79,7 @@ ANNAR_HEADERS = (
 ANNAR_LABELS = (
     "Código Centro de Costo",
     "Nombre Centro de Costos",
+    "Examen",
     "Nombre del Examen",
     "Cantidad",
     "Empresa",
@@ -449,6 +450,8 @@ def test_annar_workbook_mapping_normalized_headers_analysis(
                 annar_row("2", " Sección dos ", "20", " Hemograma "),
                 annar_row("10", " Otra sección ", "10", " Glucosa "),
                 annar_row("10", " Tercera sección ", "20", " Hemograma diferencial "),
+                annar_row("5", " Sección sin código de examen ", "", " Sin código "),
+                annar_row("6", " Sección sin nombre de examen ", "30", " "),
                 [""] * 14,
             ],
             headers,
@@ -458,15 +461,18 @@ def test_annar_workbook_mapping_normalized_headers_analysis(
     assert response.status_code == 200, response.text
     body = response.json()
     assert set(body) == {"annar_lab_id", "filas", "total", "advertencias", "analisis_annar"}
-    assert body["total"] == 4 and body["advertencias"] == []
+    assert body["total"] == 6 and body["advertencias"] == []
     assert body["filas"][0] == {
         "codigo_centro_costo": "10",
         "nombre_centro_costos": "Sección diez",
+        "examen": "20",
         "nombre_examen": "Hemograma",
         "cantidad": 1,
         "empresa": "Empresa",
         "punto_atencion": "Punto",
     }
+    assert body["filas"][4]["examen"] == ""
+    assert body["filas"][5]["nombre_examen"] == ""
     assert body["analisis_annar"] == [
         {"examen": "10", "descripcion": "Glucosa", "cantidad": 1},
         {"examen": "20", "descripcion": "Hemograma", "cantidad": 2},
