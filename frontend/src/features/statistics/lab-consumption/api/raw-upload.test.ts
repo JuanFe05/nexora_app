@@ -8,6 +8,7 @@ afterEach(() => vi.unstubAllGlobals());
 const uploads = [
   { name: "ser-laboral", type: "text/csv", extension: "csv", upload: labConsumptionApi.uploadSerLaboral, result: { ser_laboral_id: "ser-token", filas: [], total: 0, omitidas: 1, advertencias: [] } },
   { name: "annar-lab", type: "application/vnd.ms-excel", extension: "xls", upload: labConsumptionApi.uploadAnnarLab, result: { annar_lab_id: "annar-token", filas: [], total: 0, advertencias: [], analisis_annar: [] } },
+  { name: "annar-lab", type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", extension: "xlsx", upload: labConsumptionApi.uploadAnnarLab, result: { annar_lab_id: "annar-token", filas: [], total: 0, advertencias: [], analisis_annar: [] } },
 ] as const;
 it.each(uploads)("POSTs $name as a raw authenticated file with the exact Content-Type", async ({ name, type, extension, upload, result }) => {
   const fetch = vi.fn().mockResolvedValue(Response.json(result));
@@ -21,6 +22,23 @@ it.each(uploads)("POSTs $name as a raw authenticated file with the exact Content
   expect(init.method).toBe("POST");
   expect(init.body).toBe(file);
   expect(init.headers.get("Content-Type")).toBe(type);
+  expect(init.headers.get("Authorization")).toBe("Bearer synthetic-access");
+  expect(init.credentials).toBe("include");
+  expect(init.signal).toBe(signal);
+});
+it.each(["", "application/octet-stream", "application/vnd.ms-excel"])("sends uppercase XLSX with explicit modern Excel MIME despite browser type '%s'", async (type) => {
+  const result = uploads[1].result;
+  const fetch = vi.fn().mockResolvedValue(Response.json(result));
+  vi.stubGlobal("fetch", fetch);
+  const file = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], "ANNAR.XLSX", { type });
+  const signal = new AbortController().signal;
+  expect(await labConsumptionApi.uploadAnnarLab(file, signal)).toEqual(result);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  const [url, init] = fetch.mock.calls[0];
+  expect(url).toMatch(/\/statistics\/administrative\/lab-consumption\/annar-lab$/);
+  expect(init.method).toBe("POST");
+  expect(init.body).toBe(file);
+  expect(init.headers.get("Content-Type")).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   expect(init.headers.get("Authorization")).toBe("Bearer synthetic-access");
   expect(init.credentials).toBe("include");
   expect(init.signal).toBe(signal);

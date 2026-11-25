@@ -50,7 +50,7 @@ export function ImportDialog({ onClose, controller, onPending, onSerLaboral, onA
         <div className="-mx-2 overflow-y-auto px-2 py-1">
           <form id="lab-consumption-import" onSubmit={(event) => { event.preventDefault(); void submit(); }} className="grid items-start gap-5 md:grid-cols-2">
             <FileDropCard id="lab-ser-file" title="CSV de Ser Laboral" inputLabel="CSV Ser Laboral" accept=".csv" hint="Formato aceptado: CSV (.csv)" icon={<DocumentTextIcon className="size-6" />} file={ser} onFileChange={(file) => { setSer(file); setSerResult(undefined); }} disabled={pending} result={serResult} resultLabel="Ser Laboral" />
-            <FileDropCard id="lab-annar-file" title="Excel 97-2003 de ANNAR LAB" inputLabel="Excel ANNAR LAB" accept=".xls" hint="Formato aceptado: Excel 97-2003 (.xls), no .xlsx" icon={<LayoutGridIcon className="size-6" />} file={annar} onFileChange={(file) => { setAnnar(file); setAnnarResult(undefined); }} disabled={pending} result={annarResult} resultLabel="ANNAR LAB" />
+            <FileDropCard id="lab-annar-file" title="Excel de ANNAR LAB" inputLabel="Excel ANNAR LAB" accept=".xls,.xlsx" hint="Formatos aceptados: Excel 97-2003 (.xls) y Excel moderno (.xlsx)" icon={<LayoutGridIcon className="size-6" />} file={annar} onFileChange={(file) => { setAnnar(file); setAnnarResult(undefined); }} disabled={pending} result={annarResult} resultLabel="ANNAR LAB" />
           </form>
           <p className="mt-4 text-xs leading-5 text-gray-500 dark:text-gray-400">Si un archivo falla, podrás reintentar sin volver a enviar el que ya se importó.</p>
         </div>

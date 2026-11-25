@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { FileDropCard, type FileDropCardProps } from "./file-drop-card";
@@ -24,6 +24,47 @@ it("supports drop, localized size, extension badge, name and removal", () => {
   fireEvent.click(screen.getByRole("button", { name: "Quitar Reporte.XLS" }));
   expect(screen.queryByText("Reporte.XLS")).not.toBeInTheDocument();
   expect(screen.getByText("Arrastra y suelta tu archivo aquí")).toBeVisible();
+});
+it.each([
+  { title: "CSV de Ser Laboral", accept: ".csv" as const, name: "informe.csv", badge: "CSV" },
+  { title: "ANNAR LAB", accept: ".xls" as const, name: "informe.xls", badge: "XLS" },
+])("replaces the placeholder inside the same area for $title and restores it with keyboard removal", async ({ title, accept, name, badge }) => {
+  const user = userEvent.setup();
+  render(<Harness title={title} accept={accept} />);
+  const zone = screen.getByRole("region", { name: `Zona de carga de ${title}` });
+  const input = screen.getByLabelText("Excel ANNAR LAB");
+  await user.upload(input, new File([new Uint8Array(1536)], name));
+  expect(screen.getByRole("region", { name: `Zona de carga de ${title}` })).toBe(zone);
+  expect(within(zone).getByText(name)).toBeVisible();
+  expect(within(zone).getByText(badge)).toBeVisible();
+  expect(within(zone).getByText("1,5 KB")).toBeVisible();
+  expect(screen.queryByText("Arrastra y suelta tu archivo aquí")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: `Seleccionar archivo para ${title}` })).not.toBeInTheDocument();
+  await user.tab();
+  expect(within(zone).getByRole("button", { name: `Quitar ${name}` })).toHaveFocus();
+  await user.keyboard("{Enter}");
+  expect(screen.queryByText(name)).not.toBeInTheDocument();
+  expect(within(zone).getByText("Arrastra y suelta tu archivo aquí")).toBeVisible();
+  expect(within(zone).getByRole("button", { name: `Seleccionar archivo para ${title}` })).toBeEnabled();
+});
+it.each(["drop", "select"])("accepts uppercase XLSX via %s and preserves it when an invalid replacement is rejected", (method) => {
+  render(<Harness accept={".xls,.xlsx" as FileDropCardProps["accept"]} />);
+  const file = new File([new Uint8Array(1536)], "Reporte.XLSX");
+  if (method === "drop") drop(file);
+  else fireEvent.change(screen.getByLabelText("Excel ANNAR LAB"), { target: { files: [file] } });
+  const zone = screen.getByRole("region", { name: "Zona de carga de ANNAR LAB" });
+  expect(within(zone).getByText("Reporte.XLSX")).toBeVisible();
+  expect(within(zone).getByText("XLSX")).toBeVisible();
+  expect(within(zone).getByText("1,5 KB")).toBeVisible();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  drop(new File(["bad"], "informe.xls.exe"));
+  expect(screen.getByRole("alert")).toHaveTextContent("Selecciona un archivo .xls o .xlsx para ANNAR LAB. El archivo «informe.xls.exe» no es compatible.");
+  expect(screen.getByLabelText("Excel ANNAR LAB")).toHaveAccessibleDescription(/Selecciona un archivo .xls o .xlsx/);
+  expect(within(zone).getByText("Reporte.XLSX")).toBeVisible();
+  expect(screen.queryByText("informe.xls.exe")).not.toBeInTheDocument();
+  fireEvent.click(within(zone).getByRole("button", { name: "Quitar Reporte.XLSX" }));
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Excel ANNAR LAB")).toHaveAttribute("aria-invalid", "false");
 });
 it("opens the picker with keyboard, selects and formats MB", async () => {
   const user = userEvent.setup(); render(<Harness />);
@@ -73,7 +114,7 @@ it("ignores picker cancellation and resets the input so the same file can be sel
 it("blocks changes while disabled including drops", () => {
   const onFileChange = vi.fn(); render(<Harness disabled onFileChange={onFileChange} file={new File(["ok"], "listo.xls")} />);
   expect(screen.getByLabelText("Excel ANNAR LAB")).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Seleccionar archivo para ANNAR LAB" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Seleccionar archivo para ANNAR LAB" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Quitar listo.xls" })).toBeDisabled();
   drop(new File(["other"], "otro.xls"));
   expect(onFileChange).not.toHaveBeenCalled();

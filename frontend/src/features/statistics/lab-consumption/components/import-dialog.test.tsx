@@ -34,9 +34,10 @@ it("labels both cards, disables import until selection and supports removal and 
   const props = setup();
   expect(screen.getByRole("dialog", { name: "Importar archivos" })).toBeVisible();
   expect(screen.getByRole("group", { name: "CSV de Ser Laboral" })).toBeVisible();
-  expect(screen.getByRole("group", { name: "Excel 97-2003 de ANNAR LAB" })).toBeVisible();
+  expect(screen.getByRole("group", { name: "Excel de ANNAR LAB" })).toBeVisible();
   expect(screen.getByLabelText("CSV Ser Laboral")).toHaveAttribute("accept", ".csv");
-  expect(screen.getByLabelText("Excel ANNAR LAB")).toHaveAttribute("accept", ".xls");
+  expect(screen.getByLabelText("Excel ANNAR LAB")).toHaveAttribute("accept", ".xls,.xlsx");
+  expect(screen.getByText("Formatos aceptados: Excel 97-2003 (.xls) y Excel moderno (.xlsx)")).toBeVisible();
   expect(screen.getByRole("button", { name: "Importar" })).toBeDisabled();
   select("CSV Ser Laboral", csv());
   expect(screen.getByText("informe.csv")).toBeVisible();
@@ -48,7 +49,7 @@ it("labels both cards, disables import until selection and supports removal and 
   expect(props.onClose).toHaveBeenCalledOnce();
   expect(labConsumptionApi.uploadSerLaboral).not.toHaveBeenCalled();
 });
-it.each([["CSV Ser Laboral", "ser.xls", ".csv"], ["Excel ANNAR LAB", "annar.xlsx", ".xls"]])("rejects invalid extension for %s without uploading", (label, name, extension) => {
+it.each([["CSV Ser Laboral", "ser.xls", ".csv"], ["Excel ANNAR LAB", "annar.csv", ".xls o .xlsx"]])("rejects invalid extension for %s without uploading", (label, name, extension) => {
   setup();
   select(label, new File(["bad"], name));
   expect(screen.getByRole("alert")).toHaveTextContent(`Selecciona un archivo ${extension}`);
@@ -56,6 +57,28 @@ it.each([["CSV Ser Laboral", "ser.xls", ".csv"], ["Excel ANNAR LAB", "annar.xlsx
   expect(screen.getByRole("button", { name: "Importar" })).toBeDisabled();
   expect(labConsumptionApi.uploadSerLaboral).not.toHaveBeenCalled();
   expect(labConsumptionApi.uploadAnnarLab).not.toHaveBeenCalled();
+});
+it.each(["xls", "xlsx"])("selects ANNAR %s inline, removes it without uploading, then imports it", async (extension) => {
+  const props = setup();
+  const zone = screen.getByRole("region", { name: "Zona de carga de Excel de ANNAR LAB" });
+  const file = new File([new Uint8Array(1536)], `informe.${extension}`);
+  select("Excel ANNAR LAB", file);
+  expect(within(zone).getByText(file.name)).toBeVisible();
+  expect(within(zone).getByText(extension.toUpperCase())).toBeVisible();
+  expect(within(zone).getByText("1,5 KB")).toBeVisible();
+  expect(within(zone).queryByText("Arrastra y suelta tu archivo aquí")).not.toBeInTheDocument();
+  fireEvent.click(within(zone).getByRole("button", { name: `Quitar ${file.name}` }));
+  expect(within(zone).getByRole("button", { name: "Seleccionar archivo para Excel de ANNAR LAB" })).toBeEnabled();
+  expect(within(zone).getByText("Arrastra y suelta tu archivo aquí")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Importar" })).toBeDisabled();
+  expect(labConsumptionApi.uploadAnnarLab).not.toHaveBeenCalled();
+  select("Excel ANNAR LAB", file);
+  fireEvent.click(screen.getByRole("button", { name: "Importar" }));
+  await act(async () => {});
+  expect(labConsumptionApi.uploadAnnarLab).toHaveBeenCalledExactlyOnceWith(file, props.controller.signal);
+  expect(labConsumptionApi.uploadSerLaboral).not.toHaveBeenCalled();
+  expect(props.onAnnarLab).toHaveBeenCalledExactlyOnceWith(annar);
+  expect(props.onSuccess).toHaveBeenCalledExactlyOnceWith("annar-lab");
 });
 it("starts parallel uploads, displays individual outcomes, and retries only the failed file", async () => {
   const a = deferred<SerLaboralReport>(); const b = deferred<AnnarLabReport>();

@@ -74,6 +74,51 @@ it("matches import styling to Consultar and preserves both imports made before t
   expect(params.get("annar_lab_id")).toBe("annar-token");
   expect(downloadBlob).toHaveBeenCalledTimes(1);
 });
+it.each(["Ser Laboral", "ANNAR LAB"] as const)("reveals all tabs and %s results without a query, with empty query views and an explicit reset", async (source) => {
+  render(<LabConsumptionPage />);
+  const dialog = await open(source === "Ser Laboral", source === "ANNAR LAB");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Importar" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(screen.getAllByRole("tab")).toHaveLength(5);
+  expect(screen.getByRole("tab", { name: new RegExp(`^${source}`) })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByText(source === "Ser Laboral" ? "OTRA DESCRIPCIÓN" : "GLUCOSA")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Exportar" })).toBeDisabled();
+  expect(vi.mocked(httpClient.get).mock.calls.some(([url]) => url.startsWith(`${path}?`))).toBe(false);
+  expect(screen.queryByRole("button", { name: "Exportar datos unidos" })).not.toBeInTheDocument();
+  for (const title of ["Facturas Detalladas", "Admisiones"]) {
+    const tab = screen.getByRole("tab", { name: new RegExp(`^${title}`) });
+    expect(tab).toHaveTextContent(`${title}0`);
+    fireEvent.click(tab);
+    expect(await screen.findByText(`No hay registros de ${title}.`)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Exportar" })).toBeDisabled();
+  }
+  fireEvent.click(screen.getByRole("tab", { name: "Análisis" }));
+  if (source === "Ser Laboral") expect(within(screen.getByRole("table", { name: "Datos Aplicativo" })).getAllByRole("row")[1]).toHaveTextContent("901OTRA DESCRIPCIÓN4");
+  else expect(within(screen.getByRole("table", { name: "Annar Lab" })).getAllByRole("row")[1]).toHaveTextContent("02AGRUPACIÓN ANNAR7");
+  expect(screen.getByRole("button", { name: "Limpiar" })).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Limpiar" }));
+  expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Limpiar" })).toBeDisabled();
+});
+it.each(["Ser Laboral", "ANNAR LAB"] as const)("keeps successful %s data when the other import fails without a query", async (source) => {
+  render(<LabConsumptionPage />);
+  if (source === "Ser Laboral") vi.mocked(labConsumptionApi.uploadAnnarLab).mockRejectedValueOnce(new ApiError(422, "Archivo inválido", null));
+  else vi.mocked(labConsumptionApi.uploadSerLaboral).mockRejectedValueOnce(new ApiError(422, "Archivo inválido", null));
+  const dialog = await open();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Importar" }));
+  expect(await within(dialog).findByText("Archivo inválido")).toBeVisible();
+  await waitFor(() => expect(within(dialog).getByRole("button", { name: "Cancelar" })).toBeEnabled());
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+  expect(screen.getByRole("tab", { name: new RegExp(`^${source}`) })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByText(source === "Ser Laboral" ? "OTRA DESCRIPCIÓN" : "GLUCOSA")).toBeVisible();
+  const failed = await open(source !== "Ser Laboral", source !== "ANNAR LAB");
+  if (source === "Ser Laboral") vi.mocked(labConsumptionApi.uploadAnnarLab).mockRejectedValueOnce(new ApiError(422, "Otro error", null));
+  else vi.mocked(labConsumptionApi.uploadSerLaboral).mockRejectedValueOnce(new ApiError(422, "Otro error", null));
+  fireEvent.click(within(failed).getByRole("button", { name: "Importar" }));
+  expect(await within(failed).findByText("Otro error")).toBeVisible();
+  fireEvent.click(within(failed).getByRole("button", { name: "Cancelar" }));
+  expect(screen.getByText(source === "Ser Laboral" ? "OTRA DESCRIPCIÓN" : "GLUCOSA")).toBeVisible();
+});
 it("protects the active upload from reopening the modal", async () => {
   render(<LabConsumptionPage />);
   let resolve!: (value: ReturnType<typeof annar>) => void;
@@ -138,7 +183,7 @@ it("requires at least one file and starts both uploads in parallel, keeping per-
   vi.mocked(labConsumptionApi.uploadAnnarLab).mockRejectedValueOnce(new ApiError(422, "Falta Seccion", null));
   const dialog = await open(false, false);
   expect(within(dialog).getByLabelText("CSV Ser Laboral")).toHaveAttribute("accept", ".csv");
-  expect(within(dialog).getByLabelText("Excel ANNAR LAB")).toHaveAttribute("accept", ".xls");
+  expect(within(dialog).getByLabelText("Excel ANNAR LAB")).toHaveAttribute("accept", ".xls,.xlsx");
   fireEvent.click(within(dialog).getByRole("button", { name: "Importar" }));
   expect(labConsumptionApi.uploadSerLaboral).not.toHaveBeenCalled();
   expect(labConsumptionApi.uploadAnnarLab).not.toHaveBeenCalled();
@@ -327,21 +372,32 @@ it("aborts a pending import on clear and ignores its late result", async () => {
   expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Importar archivos" })).toBeEnabled();
 });
-it("subsequent consultation and clear discard imported rows/tokens without gating import", async () => {
+it("preserves successful sources during a failed requery and retry, then clears imported rows/tokens explicitly", async () => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   await query(); const dialog = await open(); fireEvent.click(within(dialog).getByRole("button", { name: "Importar" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  let reject!: (error: Error) => void;
+  vi.mocked(httpClient.get).mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
   fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
   expect(screen.getByRole("button", { name: "Importar archivos" })).toBeEnabled();
-  await screen.findByRole("table", { name: "Datos Aplicativo" });
-  fireEvent.click(screen.getByRole("tab", { name: /^Ser Laboral/ }));
-  expect(await screen.findByText("Importa un CSV Ser Laboral para ver los registros.")).toBeVisible();
-  fireEvent.click(screen.getByRole("tab", { name: /^ANNAR LAB/ }));
-  expect(await screen.findByText("Importa un archivo ANNAR LAB para ver los registros.")).toBeVisible();
+  expect(screen.getAllByRole("tab")).toHaveLength(5);
+  expect(within(screen.getByRole("table", { name: "Datos Aplicativo" })).getAllByRole("row")[1]).toHaveTextContent("901HEMOGRAMA9");
+  await act(async () => reject(new ApiError(502, "private detail", null)));
+  expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo consultar el informe.");
+  expect(screen.queryByText("private detail")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Exportar datos unidos" })).not.toBeInTheDocument();
+  for (const [source, text] of [["Ser Laboral", "OTRA DESCRIPCIÓN"], ["ANNAR LAB", "GLUCOSA"]]) {
+    fireEvent.click(screen.getByRole("tab", { name: new RegExp(`^${source}`) }));
+    expect(await screen.findByText(text)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Exportar" })).toBeDisabled();
+  }
+  fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Exportar datos unidos" })).toBeEnabled());
+  expect(within(screen.getByRole("table", { name: "Datos Aplicativo" })).getAllByRole("row")[1]).toHaveTextContent("901HEMOGRAMA9");
   await exportCsv(user, "Exportar datos unidos");
   const params = new URLSearchParams(vi.mocked(httpClient.getWithMeta).mock.lastCall![0].split("?")[1]);
-  expect(params.has("ser_laboral_id")).toBe(false);
-  expect(params.has("annar_lab_id")).toBe(false);
+  expect(params.get("ser_laboral_id")).toBe("ser-token");
+  expect(params.get("annar_lab_id")).toBe("annar-token");
   fireEvent.click(screen.getByRole("button", { name: "Limpiar" }));
   expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Importar archivos" })).toBeEnabled();

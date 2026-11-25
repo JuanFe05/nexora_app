@@ -24,4 +24,4 @@ async function upload<T>(file: File, endpoint: string, contentType: string, sign
   return client.post<T>(`/statistics/administrative/lab-consumption/${endpoint}`, { signal });
 }
 export const uploadSerLaboral = (file: File, signal?: AbortSignal) => upload<SerLaboralReport>(file, "ser-laboral", "text/csv", signal);
-export const uploadAnnarLab = (file: File, signal?: AbortSignal) => upload<AnnarLabReport>(file, "annar-lab", "application/vnd.ms-excel", signal);
+export const uploadAnnarLab = (file: File, signal?: AbortSignal) => upload<AnnarLabReport>(file, "annar-lab", file.name.toLowerCase().endsWith(".xlsx") ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "application/vnd.ms-excel", signal);
