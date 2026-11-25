@@ -17,6 +17,25 @@ server {
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
+    # ANNAR y Ser Laboral usan cuerpos crudos de hasta 25 MiB, igual que FastAPI.
+    # La excepción y el 413 JSON quedan limitados a estos dos endpoints.
+    location ~ ^/api(/v[0-9]+)?/statistics/administrative/lab-consumption/(ser-laboral|annar-lab)/?$ {
+        client_max_body_size 25m;
+        error_page 413 = @lab_consumption_upload_too_large;
+        proxy_pass ${API_UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    location @lab_consumption_upload_too_large {
+        default_type application/json;
+        return 413 '{"detail":"El archivo excede el límite de 25 MB."}';
+    }
+
     # API de FastAPI. Se conserva el Origin del navegador porque el backend lo valida.
     location /api/ {
         proxy_pass ${API_UPSTREAM};

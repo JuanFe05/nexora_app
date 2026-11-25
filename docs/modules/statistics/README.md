@@ -382,7 +382,9 @@ este informe; las cargas sí se cachean por token. El resultado JSON completo re
 - `POST /annar-lab`: cuerpo Excel crudo, **sin JSON ni multipart**, máximo 25 MiB.
   El cliente declara el formato con `Content-Type`: `.xls` → `application/vnd.ms-excel`,
   `.xlsx` → `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
-  Sin Content-Type se conserva XLS por compatibilidad. Otros tipos → 422
+  Sin Content-Type se conserva XLS por compatibilidad. Nginx production limits only these upload
+  routes to 25 MiB and converts its local 413 to JSON `{"detail":"El archivo excede el límite de 25 MB."}`;
+  other API modules keep their existing limit. Otros tipos → 422
   `Tipo de archivo no permitido; usa XLS o XLSX de ANNAR LAB.`. No se recibe nombre de
   archivo; el backend comprueba que el contenido corresponde al formato declarado, sin
   intentar otro lector al fallar. `.xls` usa `xlrd.open_workbook(on_demand=True)`;

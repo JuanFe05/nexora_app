@@ -37,7 +37,7 @@ it("labels both cards, disables import until selection and supports removal and 
   expect(screen.getByRole("group", { name: "Excel de ANNAR LAB" })).toBeVisible();
   expect(screen.getByLabelText("CSV Ser Laboral")).toHaveAttribute("accept", ".csv");
   expect(screen.getByLabelText("Excel ANNAR LAB")).toHaveAttribute("accept", ".xls,.xlsx");
-  expect(screen.getByText("Formatos aceptados: Excel 97-2003 (.xls) y Excel moderno (.xlsx)")).toBeVisible();
+  expect(screen.getByText("Formatos aceptados: Excel (.xls) y (.xlsx)")).toBeVisible();
   expect(screen.getByRole("button", { name: "Importar" })).toBeDisabled();
   select("CSV Ser Laboral", csv());
   expect(screen.getByText("informe.csv")).toBeVisible();
