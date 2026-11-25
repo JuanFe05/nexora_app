@@ -116,16 +116,45 @@ def test_analysis_layout_values_and_no_sql(http: Any) -> None:
         workbook = ET.fromstring(book.read("xl/workbook.xml"))  # noqa: S314
         assert [s.attrib["name"] for s in workbook.findall("s:sheets/s:sheet", NS)] == ["Análisis"]
         assert sheet_rows(book, 1) == [
-            [BODY["titulo"]], [BODY["periodo"]], ["Datos Aplicativo"],
-            ["CUPS", "Descripción", "Cantidad"], ["001", "HEMOGRAMA", "12500.5"],
-            ["ANNAR LAB"], ["Sección", "Descripción", "Cantidad"],
-            ["10", "HEMATOLOGÍA", "22508"],
+            [BODY["titulo"]], [BODY["periodo"]], ["Datos Aplicativo", "ANNAR LAB"],
+            ["CUPS", "Descripción", "Cantidad", "Sección", "Descripción", "Cantidad"],
+            ["001", "HEMOGRAMA", "12500.5", "10", "HEMATOLOGÍA", "22508"],
         ]
         styles = book.read("xl/styles.xml").decode()
-        assert "#,##0" in styles and "FF123EBD" in styles
+        assert "FF123EBD" in styles
         sheet = ET.fromstring(book.read("xl/worksheets/sheet1.xml"))  # noqa: S314
-        quantity = sheet.find('.//s:c[@r="C6"]', NS)
-        assert quantity is not None and "t" not in quantity.attrib
+        assert [m.attrib["ref"] for m in sheet.findall("s:mergeCells/s:mergeCell", NS)] == [
+            "A1:G1", "A2:G2", "A4:C4", "E4:G4",
+        ]
+        assert not any(c.attrib["r"].startswith("D") for c in sheet.findall(".//s:c", NS))
+        style_tree = ET.fromstring(styles)  # noqa: S314
+        cell_styles = style_tree.findall("s:cellXfs/s:xf", NS)
+        for ref, expected in (("C6", "12500.5"), ("G6", "22508")):
+            quantity = sheet.find(f'.//s:c[@r="{ref}"]', NS)
+            assert quantity is not None and "t" not in quantity.attrib
+            assert quantity.findtext("s:v", namespaces=NS) == expected
+            # General renders both integers and fractions without an optional decimal separator.
+            assert cell_styles[int(quantity.attrib["s"])].attrib["numFmtId"] == "0"
+    assert http[1].calls == http[2].calls == []
+
+
+@pytest.mark.parametrize(("app_count", "annar_count"), [(0, 2), (2, 0), (1, 3)])
+def test_analysis_unequal_tables_keep_independent_rows(http: Any, app_count: int,
+                                                     annar_count: int) -> None:
+    body = {"aplicativo": BODY["aplicativo"] * app_count,
+            "annar": BODY["annar"] * annar_count}
+    response = http[0].post(BASE + "/export/analysis/xlsx", headers=AUTH, json=body)
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    with zipfile.ZipFile(io.BytesIO(response.content)) as book:
+        sheet = ET.fromstring(book.read("xl/worksheets/sheet1.xml"))  # noqa: S314
+        for column, count, value in (("C", app_count, "12500.5"), ("G", annar_count, "22508")):
+            cells = [c for c in sheet.findall(".//s:c", NS)
+                     if c.attrib["r"].startswith(column) and c.find("s:v", NS) is not None]
+            assert [c.attrib["r"] for c in cells] == [f"{column}{i + 6}" for i in range(count)]
+            assert all(c.findtext("s:v", namespaces=NS) == value and "t" not in c.attrib
+                       for c in cells)
+        assert not any(c.attrib["r"].startswith("D") for c in sheet.findall(".//s:c", NS))
     assert http[1].calls == http[2].calls == []
 
 
@@ -149,7 +178,7 @@ def test_analysis_empty_tables_defaults(http: Any) -> None:
     assert response.status_code == 200
     with zipfile.ZipFile(io.BytesIO(response.content)) as book:
         rows = sheet_rows(book, 1)
-        assert ["Datos Aplicativo"] in rows and ["ANNAR LAB"] in rows
+        assert ["Datos Aplicativo", "ANNAR LAB"] in rows
 
 
 def test_archive_build_runs_in_worker(http: Any, monkeypatch: Any) -> None:

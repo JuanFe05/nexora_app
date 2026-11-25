@@ -25,6 +25,21 @@ it.each(uploads)("POSTs $name as a raw authenticated file with the exact Content
   expect(init.credentials).toBe("include");
   expect(init.signal).toBe(signal);
 });
+it("sends XLS binary bytes unchanged even when the browser supplies no MIME type", async () => {
+  const result = uploads[1].result;
+  const fetch = vi.fn().mockResolvedValue(Response.json(result));
+  vi.stubGlobal("fetch", fetch);
+  const bytes = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+  const file = new File([bytes], "ANNAR.XLS");
+  expect(file.type).toBe("");
+  expect(await labConsumptionApi.uploadAnnarLab(file)).toEqual(result);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  const [, init] = fetch.mock.calls[0];
+  expect(init.method).toBe("POST");
+  expect(init.body).toBe(file);
+  expect(init.headers.get("Content-Type")).toBe("application/vnd.ms-excel");
+  expect(init.headers.get("Authorization")).toBe("Bearer synthetic-access");
+});
 it.each(uploads)("preserves 422 and 413 detail for $name", async ({ upload, extension }) => {
   for (const status of [422, 413]) {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ detail: "Detalle del archivo" }, { status })));

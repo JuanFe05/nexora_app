@@ -36,10 +36,10 @@ function dates() {
 }
 async function query() {
   render(<LabConsumptionPage />);
-  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeEnabled();
   await waitFor(() => expect(screen.getByRole("button", { name: "Consultar" })).toBeEnabled());
   dates(); fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
-  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeEnabled();
   await screen.findByRole("table", { name: "Datos Aplicativo" });
 }
 async function open(serFile = true, annarFile = true) {
@@ -55,6 +55,37 @@ async function exportCsv(user: ReturnType<typeof userEvent.setup>, label = "Expo
   fireEvent.click(await screen.findByRole("menuitem", { name: "CSV" }));
   await waitFor(() => expect(httpClient.getWithMeta).toHaveBeenCalled());
 }
+it("matches import styling to Consultar and preserves both imports made before the first consultation", async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  render(<LabConsumptionPage />);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Consultar" })).toBeEnabled());
+  expect(screen.getByRole("button", { name: "Importar archivos" }).className).toBe(screen.getByRole("button", { name: "Consultar" }).className);
+  const dialog = await open();
+  fireEvent.click(within(dialog).getByRole("button", { name: "Importar" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  dates(); fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
+  const table = within(await screen.findByRole("table", { name: "Datos Aplicativo" }));
+  expect(table.getAllByRole("row")[1]).toHaveTextContent("901HEMOGRAMA9");
+  expect(within(screen.getByRole("table", { name: "Annar Lab" })).getAllByRole("row")[1]).toHaveTextContent("02AGRUPACIÓN ANNAR7");
+  expect(screen.getByRole("region", { name: "Exportación de datos unidos" }).querySelector("p")).toBeNull();
+  await exportCsv(user, "Exportar datos unidos");
+  const params = new URLSearchParams(vi.mocked(httpClient.getWithMeta).mock.lastCall![0].split("?")[1]);
+  expect(params.get("ser_laboral_id")).toBe("ser-token");
+  expect(params.get("annar_lab_id")).toBe("annar-token");
+  expect(downloadBlob).toHaveBeenCalledTimes(1);
+});
+it("protects the active upload from reopening the modal", async () => {
+  render(<LabConsumptionPage />);
+  let resolve!: (value: ReturnType<typeof annar>) => void;
+  vi.mocked(labConsumptionApi.uploadAnnarLab).mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+  const dialog = await open(false, true);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Importar" }));
+  expect(screen.getByRole("button", { name: "Importar archivos", hidden: true })).toBeEnabled();
+  expect(within(dialog).getByRole("button", { name: "Importando…" })).toBeDisabled();
+  await act(async () => resolve(annar()));
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeEnabled();
+});
 it("renders the combined export bar only for a successfully loaded report", async () => {
   render(<LabConsumptionPage />);
   function expectHidden() {
@@ -261,7 +292,7 @@ it("shows both empty analysis states and backend consultation warnings", async (
   expect(await screen.findByRole("button", { name: "Exportar" })).toBeDisabled();
   expect(screen.getByText("No hay registros de Facturas Detalladas.")).toBeVisible();
 });
-it("keeps import disabled after a consultation failure, then enables it on successful retry", async () => {
+it("keeps import available after a consultation failure and on successful retry", async () => {
   vi.mocked(httpClient.get).mockImplementation(async (url) => {
     if (url.startsWith(`${path}?`)) throw new ApiError(502, "private detail", null);
     return [];
@@ -274,7 +305,7 @@ it("keeps import disabled after a consultation failure, then enables it on succe
   dates(); fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo consultar el informe.");
   expect(screen.queryByText("private detail")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeEnabled();
   expect(screen.queryByRole("button", { name: "Exportar datos unidos" })).not.toBeInTheDocument();
   vi.mocked(httpClient.get).mockResolvedValue(report);
   fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
@@ -294,14 +325,14 @@ it("aborts a pending import on clear and ignores its late result", async () => {
   await act(async () => resolve(ser()));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(screen.queryByRole("tab")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeEnabled();
 });
-it("new consultation and clear discard imported rows/tokens and gate the import lifecycle", async () => {
+it("subsequent consultation and clear discard imported rows/tokens without gating import", async () => {
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   await query(); const dialog = await open(); fireEvent.click(within(dialog).getByRole("button", { name: "Importar" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   fireEvent.click(screen.getByRole("button", { name: "Consultar" }));
-  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeEnabled();
   await screen.findByRole("table", { name: "Datos Aplicativo" });
   fireEvent.click(screen.getByRole("tab", { name: /^Ser Laboral/ }));
   expect(await screen.findByText("Importa un CSV Ser Laboral para ver los registros.")).toBeVisible();
@@ -313,5 +344,5 @@ it("new consultation and clear discard imported rows/tokens and gate the import 
   expect(params.has("annar_lab_id")).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Limpiar" }));
   expect(screen.queryByRole("tab")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Importar archivos" })).toBeEnabled();
 });

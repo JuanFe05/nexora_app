@@ -187,7 +187,9 @@ def create_lab_consumption_router(*, provider: Callable[..., LabConsumptionRepor
     @router.post(
         "/export/analysis/xlsx", summary="Excel de Análisis: Datos Aplicativo y ANNAR LAB",
         description=(
-            "Una hoja Análisis; no consulta SQL. aplicativo: cups/descripcion/cantidad; "
+            "Una hoja Análisis: Datos Aplicativo A:C y ANNAR LAB E:G, columna D vacía; "
+            "cantidades numéricas con formato General; no consulta SQL. "
+            "aplicativo: cups/descripcion/cantidad; "
             "annar: seccion/descripcion/cantidad. Máximo 10000 filas por tabla, códigos 100 "
             "caracteres, descripción 500, título 120, periodo 180; sin campos adicionales."
         ),

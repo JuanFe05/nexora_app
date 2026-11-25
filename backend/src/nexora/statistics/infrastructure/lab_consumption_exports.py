@@ -119,35 +119,39 @@ def build_analysis_xlsx(
         f'<row r="1" ht="28" customHeight="1">{_text_cell("A1", title, TITLE)}</row>',
         f'<row r="2" ht="24" customHeight="1">{_text_cell("A2", period, SUBTITLE)}</row>',
     ]
-    merges = ["A1:C1", "A2:C2"]
-    index = 4
-    for name, code, label, data in (
-        ("Datos Aplicativo", "cups", "CUPS", aplicativo),
-        ("ANNAR LAB", "seccion", "Sección", annar),
-    ):
-        rows.append(
-            f'<row r="{index}" ht="26" customHeight="1">'
-            + _text_cell(f"A{index}", name, SUBTITLE) + "</row>"
-        )
-        merges.append(f"A{index}:C{index}")
-        index += 1
-        rows.append(
-            f'<row r="{index}" ht="28" customHeight="1">'
-            + "".join(_text_cell(f"{col}{index}", text, HEADER)
-                      for col, text in zip("ABC", (label, "Descripción", "Cantidad"), strict=True))
-            + "</row>"
-        )
-        for item in data:
-            index += 1
-            rows.append(
-                f'<row r="{index}" ht="30" customHeight="1">'
-                + _text_cell(f"A{index}", item[code], LABEL)
-                + _text_cell(f"B{index}", item["descripcion"], LABEL)
-                + f'<c r="C{index}" s="{NUMBER}"><v>{item["cantidad"]}</v></c></row>'
-            )
-        index += 3
+    merges = ["A1:G1", "A2:G2", "A4:C4", "E4:G4"]
+    tables = (
+        ("Datos Aplicativo", "cups", "CUPS", aplicativo, "ABC"),
+        ("ANNAR LAB", "seccion", "Sección", annar, "EFG"),
+    )
+    rows.append(
+        '<row r="4" ht="26" customHeight="1">'
+        + "".join(_text_cell(f"{cols[0]}4", name, SUBTITLE)
+                  for name, _, _, _, cols in tables) + "</row>"
+    )
+    rows.append(
+        '<row r="5" ht="28" customHeight="1">'
+        + "".join(_text_cell(f"{col}5", text, HEADER)
+                  for _, _, label, _, cols in tables
+                  for col, text in zip(cols, (label, "Descripción", "Cantidad"), strict=True))
+        + "</row>"
+    )
+    # Each XML row contains both tables; D remains entirely empty, even for unequal lengths.
+    for offset in range(max(len(aplicativo), len(annar))):
+        index = offset + 6
+        cells = []
+        for _, code, _, data, cols in tables:
+            if offset >= len(data):
+                continue
+            item = data[offset]
+            cells.extend((
+                _text_cell(f"{cols[0]}{index}", item[code], LABEL),
+                _text_cell(f"{cols[1]}{index}", item["descripcion"], LABEL),
+                f'<c r="{cols[2]}{index}" s="{NUMBER}"><v>{item["cantidad"]}</v></c>',
+            ))
+        rows.append(f'<row r="{index}" ht="30" customHeight="1">{"".join(cells)}</row>')
     sheet = _sheet(
-        rows, cols=[24, 76, 24], extra_view=' showGridLines="0">',
+        rows, cols=[24, 76, 24, 4, 24, 76, 24], extra_view=' showGridLines="0">',
         tail=(f'<mergeCells count="{len(merges)}">'
               + "".join(f'<mergeCell ref="{ref}"/>' for ref in merges) + "</mergeCells>"
               '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" '
@@ -157,11 +161,9 @@ def build_analysis_xlsx(
     buffer.seek(0)
     with zipfile.ZipFile(buffer) as book:
         workbook = book.read("xl/workbook.xml").replace(b'name="Hoja1"', 'name="Análisis"'.encode())
-    styles = (
-        _STYLES.replace('<numFmts count="1">', '<numFmts count="2">')
-        .replace('</numFmts>', '<numFmt numFmtId="165" formatCode="#,##0.##########"/></numFmts>')
-        .replace('numFmtId="1"', 'numFmtId="165"')
-    )
+    # Avoid optional decimal separators in the quantity format. General retains numeric
+    # cells for integers and fractions; keep the existing fonts, borders and alignment.
+    styles = _STYLES.replace('numFmtId="1"', 'numFmtId="0"')
     output = io.BytesIO()
     _copy_book(buffer, output, {
         "xl/workbook.xml": workbook,

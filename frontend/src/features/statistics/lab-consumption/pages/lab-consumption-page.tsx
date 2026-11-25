@@ -47,7 +47,10 @@ export default function LabConsumptionPage() {
   }
   function discardImports() { closeImport(); setSerLaboral(null); setAnnarLab(null); setUploadError(null); }
   function consult(filters: ReportFilters) {
-    discardImports(); setTab("analisis"); setVisible(defaultLabColumns); setAnnarVisible(defaultAnnarColumns);
+    // The first consultation must include files the user chose to import first.
+    if (applied) discardImports();
+    else { closeImport(); setUploadError(null); }
+    setTab("analisis"); setVisible(defaultLabColumns); setAnnarVisible(defaultAnnarColumns);
     setState({ status: "loading" });
     setApplied((current) => ({ filters, revision: (current?.revision ?? 0) + 1 }));
   }
@@ -73,11 +76,10 @@ export default function LabConsumptionPage() {
   const report = state.status === "ready" ? state.report : null;
   return <div className="min-w-0 space-y-6">
     <PageHeader icon={<FlaskIcon />} title="Consumo de Laboratorio" description="Consulta y analiza el consumo de laboratorio del aplicativo, Ser Laboral y ANNAR LAB." />
-    <ConsumptionFilters consulting={state.status === "loading"} hasResults={Boolean(applied)} beforeConsult={<Button type="button" variant="outline" disabled={!ready || uploading} onClick={() => { const controller = new AbortController(); uploadController.current = controller; setImportController(controller); }}>Importar archivos</Button>} onConsult={consult} onClear={() => { discardImports(); setApplied(null); setState({ status: "idle" }); setTab("analisis"); }} />
+    <ConsumptionFilters consulting={state.status === "loading"} hasResults={Boolean(applied)} beforeConsult={<Button type="button" className="min-w-36" onClick={() => { if (uploading) return; const controller = new AbortController(); uploadController.current = controller; setImportController(controller); }}>Importar archivos</Button>} onConsult={consult} onClear={() => { discardImports(); setApplied(null); setState({ status: "idle" }); setTab("analisis"); }} />
     {importController && <ImportDialog controller={importController} onClose={closeImport} onPending={setUploading} onSerLaboral={setSerLaboral} onAnnarLab={setAnnarLab} onSuccess={(value) => { closeImport(); setTab(value); setUploadError(null); }} />}
     {uploadError && <p role="alert" className="text-sm text-error-600 dark:text-error-400">{uploadError}</p>}
     {ready && <section aria-label="Exportación de datos unidos" className="flex flex-wrap items-center justify-end gap-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/3">
-      <p className="text-sm text-gray-500 dark:text-gray-400">Excel incluye las hojas Datos Aplicativo (Facturas Detalladas + Admisiones + Ser Laboral importado) y ANNAR LAB. CSV descarga un ZIP con Datos_Aplicativo.csv y ANNAR_LAB.csv. Las columnas seleccionadas corresponden a Datos Aplicativo.</p>
       <ExportMenu key={applied?.revision ?? "idle"} label="Exportar datos unidos" columns={labExportColumns} visibleIds={visible} disabled={!ready || uploading} exportFile={exportData} />
     </section>}
     {state.status === "loading" && <Card role="status" className="flex items-center gap-3"><Spinner aria-hidden="true" role="presentation" /><span className="text-sm text-gray-500 dark:text-gray-400">Consultando y procesando registros…</span></Card>}
