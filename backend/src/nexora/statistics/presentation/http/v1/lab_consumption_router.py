@@ -96,6 +96,21 @@ def create_lab_consumption_router(*, provider: Callable[..., LabConsumptionRepor
             if len(content) + len(block) > MAX_UPLOAD_BYTES:
                 raise HTTPException(413, "El archivo excede el límite de 25 MB.")
             content.extend(block)
+        if annar:
+            # Cuerpo crudo sin nombre de archivo: Content-Type declara el formato.
+            # Ausente conserva la carga XLS histórica; nunca probar otro lector al fallar.
+            mime = request.headers.get("content-type", "application/vnd.ms-excel")
+            mime = mime.split(";", 1)[0].strip().lower()
+            formats = {
+                "application/vnd.ms-excel": "XLS",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
+            }
+            if mime not in formats:
+                raise InvalidReportFilter(
+                    "Tipo de archivo no permitido; usa XLS o XLSX de ANNAR LAB."
+                )
+            if (formats[mime] == "XLSX") != content.startswith(b"PK"):
+                raise InvalidReportFilter(f"El archivo {formats[mime]} de ANNAR LAB no es válido.")
         cache = report.annar_lab if annar else report.ser_laboral
         try:
             return await json_response(await cache.load(bytes(content)))
@@ -110,8 +125,13 @@ def create_lab_consumption_router(*, provider: Callable[..., LabConsumptionRepor
         return await load(request, report, annar=False)
 
     @router.post(
-        "/annar-lab", summary="Cargar XLS ANNAR LAB", response_class=Response,
-        description="BIFF .xls crudo (application/vnd.ms-excel); máximo 25 MB; TTL 30 min.",
+        "/annar-lab", summary="Cargar XLS/XLSX ANNAR LAB", response_class=Response,
+        description=(
+            "Excel crudo, sin multipart: .xls con application/vnd.ms-excel (xlrd), "
+            ".xlsx con application/vnd.openxmlformats-officedocument.spreadsheetml.sheet "
+            "(openpyxl). Sin Content-Type conserva XLS. Formato incorrecto/cabeceras "
+            "faltantes o duplicadas: 422; máximo 25 MB; TTL 30 min."
+        ),
     )
     async def annar_lab(request: Request, report: Report) -> Response:
         return await load(request, report, annar=True)

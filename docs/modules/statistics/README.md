@@ -379,15 +379,29 @@ este informe; las cargas sí se cachean por token. El resultado JSON completo re
   Retiene solo CERRADO + línea LABORATORIO, cero filas → 422
   `Ningún registro cumple los filtros.`; `omitidas` cuenta ambos motivos. Respuesta
   `{ser_laboral_id, filas, total, omitidas, advertencias}`; doce claves, sin análisis.
-- `POST /annar-lab`: cuerpo BIFF `.xls` crudo (`application/vnd.ms-excel`), máximo 25 MiB;
-  lectura `xlrd.open_workbook(on_demand=True)` de una sola hoja en `asyncio.to_thread`.
-  Nueva dependencia **xlrd>=2.0.1** (lock: 2.0.2; instalada con `cd backend && uv add 'xlrd>=2.0.1'`).
-  Cabeceras verificadas contra el XLS real: Sede, Nombre Sede, Cliente, Nombre Cliente,
+- `POST /annar-lab`: cuerpo Excel crudo, **sin JSON ni multipart**, máximo 25 MiB.
+  El cliente declara el formato con `Content-Type`: `.xls` → `application/vnd.ms-excel`,
+  `.xlsx` → `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+  Sin Content-Type se conserva XLS por compatibilidad. Otros tipos → 422
+  `Tipo de archivo no permitido; usa XLS o XLSX de ANNAR LAB.`. No se recibe nombre de
+  archivo; el backend comprueba que el contenido corresponde al formato declarado, sin
+  intentar otro lector al fallar. `.xls` usa `xlrd.open_workbook(on_demand=True)`;
+  `.xlsx` usa `openpyxl.load_workbook(read_only=True, data_only=True, keep_links=False)`
+  y cierra el libro incluso al fallar. Ambos lectores exigen una sola hoja y ejecutan
+  la misma validación/mapeo/agrupación en `asyncio.to_thread`. Fórmulas XLSX no se ejecutan:
+  solo se leen valores guardados; sin valor guardado la celda queda vacía.
+  Dependencias runtime: **xlrd>=2.0.1** (lock: 2.0.2), **openpyxl>=3.1.5**
+  (lock: 3.1.5; dependencia et-xmlfile 2.0.0). Instalar el entorno bloqueado con
+  `cd backend && uv sync --locked`.
+  Las 14 cabeceras requeridas del contrato son: Sede, Nombre Sede, Cliente, Nombre Cliente,
   Cen.Costo, Nombre Centro de Costos, Medico, Nombre Medico, Seccion, Nombre de la Sección,
   Examen, Nombre del Examen, Nivel, Valor. Matching sin acentos/NBSP/espacios y tolerancia a
   variantes mal codificadas de Sección; faltantes → 422
-  `Cabeceras requeridas faltantes: <lista>.`; requeridas duplicadas → 422. XLS inválido →
-  422 `El archivo XLS de ANNAR LAB no es válido.`. Filas completamente vacías omitidas,
+  `Cabeceras requeridas faltantes: <lista>.`; requeridas duplicadas → 422
+  `No se permiten cabeceras requeridas duplicadas.`. XLS inválido/formato incorrecto →
+  422 `El archivo XLS de ANNAR LAB no es válido.`; para XLSX,
+  `El archivo XLSX de ANNAR LAB no es válido.`. Más/menos de una hoja → 422
+  `El archivo XLS de ANNAR LAB debe tener una sola hoja.` (XLSX usa `XLSX` en el mensaje). Filas completamente vacías omitidas,
   sin filtro de estado ni línea; valores trim (conserva mayúsculas/minúsculas originales).
   Respuesta `{annar_lab_id, filas, total, advertencias, analisis_annar}`. Seis claves:
   `codigo_centro_costo` ← Seccion; `nombre_centro_costos` ← Nombre de la Sección;
@@ -401,7 +415,7 @@ Ambas cargas usan la caché compartida SerLaboralCache con procesador/clave de r
 inyectables, manteniendo sus valores por defecto para Consumo General. Por cada pipeline:
 TTL fijo 30 minutos, máximo 8 cargas, expulsión de la más antigua, tokens aleatorios de 256 bits,
 expiración activa y monotónica, sin almacenamiento persistente. Cargas inválidas no publican
-ni expulsan tokens. El frontend descarta los tokens al reconsultar; no invalida otros clientes.
+ni expulsan tokens. El frontend conserva imports y tokens al reconsultar; `Limpiar` los retira del estado de página, mientras la caché del servidor los conserva hasta su TTL. No invalida otros clientes.
 Más de 25 MiB se rechaza incrementalmente con 413 antes de continuar leyendo el cuerpo;
 exactamente 25 MiB se admite. Valorar memoria de ocho cargas por cada pipeline.
 
@@ -441,20 +455,25 @@ repetido) y se ignora, por compatibilidad con los botones individuales anteriore
 }
 ```
 
-Devuelve `analisis-consumo-laboratorio.xlsx`, una hoja **Análisis** con ambas tablas separadas
-por títulos **Datos Aplicativo** y **ANNAR LAB**, cabeceras CUPS/Descripción/Cantidad y
-Sección/Descripción/Cantidad, cantidades numéricas con separador de miles, bordes y estilo azul
-como Consumo General. Mismo permiso del módulo, `Cache-Control: no-store`.
+Devuelve `analisis-consumo-laboratorio.xlsx`, una hoja **Análisis** con **Datos Aplicativo** en
+A:C y **ANNAR LAB** en E:G, separadas por la columna D vacía. Conserva los títulos/cabeceras,
+los bordes y el estilo azul como Consumo General; las cantidades son celdas numéricas con
+formato General, sin separadores decimales opcionales al final. Mismo permiso del módulo, `Cache-Control: no-store`.
 Las dos listas son obligatorias (pueden estar vacías), máximo 10.000 filas por tabla;
 `cups`/`seccion` son texto de hasta 100 caracteres, `descripcion` hasta 500 y `cantidad`
 finita con máximo 38 dígitos y 10 decimales. `titulo` y `periodo` opcionales (predeterminados
 CONSUMO DE LABORATORIO y vacío), hasta 120/180 caracteres. Forma/campos adicionales/límites
 inválidos → 422. Los textos se escapan para XML y no se ejecutan como fórmulas.
 
-Pruebas sintéticas: `tests/unit/statistics/test_lab_consumption.py` y
-`tests/unit/statistics/test_lab_exports.py`. Los archivos originales
-CSV/XLS/DOCX de `data_ips` son solo fuentes locales de validación, no fixtures ni artefactos
-versionados. Pendiente comprobar consultas y rendimiento contra SQL Server real.
+Pruebas sintéticas de importación: `tests/unit/statistics/test_lab_consumption.py`,
+`tests/unit/statistics/test_lab_annar_import.py` y
+`tests/unit/statistics/test_lab_consumption_verification.py`: XLS BIFF/OLE2 y XLSX,
+transporte crudo fragmentado con aplicación real/auth/CORS, 14 cabeceras faltantes o
+requeridas duplicadas, archivos inválidos/formato incorrecto y tokens previos exportables
+tras rechazar reemplazos con caché llena. Exportaciones: `tests/unit/statistics/test_lab_exports.py`.
+No se leen libros de usuarios en estas pruebas ni se ha reproducido o demostrado la causa
+raíz del fallo de un archivo real reportado. Pendiente comprobar consultas y rendimiento
+contra SQL Server real y memoria con cargas XLSX de producción.
 
 ### Notificación SIVIGILA
 

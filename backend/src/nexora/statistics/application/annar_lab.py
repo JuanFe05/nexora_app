@@ -1,14 +1,19 @@
-"""Importación BIFF XLS de ANNAR LAB, invocada en un worker por la caché compartida."""
+"""Importación XLS/XLSX de ANNAR LAB en el worker de la caché compartida."""
 
+import io
 import re
 import struct
 import unicodedata
 import zipfile
 from collections import Counter
+from collections.abc import Iterable
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from xml.etree.ElementTree import ParseError
 
 import xlrd  # type: ignore[import-untyped]
+from openpyxl import load_workbook
+from openpyxl.utils.exceptions import InvalidFileException
 
 from nexora.statistics.application.ser_laboral import SerLaboralExpired
 from nexora.statistics.domain.filters import InvalidReportFilter
@@ -72,6 +77,46 @@ def _numeric_code(key: tuple[str, str]) -> tuple[Decimal, str, str]:
     return number, *key
 
 
+def _process_rows(values: Iterable[Iterable[Any]]) -> dict[str, Any]:
+    """Misma validación, proyección y agrupación para ambos lectores."""
+    iterator = iter(values)
+    headers = [normalize_header(v) for v in next(iterator, ())]
+    missing = [h for h in REQUIRED_HEADERS if normalize_header(h) not in headers]
+    if missing:
+        raise InvalidReportFilter(f"Cabeceras requeridas faltantes: {', '.join(missing)}.")
+    if any(headers.count(normalize_header(h)) != 1 for h in REQUIRED_HEADERS):
+        raise InvalidReportFilter("No se permiten cabeceras requeridas duplicadas.")
+    indexes = {h: headers.index(normalize_header(h)) for h in REQUIRED_HEADERS}
+    rows: list[dict[str, Any]] = []
+    groups: Counter[tuple[str, str]] = Counter()
+    for raw in iterator:
+        cells = ["" if v is None else str(v).strip() for v in raw]
+        if not any(cells):
+            continue
+        fields = {header: cells[i] if i < len(cells) else "" for header, i in indexes.items()}
+        code, description = fields["Seccion"], fields["Nombre de la Sección"]
+        rows.append(
+            {
+                "codigo_centro_costo": code,
+                "nombre_centro_costos": description,
+                "nombre_examen": fields["Nombre del Examen"],
+                "cantidad": 1,
+                "empresa": fields["Nombre Cliente"],
+                "punto_atencion": fields["Nombre Centro de Costos"],
+            }
+        )
+        groups[(code, description)] += 1
+    return {
+        "filas": rows,
+        "total": len(rows),
+        "advertencias": [],
+        "analisis_annar": [
+            {"seccion": code, "descripcion": description, "cantidad": groups[(code, description)]}
+            for code, description in sorted(groups, key=_numeric_code)
+        ],
+    }
+
+
 def process_xls(content: bytes) -> dict[str, Any]:
     check_size(content)
     if not content:
@@ -82,32 +127,7 @@ def process_xls(content: bytes) -> dict[str, Any]:
             if book.nsheets != 1:
                 raise InvalidReportFilter("El archivo XLS de ANNAR LAB debe tener una sola hoja.")
             sheet = book.sheet_by_index(0)
-            headers = [normalize_header(v) for v in sheet.row_values(0)] if sheet.nrows else []
-            missing = [h for h in REQUIRED_HEADERS if normalize_header(h) not in headers]
-            if missing:
-                raise InvalidReportFilter(f"Cabeceras requeridas faltantes: {', '.join(missing)}.")
-            if any(headers.count(normalize_header(h)) != 1 for h in REQUIRED_HEADERS):
-                raise InvalidReportFilter("No se permiten cabeceras requeridas duplicadas.")
-            indexes = {h: headers.index(normalize_header(h)) for h in REQUIRED_HEADERS}
-            rows: list[dict[str, Any]] = []
-            groups: Counter[tuple[str, str]] = Counter()
-            for index in range(1, sheet.nrows):
-                values = sheet.row_values(index)
-                if not any(str(v).strip() for v in values):
-                    continue
-                fields = {header: str(values[i]).strip() for header, i in indexes.items()}
-                code, description = fields["Seccion"], fields["Nombre de la Sección"]
-                rows.append(
-                    {
-                        "codigo_centro_costo": code,
-                        "nombre_centro_costos": description,
-                        "nombre_examen": fields["Nombre del Examen"],
-                        "cantidad": 1,
-                        "empresa": fields["Nombre Cliente"],
-                        "punto_atencion": fields["Nombre Centro de Costos"],
-                    }
-                )
-                groups[(code, description)] += 1
+            return _process_rows(sheet.row_values(index) for index in range(sheet.nrows))
     except (
         xlrd.XLRDError,
         xlrd.compdoc.CompDocError,
@@ -125,12 +145,28 @@ def process_xls(content: bytes) -> dict[str, Any]:
         if isinstance(exc, InvalidReportFilter):
             raise
         raise InvalidReportFilter("El archivo XLS de ANNAR LAB no es válido.") from exc
-    return {
-        "filas": rows,
-        "total": len(rows),
-        "advertencias": [],
-        "analisis_annar": [
-            {"seccion": code, "descripcion": description, "cantidad": groups[(code, description)]}
-            for code, description in sorted(groups, key=_numeric_code)
-        ],
-    }
+
+
+def process_xlsx(content: bytes) -> dict[str, Any]:
+    check_size(content)
+    try:
+        with io.BytesIO(content) as stream:
+            book = load_workbook(stream, read_only=True, data_only=True, keep_links=False)
+            try:
+                if len(book.sheetnames) != 1 or len(book.worksheets) != 1:
+                    raise InvalidReportFilter(
+                        "El archivo XLSX de ANNAR LAB debe tener una sola hoja."
+                    )
+                sheet = book.worksheets[0]
+                # No confiar en dimensiones incorrectas del productor del archivo.
+                sheet.reset_dimensions()
+                return _process_rows(sheet.iter_rows(values_only=True))
+            finally:
+                book.close()
+    except (
+        InvalidFileException, zipfile.BadZipFile, ParseError, OSError, ValueError,
+        IndexError, EOFError, KeyError, TypeError, NotImplementedError, OverflowError,
+    ) as exc:
+        if isinstance(exc, InvalidReportFilter):
+            raise
+        raise InvalidReportFilter("El archivo XLSX de ANNAR LAB no es válido.") from exc

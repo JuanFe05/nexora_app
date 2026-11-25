@@ -7,6 +7,7 @@ from nexora.statistics.application.annar_lab import (
     AnnarLabExpired,
     check_size,
     process_xls,
+    process_xlsx,
 )
 from nexora.statistics.application.general_consumption import _read_chunks, _transform
 from nexora.statistics.application.ports import CatalogOption, ReportSource
@@ -17,6 +18,11 @@ from nexora.statistics.domain.lab_consumption import (
     is_laboratory,
     project_row,
 )
+
+
+def process_annar_excel(content: bytes) -> dict[str, Any]:
+    # HTTP valida el formato declarado antes de cargar; una caché y un worker comunes.
+    return process_xlsx(content) if content.startswith(b"PK") else process_xls(content)
 
 
 def process_lab_csv(content: bytes) -> dict[str, Any]:
@@ -85,7 +91,7 @@ class LabConsumptionReport:
         self.annar_lab = SerLaboralCache(
             ttl_seconds=upload_ttl_seconds,
             max_entries=upload_max_entries,
-            processor=process_xls,
+            processor=process_annar_excel,
             result_key="annar_lab_id",
             expired=AnnarLabExpired,
         )

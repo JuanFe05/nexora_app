@@ -15,6 +15,7 @@ from xml.etree import ElementTree as ET
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from openpyxl import Workbook
 from tests.unit.statistics.test_general_consumption import admission, invoice
 from tests.unit.statistics.test_general_consumption_ser_laboral import HEADERS, csv_bytes, raw
 from tests.unit.statistics.test_router import DATES, FakeAuthentication
@@ -113,6 +114,24 @@ def xls_bytes(rows: list[list[Any]], headers: tuple[str, ...] = ANNAR_HEADERS) -
     return content + record(0x000A)
 
 
+XLS_MIME = "application/vnd.ms-excel"
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def xlsx_bytes(rows: list[list[Any]], headers: tuple[str, ...] = ANNAR_HEADERS) -> bytes:
+    """Synthetic modern workbook; no user files or repository scratch."""
+    book = Workbook()
+    sheet = book.active
+    assert sheet is not None
+    sheet.append(list(headers))
+    for row in rows:
+        sheet.append(row)
+    content = io.BytesIO()
+    book.save(content)
+    book.close()
+    return content.getvalue()
+
+
 def annar_row(code: str = "10", description: str = " Sección diez ") -> list[Any]:
     return [
         " 01",
@@ -195,8 +214,11 @@ def http() -> Iterator[tuple[TestClient, Source, Source, FakeAuthentication, Lab
         yield client, invoices, admissions, auth, report
 
 
-def upload(client: TestClient, suffix: str, content: bytes) -> Any:
-    return client.post(BASE + suffix, content=content, headers=AUTH)
+def upload(
+    client: TestClient, suffix: str, content: bytes, mime: str | None = None,
+) -> Any:
+    headers = AUTH | ({"Content-Type": mime} if mime else {})
+    return client.post(BASE + suffix, content=content, headers=headers)
 
 
 def export(client: TestClient, **params: Any) -> Any:
@@ -405,7 +427,10 @@ def test_ser_missing_headers_invalid_load_preserves_token(http: Any) -> None:
     assert len(invoices.calls) == len(admissions.calls) == 1
 
 
-def test_annar_actual_xls_mapping_normalized_headers_analysis(http: Any) -> None:
+@pytest.mark.parametrize(("writer", "mime"), [(xls_bytes, XLS_MIME), (xlsx_bytes, XLSX_MIME)])
+def test_annar_workbook_mapping_normalized_headers_analysis(
+    http: Any, writer: Any, mime: str
+) -> None:
     client, invoices, admissions, _, _ = http
     headers = tuple(
         " \xa0" + h.upper().replace("ó", "o").replace("Ó", "O") + " \xa0" for h in ANNAR_HEADERS
@@ -413,7 +438,7 @@ def test_annar_actual_xls_mapping_normalized_headers_analysis(http: Any) -> None
     response = upload(
         client,
         "/annar-lab",
-        xls_bytes(
+        writer(
             [
                 annar_row("10"),
                 annar_row("2", " Sección dos "),
@@ -423,6 +448,7 @@ def test_annar_actual_xls_mapping_normalized_headers_analysis(http: Any) -> None
             ],
             headers,
         ),
+        mime,
     )
     assert response.status_code == 200, response.text
     body = response.json()
@@ -444,17 +470,30 @@ def test_annar_actual_xls_mapping_normalized_headers_analysis(http: Any) -> None
     assert invoices.calls == admissions.calls == []
 
 
+@pytest.mark.parametrize(("writer", "mime"), [(xls_bytes, XLS_MIME), (xlsx_bytes, XLSX_MIME)])
 @pytest.mark.parametrize("missing", ANNAR_HEADERS)
-def test_annar_missing_headers_listed_and_token_preserved(http: Any, missing: str) -> None:
+def test_annar_missing_headers_listed_and_token_preserved(
+    http: Any, missing: str, writer: Any, mime: str,
+) -> None:
     client, invoices, admissions, _, _ = http
-    token = upload(client, "/annar-lab", xls_bytes([annar_row()])).json()["annar_lab_id"]
+    token = upload(client, "/annar-lab", writer([annar_row()]), mime).json()["annar_lab_id"]
+    before = export(client, annar_lab_id=token)
     response = upload(
-        client, "/annar-lab", xls_bytes([], tuple(h for h in ANNAR_HEADERS if h != missing))
+        client, "/annar-lab", writer([], tuple(h for h in ANNAR_HEADERS if h != missing)), mime,
     )
     assert response.status_code == 422
     assert response.json() == {"detail": f"Cabeceras requeridas faltantes: {missing}."}
-    assert export(client, tablas="annar_lab", annar_lab_id=token).status_code == 200
-    assert len(invoices.calls) == len(admissions.calls) == 1
+    after = export(client, tablas="annar_lab", annar_lab_id=token)
+    assert before.status_code == after.status_code == 200
+    with (
+        zipfile.ZipFile(io.BytesIO(before.content)) as original,
+        zipfile.ZipFile(io.BytesIO(after.content)) as saved,
+    ):
+        assert saved.namelist() == original.namelist()
+        assert {name: saved.read(name) for name in saved.namelist()} == {
+            name: original.read(name) for name in original.namelist()
+        }
+    assert len(invoices.calls) == len(admissions.calls) == 2
 
 
 @pytest.mark.parametrize("suffix", ["/ser-laboral", "/annar-lab"])
@@ -597,7 +636,8 @@ def test_shared_catalog_endpoints(http: Any, suffix: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("kind", "token_key"), [("ser", "ser_laboral_id"), ("annar", "annar_lab_id")]
+    ("kind", "token_key"),
+    [("ser", "ser_laboral_id"), ("annar", "annar_lab_id"), ("xlsx", "annar_lab_id")]
 )
 async def test_import_caches_ttl_capacity_offload_shutdown(
     kind: str, token_key: str, monkeypatch: Any
@@ -605,7 +645,7 @@ async def test_import_caches_ttl_capacity_offload_shutdown(
     from nexora.statistics.application import lab_consumption as module
     from nexora.statistics.application.ser_laboral import SerLaboralExpired
 
-    function = "process_lab_csv" if kind == "ser" else "process_xls"
+    function = {"ser": "process_lab_csv", "annar": "process_xls", "xlsx": "process_xlsx"}[kind]
     original = getattr(module, function)
     threads: list[int] = []
 
@@ -622,7 +662,8 @@ async def test_import_caches_ttl_capacity_offload_shutdown(
     )
     cache = report.ser_laboral if kind == "ser" else report.annar_lab
     content = (
-        csv_bytes([raw(lna_prdcto="LABORATORIO")]) if kind == "ser" else xls_bytes([annar_row()])
+        csv_bytes([raw(lna_prdcto="LABORATORIO")]) if kind == "ser" else
+        (xlsx_bytes([annar_row()]) if kind == "xlsx" else xls_bytes([annar_row()]))
     )
     first, second, third = [await cache.load(content) for _ in range(3)]
     assert len({r[token_key] for r in (first, second, third)}) == 3

@@ -23,7 +23,7 @@ from tests.support.fakes import (
     FakeUserRepository,
     build_user,
 )
-from tests.unit.statistics.test_lab_consumption import annar_row, xls_bytes
+from tests.unit.statistics.test_lab_consumption import XLSX_MIME, annar_row, xls_bytes, xlsx_bytes
 
 from nexora.bootstrap import app as bootstrap
 from nexora.bootstrap.settings import Settings
@@ -129,8 +129,9 @@ async def real_app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[tuple[Any, 
         yield result
 
 
+@pytest.mark.parametrize("formato", ["xls", "xlsx"])
 async def test_real_app_cors_streamed_ole_import_and_shutdown(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, formato: str,
 ) -> None:
     async with app_client(monkeypatch) as (app, client, headers, _, _):
         preflight = await client.options(PATH, headers={
@@ -143,7 +144,10 @@ async def test_real_app_cors_streamed_ole_import_and_shutdown(
         assert preflight.headers["access-control-allow-credentials"] == "true"
         assert "POST" in preflight.headers["access-control-allow-methods"]
         assert preflight.headers["access-control-allow-headers"] == "authorization,content-type"
-        content = ole_workbook(xls_bytes([annar_row(), [""] * 14]))
+        content = (ole_workbook(xls_bytes([annar_row(), [""] * 14])) if formato == "xls"
+                   else xlsx_bytes([annar_row(), [""] * 14]))
+        if formato == "xlsx":
+            headers = headers | {"Content-Type": XLSX_MIME}
 
         async def chunks() -> AsyncIterator[bytes]:
             for offset in range(0, len(content), 127):
