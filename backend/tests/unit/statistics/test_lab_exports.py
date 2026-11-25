@@ -100,7 +100,7 @@ def test_invalid_columns_before_sql(http: Any, columns: list[str]) -> None:
 
 BODY = {
     "aplicativo": [{"cups": "001", "descripcion": "HEMOGRAMA", "cantidad": 12500.5}],
-    "annar": [{"seccion": "10", "descripcion": "HEMATOLOGÍA", "cantidad": 22508}],
+    "annar": [{"examen": "10", "descripcion": "HEMATOLOGÍA", "cantidad": 22508}],
     "titulo": "CONSUMO DE LABORATORIO",
     "periodo": "ENERO 2026",
 }
@@ -117,7 +117,7 @@ def test_analysis_layout_values_and_no_sql(http: Any) -> None:
         assert [s.attrib["name"] for s in workbook.findall("s:sheets/s:sheet", NS)] == ["Análisis"]
         assert sheet_rows(book, 1) == [
             [BODY["titulo"]], [BODY["periodo"]], ["Datos Aplicativo", "ANNAR LAB"],
-            ["CUPS", "Descripción", "Cantidad", "Sección", "Descripción", "Cantidad"],
+            ["CUPS", "Descripción", "Cantidad", "Código Examen", "Descripción", "Cantidad"],
             ["001", "HEMOGRAMA", "12500.5", "10", "HEMATOLOGÍA", "22508"],
         ]
         styles = book.read("xl/styles.xml").decode()
@@ -169,6 +169,18 @@ def test_analysis_unequal_tables_keep_independent_rows(http: Any, app_count: int
 def test_analysis_validation_422_without_sql(http: Any, body: Any) -> None:
     response = http[0].post(BASE + "/export/analysis/xlsx", headers=AUTH, json=body)
     assert response.status_code == 422
+    assert http[1].calls == http[2].calls == []
+
+
+def test_analysis_accepts_legacy_section_key(http: Any) -> None:
+    body = {**BODY, "annar": [{"seccion": "10", "descripcion": "HEMATOLOGÍA", "cantidad": 22508}]}
+    response = http[0].post(BASE + "/export/analysis/xlsx", headers=AUTH, json=body)
+    assert response.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(response.content)) as book:
+        assert sheet_rows(book, 1)[3] == [
+            "CUPS", "Descripción", "Cantidad", "Código Examen", "Descripción", "Cantidad",
+        ]
+        assert sheet_rows(book, 1)[4][3:] == ["10", "HEMATOLOGÍA", "22508"]
     assert http[1].calls == http[2].calls == []
 
 

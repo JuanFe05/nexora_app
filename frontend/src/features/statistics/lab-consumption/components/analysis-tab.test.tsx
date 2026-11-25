@@ -12,14 +12,16 @@ vi.mock("@/lib/table-export", async (original) => ({ ...await original<typeof im
 afterEach(cleanup);
 beforeEach(() => vi.resetAllMocks());
 const row = (changes: Partial<LabConsumptionRow> = {}): LabConsumptionRow => ({ cnsctvo_dcto: "0001", cdgo_prcdmnto: "00901", lna_prdcto: "LABORATORIO", procedimiento: "HEMOGRAMA", cntdd: 2, fcha_ingrso_pcnte: "2026-01-02", fcha_dcto: "2026-01-03", admision: "10", estado: "CERRADO", emprs: "EMPRESA", dscrp_transcn: "FACTURA", sede: "CENTRO", ...changes });
-const annar: AnnarAnalysis[] = [{ seccion: "02", descripcion: "AGRUPACIÓN ANNAR", cantidad: 7 }, { seccion: "01", descripcion: "OTRA", cantidad: 1.5 }];
+const annar: AnnarAnalysis[] = [{ examen: "02", descripcion: "AGRUPACIÓN ANNAR", cantidad: 7 }, { examen: "01", descripcion: "OTRA", cantidad: 1.5 }];
 it("exports exactly the displayed local sums and backend ANNAR rows, with pending state and a single download", async () => {
   let resolve!: (file: Blob) => void;
   vi.mocked(httpClient.post).mockImplementationOnce(() => new Promise((done) => { resolve = done as typeof resolve; }));
   render(<AnalysisTab facturas={[row({ procedimiento: "" }), row({ cdgo_prcdmnto: "902", procedimiento: "OTRO", cntdd: 1 })]} admisiones={[row({ cntdd: 3 })]} serLaboral={[row({ cntdd: 4, procedimiento: "DESCRIPCIÓN POSTERIOR" })]} annar={annar} />);
   const applicationRows = within(screen.getByRole("table", { name: "Datos Aplicativo" })).getAllByRole("row").slice(1);
   expect(applicationRows.map((row) => row.textContent)).toEqual(["00901HEMOGRAMA9", "902OTRO1"]);
-  const annarRows = within(screen.getByRole("table", { name: "Annar Lab" })).getAllByRole("row").slice(1);
+  const annarTable = within(screen.getByRole("table", { name: "Annar Lab" }));
+  expect(annarTable.getByRole("columnheader", { name: "Código Examen" })).toBeVisible();
+  const annarRows = annarTable.getAllByRole("row").slice(1);
   expect(annarRows[0]).toHaveTextContent("02AGRUPACIÓN ANNAR7");
   const button = screen.getByRole("button", { name: "Exportar a Excel" });
   expect(button).toBeEnabled();

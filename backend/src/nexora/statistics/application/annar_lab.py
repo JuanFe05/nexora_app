@@ -94,24 +94,25 @@ def _process_rows(values: Iterable[Iterable[Any]]) -> dict[str, Any]:
         if not any(cells):
             continue
         fields = {header: cells[i] if i < len(cells) else "" for header, i in indexes.items()}
-        code, description = fields["Seccion"], fields["Nombre de la Sección"]
+        section_code, section_description = fields["Seccion"], fields["Nombre de la Sección"]
+        exam_code, exam_description = fields["Examen"], fields["Nombre del Examen"]
         rows.append(
             {
-                "codigo_centro_costo": code,
-                "nombre_centro_costos": description,
-                "nombre_examen": fields["Nombre del Examen"],
+                "codigo_centro_costo": section_code,
+                "nombre_centro_costos": section_description,
+                "nombre_examen": exam_description,
                 "cantidad": 1,
                 "empresa": fields["Nombre Cliente"],
                 "punto_atencion": fields["Nombre Centro de Costos"],
             }
         )
-        groups[(code, description)] += 1
+        groups[(exam_code, exam_description)] += 1
     return {
         "filas": rows,
         "total": len(rows),
         "advertencias": [],
         "analisis_annar": [
-            {"seccion": code, "descripcion": description, "cantidad": groups[(code, description)]}
+            {"examen": code, "descripcion": description, "cantidad": groups[(code, description)]}
             for code, description in sorted(groups, key=_numeric_code)
         ],
     }

@@ -166,7 +166,7 @@ async def test_real_app_cors_streamed_ole_import_and_shutdown(
                        "punto_atencion": "Punto"}],
             "total": 1,
             "advertencias": [],
-            "analisis_annar": [{"seccion": "10", "descripcion": "Sección diez", "cantidad": 1}],
+            "analisis_annar": [{"examen": "E", "descripcion": "Examen", "cantidad": 1}],
         }
         cache = app.state.lab_consumption_report.annar_lab
         assert cache.rows(body["annar_lab_id"]) == body["filas"]
@@ -256,7 +256,7 @@ async def test_real_app_full_size_response(real_app: Any) -> None:
     assert all(row == body["filas"][0] for row in body["filas"])
     assert body["advertencias"] == []
     assert body["analisis_annar"] == [
-        {"seccion": "10", "descripcion": "Sección diez", "cantidad": 22508},
+        {"examen": "E", "descripcion": "Examen", "cantidad": 22508},
     ]
     assert len(response.content) > 3_000_000
 

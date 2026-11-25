@@ -122,7 +122,7 @@ def build_analysis_xlsx(
     merges = ["A1:G1", "A2:G2", "A4:C4", "E4:G4"]
     tables = (
         ("Datos Aplicativo", "cups", "CUPS", aplicativo, "ABC"),
-        ("ANNAR LAB", "seccion", "Sección", annar, "EFG"),
+        ("ANNAR LAB", "examen", "Código Examen", annar, "EFG"),
     )
     rows.append(
         '<row r="4" ht="26" customHeight="1">'

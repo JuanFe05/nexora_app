@@ -17,7 +17,7 @@ const path = "/statistics/administrative/lab-consumption";
 const row = (changes: Partial<LabConsumptionRow> = {}): LabConsumptionRow => ({ cnsctvo_dcto: "0001", cdgo_prcdmnto: "901", lna_prdcto: "LABORATORIO", procedimiento: "HEMOGRAMA", cntdd: 2, fcha_ingrso_pcnte: "2026-01-02", fcha_dcto: "2026-01-03", admision: "10", estado: "CERRADO", emprs: "EMPRESA", dscrp_transcn: "FACTURA", sede: "CENTRO", ...changes });
 let report: LabConsumptionReport;
 const ser = () => ({ ser_laboral_id: "ser-token", filas: [row({ cntdd: 4, procedimiento: "OTRA DESCRIPCIÓN" })], total: 1, omitidas: 2, advertencias: ["Advertencia CSV"] });
-const annar = () => ({ annar_lab_id: "annar-token", filas: [{ codigo_centro_costo: "02", nombre_centro_costos: "QUÍMICA", nombre_examen: "GLUCOSA", cantidad: 1, empresa: "CLIENTE", punto_atencion: "NORTE" }], total: 1, advertencias: ["Advertencia Excel"], analisis_annar: [{ seccion: "02", descripcion: "AGRUPACIÓN ANNAR", cantidad: 7 }] });
+const annar = () => ({ annar_lab_id: "annar-token", filas: [{ codigo_centro_costo: "02", nombre_centro_costos: "QUÍMICA", nombre_examen: "GLUCOSA", cantidad: 1, empresa: "CLIENTE", punto_atencion: "NORTE" }], total: 1, advertencias: ["Advertencia Excel"], analisis_annar: [{ examen: "02", descripcion: "AGRUPACIÓN ANNAR", cantidad: 7 }] });
 afterEach(cleanup);
 beforeEach(() => {
   vi.resetAllMocks();

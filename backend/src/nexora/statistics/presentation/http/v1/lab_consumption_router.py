@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from nexora.identity_access.presentation.http.v1.dependencies.auth import require_permission
 from nexora.statistics.application.annar_lab import COLUMNS as ANNAR_COLUMNS
@@ -39,7 +39,7 @@ class ApplicationRow(AnalysisRow):
 
 
 class AnnarRow(AnalysisRow):
-    seccion: str = Field(max_length=100)
+    examen: str = Field(max_length=100, validation_alias=AliasChoices("examen", "seccion"))
 
 
 class AnalysisExport(BaseModel):
@@ -210,7 +210,8 @@ def create_lab_consumption_router(*, provider: Callable[..., LabConsumptionRepor
             "Una hoja Análisis: Datos Aplicativo A:C y ANNAR LAB E:G, columna D vacía; "
             "cantidades numéricas con formato General; no consulta SQL. "
             "aplicativo: cups/descripcion/cantidad; "
-            "annar: seccion/descripcion/cantidad. Máximo 10000 filas por tabla, códigos 100 "
+            "annar: examen/descripcion/cantidad (seccion accepted as legacy alias). "
+            "Máximo 10000 filas por tabla, códigos 100 "
             "caracteres, descripción 500, título 120, periodo 180; sin campos adicionales."
         ),
     )

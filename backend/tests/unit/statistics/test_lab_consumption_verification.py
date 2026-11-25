@@ -123,11 +123,16 @@ def test_annar_import_exports_in_grouped_download(http):  # noqa: F811
     response = upload(
         client,
         "/annar-lab",
-        xls_bytes([annar_row("2"), annar_row("2"), annar_row("10"), [""] * 14]),
+        xls_bytes([
+            annar_row("50", "Section fifty", "2", "Exam two"),
+            annar_row("10", "Section ten", "2", "Exam two"),
+            annar_row("2", "Section two", "10", "Exam ten"),
+            [""] * 14,
+        ]),
     )
     assert response.status_code == 200
     body = response.json()
-    assert [(g["seccion"], g["cantidad"]) for g in body["analisis_annar"]] == [
+    assert [(g["examen"], g["cantidad"]) for g in body["analisis_annar"]] == [
         ("2", 2),
         ("10", 1),
     ]

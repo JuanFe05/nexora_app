@@ -132,7 +132,12 @@ def xlsx_bytes(rows: list[list[Any]], headers: tuple[str, ...] = ANNAR_HEADERS) 
     return content.getvalue()
 
 
-def annar_row(code: str = "10", description: str = " Sección diez ") -> list[Any]:
+def annar_row(
+    code: str = "10",
+    description: str = " Sección diez ",
+    exam_code: str = "E",
+    exam_name: str = " Examen ",
+) -> list[Any]:
     return [
         " 01",
         " sede ",
@@ -144,8 +149,8 @@ def annar_row(code: str = "10", description: str = " Sección diez ") -> list[An
         "Médico",
         code,
         description,
-        "E",
-        " Examen\xa0 ",
+        exam_code,
+        exam_name,
         "1",
         10500.0,
     ]
@@ -440,10 +445,10 @@ def test_annar_workbook_mapping_normalized_headers_analysis(
         "/annar-lab",
         writer(
             [
-                annar_row("10"),
-                annar_row("2", " Sección dos "),
-                annar_row("10"),
-                annar_row("10", " Otra descripción "),
+                annar_row("10", " Sección diez ", "20", " Hemograma "),
+                annar_row("2", " Sección dos ", "20", " Hemograma "),
+                annar_row("10", " Otra sección ", "10", " Glucosa "),
+                annar_row("10", " Tercera sección ", "20", " Hemograma diferencial "),
                 [""] * 14,
             ],
             headers,
@@ -457,15 +462,15 @@ def test_annar_workbook_mapping_normalized_headers_analysis(
     assert body["filas"][0] == {
         "codigo_centro_costo": "10",
         "nombre_centro_costos": "Sección diez",
-        "nombre_examen": "Examen",
+        "nombre_examen": "Hemograma",
         "cantidad": 1,
         "empresa": "Empresa",
         "punto_atencion": "Punto",
     }
     assert body["analisis_annar"] == [
-        {"seccion": "2", "descripcion": "Sección dos", "cantidad": 1},
-        {"seccion": "10", "descripcion": "Otra descripción", "cantidad": 1},
-        {"seccion": "10", "descripcion": "Sección diez", "cantidad": 2},
+        {"examen": "10", "descripcion": "Glucosa", "cantidad": 1},
+        {"examen": "20", "descripcion": "Hemograma", "cantidad": 2},
+        {"examen": "20", "descripcion": "Hemograma diferencial", "cantidad": 1},
     ]
     assert invoices.calls == admissions.calls == []
 

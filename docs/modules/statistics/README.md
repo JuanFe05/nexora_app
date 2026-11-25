@@ -406,8 +406,9 @@ este informe; las cargas sí se cachean por token. El resultado JSON completo re
   Respuesta `{annar_lab_id, filas, total, advertencias, analisis_annar}`. Seis claves:
   `codigo_centro_costo` ← Seccion; `nombre_centro_costos` ← Nombre de la Sección;
   `nombre_examen` ← Nombre del Examen; `cantidad` = 1; `empresa` ← Nombre Cliente;
-  `punto_atencion` ← Nombre Centro de Costos. Análisis por **(código, descripción)**, cantidad
-  de filas, orden numérico del código, con objetos `{seccion, descripcion, cantidad}`.
+  `punto_atencion` ← Nombre Centro de Costos. Análisis ANNAR por **(Examen, Nombre del Examen)**,
+  con cantidad de filas, orden numérico de código, respuesta `{examen, descripcion, cantidad}`.
+  El detalle continúa proyectando Seccion y Nombre de la Sección en sus campos de centro de costo.
   Datos Aplicativo lo agrupa el frontend localmente por CUPS sobre las tres listas comunes;
   no existe `analisis_aplicativo` en las respuestas del backend.
 
@@ -449,7 +450,7 @@ repetido) y se ignora, por compatibilidad con los botones individuales anteriore
 ```json
 {
   "aplicativo": [{"cups": "001", "descripcion": "HEMOGRAMA", "cantidad": 12500.5}],
-  "annar": [{"seccion": "10", "descripcion": "HEMATOLOGÍA", "cantidad": 22508}],
+  "annar": [{"examen": "10", "descripcion": "HEMATOLOGÍA", "cantidad": 22508}],
   "titulo": "CONSUMO DE LABORATORIO",
   "periodo": "ENERO 2026"
 }
@@ -460,7 +461,7 @@ A:C y **ANNAR LAB** en E:G, separadas por la columna D vacía. Conserva los tít
 los bordes y el estilo azul como Consumo General; las cantidades son celdas numéricas con
 formato General, sin separadores decimales opcionales al final. Mismo permiso del módulo, `Cache-Control: no-store`.
 Las dos listas son obligatorias (pueden estar vacías), máximo 10.000 filas por tabla;
-`cups`/`seccion` son texto de hasta 100 caracteres, `descripcion` hasta 500 y `cantidad`
+`cups`/`examen` son texto de hasta 100 caracteres (`seccion` se acepta como alias legacy), `descripcion` hasta 500 y `cantidad`
 finita con máximo 38 dígitos y 10 decimales. `titulo` y `periodo` opcionales (predeterminados
 CONSUMO DE LABORATORIO y vacío), hasta 120/180 caracteres. Forma/campos adicionales/límites
 inválidos → 422. Los textos se escapan para XML y no se ejecutan como fórmulas.
