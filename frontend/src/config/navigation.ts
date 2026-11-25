@@ -3,11 +3,9 @@ import {
   BriefcaseIcon,
   ChartBarIcon,
   DocumentTextIcon,
-  KeyIcon,
   LayoutGridIcon,
   MegaphoneIcon,
   LockIcon,
-  UserCircleIcon,
   UsersIcon,
   type IconProps,
 } from "@/icons";
@@ -27,6 +25,8 @@ export type NavigationGroupItem = {
   label: string;
   path?: string;
   requiredPermission?: PermissionCode;
+  /** Igual que las entradas directas: sin permiso solo se muestra si es pública. */
+  public?: boolean;
 };
 export type NavigationGroup = {
   label: string;
@@ -113,36 +113,30 @@ export const navigation: NavigationSection[] = [
   },
   {
     title: "CONFIGURACIONES",
-    items: [
+    items: [],
+    groups: [
       {
-        label: "Perfil de usuario",
-        path: "/configuracion/perfil",
-        icon: UserCircleIcon,
-        public: true,
-      },
-      {
-        label: "Usuarios",
-        path: "/configuracion/usuarios",
+        label: "GESTIÓN DE USUARIOS",
         icon: UsersIcon,
-        requiredPermission: PERMISSIONS.usersView,
+        items: [
+          { label: "Perfil de usuario", path: "/configuracion/perfil", public: true },
+          { label: "Usuarios", path: "/configuracion/usuarios", requiredPermission: PERMISSIONS.usersView },
+        ],
       },
       {
-        label: "Roles",
-        path: "/configuracion/roles",
+        label: "SEGURIDAD Y ACCESOS",
         icon: LockIcon,
-        requiredPermission: PERMISSIONS.rolesView,
+        items: [
+          { label: "Roles", path: "/configuracion/roles", requiredPermission: PERMISSIONS.rolesView },
+          { label: "Permisos", path: "/configuracion/permisos", requiredPermission: PERMISSIONS.permissionsView },
+        ],
       },
       {
-        label: "Permisos",
-        path: "/configuracion/permisos",
-        icon: KeyIcon,
-        requiredPermission: PERMISSIONS.permissionsView,
-      },
-      {
-        label: "Cuotas Moderadoras",
-        path: "/configuracion/cuotas-moderadoras",
+        label: "ADMINISTRACIÓN DEL SISTEMA",
         icon: DocumentTextIcon,
-        requiredPermission: PERMISSIONS.moderatorFeesView,
+        items: [
+          { label: "Cuotas Moderadoras", path: "/configuracion/cuotas-moderadoras", requiredPermission: PERMISSIONS.moderatorFeesView },
+        ],
       },
     ],
   },
