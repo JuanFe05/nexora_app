@@ -116,7 +116,7 @@ export const navigation: NavigationSection[] = [
     items: [],
     groups: [
       {
-        label: "GESTIÓN DE USUARIOS",
+        label: "Gestión de Usuarios",
         icon: UsersIcon,
         items: [
           { label: "Perfil de usuario", path: "/configuracion/perfil", public: true },
@@ -124,7 +124,7 @@ export const navigation: NavigationSection[] = [
         ],
       },
       {
-        label: "SEGURIDAD Y ACCESOS",
+        label: "Seguridad y Accesos",
         icon: LockIcon,
         items: [
           { label: "Roles", path: "/configuracion/roles", requiredPermission: PERMISSIONS.rolesView },
@@ -132,7 +132,7 @@ export const navigation: NavigationSection[] = [
         ],
       },
       {
-        label: "ADMINISTRACIÓN DEL SISTEMA",
+        label: "Administración del Sistema",
         icon: DocumentTextIcon,
         items: [
           { label: "Cuotas Moderadoras", path: "/configuracion/cuotas-moderadoras", requiredPermission: PERMISSIONS.moderatorFeesView },

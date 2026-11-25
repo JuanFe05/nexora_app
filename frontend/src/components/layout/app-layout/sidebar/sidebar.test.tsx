@@ -17,7 +17,7 @@ function mount(open = true, pathname = "/") {
   return render(<MemoryRouter initialEntries={[pathname]}><SidebarProvider defaultOpen={open}><AppSidebar /></SidebarProvider></MemoryRouter>);
 }
 
-const CONFIGURATION_GROUPS = ["GESTIÓN DE USUARIOS", "SEGURIDAD Y ACCESOS", "ADMINISTRACIÓN DEL SISTEMA"];
+const CONFIGURATION_GROUPS = ["Gestión de Usuarios", "Seguridad y Accesos", "Administración del Sistema"];
 
 function expandConfiguration() {
   for (const name of CONFIGURATION_GROUPS) {
@@ -65,9 +65,9 @@ it.each([
   mount();
   expandConfiguration();
   expect(screen.getByRole("link", { name: "Perfil de usuario" })).toBeVisible();
-  const expectedGroups = ["GESTIÓN DE USUARIOS"];
-  if (visible.some((label) => ["Roles", "Permisos"].includes(label))) expectedGroups.push("SEGURIDAD Y ACCESOS");
-  if (visible.includes("Cuotas Moderadoras")) expectedGroups.push("ADMINISTRACIÓN DEL SISTEMA");
+  const expectedGroups = ["Gestión de Usuarios"];
+  if (visible.some((label) => ["Roles", "Permisos"].includes(label))) expectedGroups.push("Seguridad y Accesos");
+  if (visible.includes("Cuotas Moderadoras")) expectedGroups.push("Administración del Sistema");
   expect(within(screen.getByRole("navigation", { name: "CONFIGURACIONES" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(expectedGroups);
   for (const label of ["Usuarios", "Permisos", "Roles", "Cuotas Moderadoras"]) {
     if (visible.includes(label)) expect(screen.getByRole("link", { name: label })).toBeVisible();
@@ -83,6 +83,7 @@ it("CONFIGURACIONES reutiliza acordeones con iconos, chevrons y sangría secunda
   const children = [["Perfil de usuario", "Usuarios"], ["Roles", "Permisos"], ["Cuotas Moderadoras"]];
   CONFIGURATION_GROUPS.forEach((name, index) => {
     const button = within(section).getByRole("button", { name });
+    expect(button).toHaveTextContent(name);
     expect(button).toHaveClass("menu-item", "menu-item-inactive");
     expect(button).toHaveAttribute("aria-expanded", "false");
     const icons = button.querySelectorAll("svg");
@@ -103,11 +104,11 @@ it("CONFIGURACIONES reutiliza acordeones con iconos, chevrons y sangría secunda
 });
 
 it.each([
-  ["GESTIÓN DE USUARIOS", "Perfil de usuario", "perfil"],
-  ["GESTIÓN DE USUARIOS", "Usuarios", "usuarios"],
-  ["SEGURIDAD Y ACCESOS", "Roles", "roles"],
-  ["SEGURIDAD Y ACCESOS", "Permisos", "permisos"],
-  ["ADMINISTRACIÓN DEL SISTEMA", "Cuotas Moderadoras", "cuotas-moderadoras"],
+  ["Gestión de Usuarios", "Perfil de usuario", "perfil"],
+  ["Gestión de Usuarios", "Usuarios", "usuarios"],
+  ["Seguridad y Accesos", "Roles", "roles"],
+  ["Seguridad y Accesos", "Permisos", "permisos"],
+  ["Administración del Sistema", "Cuotas Moderadoras", "cuotas-moderadoras"],
 ])("abre y destaca la categoría %s y su opción activa %s", (group, label, path) => {
   mount(true, `/configuracion/${path}`);
   const button = screen.getByRole("button", { name: group });
@@ -132,7 +133,7 @@ it("navega entre opciones de configuración conservando el destacado activo", ()
   expect(screen.getByRole("link", { name: "Permisos" })).toHaveAttribute("aria-current", "page");
   expect(screen.getByRole("link", { name: "Permisos" })).toHaveClass("menu-item-active");
   expect(screen.getByRole("link", { name: "Roles" })).not.toHaveAttribute("aria-current");
-  expect(screen.getByRole("button", { name: "SEGURIDAD Y ACCESOS" })).toHaveClass("menu-item-active");
+  expect(screen.getByRole("button", { name: "Seguridad y Accesos" })).toHaveClass("menu-item-active");
 });
 
 it("contraído conserva los iconos activos de CONFIGURACIONES y oculta opciones y chevrons", () => {
@@ -143,15 +144,15 @@ it("contraído conserva los iconos activos de CONFIGURACIONES y oculta opciones 
     expect(button).toHaveClass("justify-center");
     expect(button.querySelectorAll("svg")).toHaveLength(1);
   }
-  expect(screen.getByRole("button", { name: "GESTIÓN DE USUARIOS" })).toHaveClass("menu-item-active");
-  expect(screen.getByRole("button", { name: "GESTIÓN DE USUARIOS" }).querySelector("svg")).toHaveClass("menu-item-icon-active");
+  expect(screen.getByRole("button", { name: "Gestión de Usuarios" })).toHaveClass("menu-item-active");
+  expect(screen.getByRole("button", { name: "Gestión de Usuarios" }).querySelector("svg")).toHaveClass("menu-item-icon-active");
   expect(within(screen.getByRole("navigation", { name: "CONFIGURACIONES" })).queryByRole("link")).not.toBeInTheDocument();
 });
 
 it("una ruta de configuración sin permiso no revela su categoría ni opción activa", () => {
   auth.permissions = [];
   mount(true, "/configuracion/roles");
-  expect(screen.queryByRole("button", { name: "SEGURIDAD Y ACCESOS" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Seguridad y Accesos" })).not.toBeInTheDocument();
   expect(screen.queryByText("Roles")).not.toBeInTheDocument();
   expandConfiguration();
   expect(screen.getByRole("link", { name: "Perfil de usuario" })).not.toHaveAttribute("aria-current");
