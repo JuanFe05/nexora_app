@@ -2,11 +2,14 @@
 
 import io
 import re
+import sqlite3
 import zipfile
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from importlib import import_module
 from pathlib import Path
 from types import SimpleNamespace
+from xml.etree import ElementTree
 
 import pytest
 from fastapi import FastAPI
@@ -53,6 +56,7 @@ HEADER = [
     "tlla",
     "imc",
     "prmtro_crnl",
+    "prmtro_brql",
     "cdgo_dgnstco",
     "diagnostico",
     "cdgo_dgnstco_rl_1",
@@ -329,6 +333,235 @@ def test_legacy_routes_preserve_behavior_when_lineas_is_omitted(http, suffix) ->
             assert response.json() == [{"sede": "Synthetic"}]
             assert response.headers["X-Total-Count"] == "7"
             assert reader.calls[0][1]["limit"] == 50 and reader.calls[0][1]["offset"] == 0
+
+
+def test_vital_signs_brachial_sql_matches_reference_rules() -> None:
+    sql = import_module("nexora.statistics.infrastructure.queries.vital_signs").VITAL_SIGNS_SQL
+    assert "FROM tbPreadmision pre WITH (NOLOCK)" in sql
+    assert "WHERE pre.unco_admsns = thc.unco_admsns" in sql
+    assert "AND (CHARINDEX('P.B:', pre.obsrvcns) > 0 OR CHARINDEX('PB:', pre.obsrvcns) > 0)" in sql
+    assert "ORDER BY pre.fcha_ingrso DESC\n) ob" in sql
+    assert "WHEN pbpos.p1 > 0 THEN SUBSTRING(ob.o, pbpos.p1 + 4, 10)" in sql
+    assert "WHEN pbpos.p2 > 0 THEN SUBSTRING(ob.o, pbpos.p2 + 3, 10)" in sql
+    assert "LEFT(pb.tk, PATINDEX('%[^0-9.]%', pb.tk + 'X') - 1)" in sql
+    assert "AS DECIMAL(5,1)), 0)" in sql
+    assert "CAST(:fecha_inicial AS DATE)" in sql and "CAST(:fecha_final AS DATE)" in sql
+    assert "'20261101'" not in sql and "'20261124'" not in sql
+
+
+@pytest.fixture
+def brachial_sql():
+    """Execute production fragments with SQLite function shims, not a second extractor.
+
+    This deterministic check is not SQL Server runtime verification: collation,
+    SQL Server types and query plans still require an integration environment.
+    """
+    sql = import_module("nexora.statistics.infrastructure.queries.vital_signs").VITAL_SIGNS_SQL
+    observation = re.search(
+        r"SELECT TOP 1 CAST\(pre.obsrvcns.*?ORDER BY pre.fcha_ingrso DESC", sql, re.DOTALL
+    )
+    positions = re.search(r"CROSS APPLY \(SELECT CHARINDEX\('P.B:'.*?\) pbpos", sql)
+    token = re.search(r"SELECT CASE\s+WHEN pbpos.p1.*?END AS tk", sql, re.DOTALL)
+    value = re.search(r"ISNULL\(TRY_CAST\(.*?AS prmtro_brql", sql, re.DOTALL)
+    assert observation and positions and token and value, "Missing brachial extraction SQL"
+    observation_sql = (
+        observation.group()
+        .replace("TOP 1 ", "")
+        .replace("NVARCHAR(MAX)", "TEXT")
+        .replace(" WITH (NOLOCK)", "")
+        .replace("thc.unco_admsns", ":admission") + " LIMIT 1"
+    )
+    positions_sql = positions.group().removeprefix("CROSS APPLY (").removesuffix(") pbpos")
+    value_sql = (
+        re.sub(
+            r"TRY_CAST\((.*?)AS DECIMAL\(5,1\)\)",
+            r"try_decimal(\1)", value.group(), flags=re.DOTALL,
+        )
+        .replace("ISNULL(", "IFNULL(")
+        .replace("LEFT(", "sql_left(")
+        .replace("pb.tk + 'X'", "pb.tk || 'X'")
+    )
+
+    def try_decimal(raw):
+        if raw is None:
+            return None
+        try:
+            number = Decimal(raw or "0").quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+        except InvalidOperation:
+            return None
+        return float(number) if number.is_finite() and abs(number) <= Decimal("9999.9") else None
+
+    connection = sqlite3.connect(":memory:")
+    connection.create_function(
+        "CHARINDEX", 2, lambda marker, raw: None if raw is None else raw.find(marker) + 1
+    )
+    connection.create_function(
+        "SUBSTRING", 3,
+        lambda raw, start, length: None if raw is None else raw[start - 1:start - 1 + length],
+    )
+    connection.create_function(
+        "sql_left", 2, lambda raw, length: None if raw is None else raw[:length]
+    )
+    connection.create_function(
+        "PATINDEX", 2,
+        lambda pattern, raw: None if raw is None else re.search(r"[^0-9.]", raw).start() + 1,
+    )
+    connection.create_function("try_decimal", 1, try_decimal)
+    connection.execute(
+        "CREATE TABLE tbPreadmision (unco_admsns INTEGER, fcha_ingrso TEXT, obsrvcns TEXT)"
+    )
+
+    def evaluate(rows, admission=7):
+        connection.executemany("INSERT INTO tbPreadmision VALUES (?, ?, ?)", rows)
+        selected = connection.execute(observation_sql, {"admission": admission}).fetchone()
+        result = connection.execute(
+            f"WITH ob(o) AS (VALUES (:observation)), "  # noqa: S608 -- only statically extracted production SQL fragments are interpolated
+            f"pbpos AS ({positions_sql} FROM ob), "
+            f"pb AS ({token.group()} FROM pbpos CROSS JOIN ob) "
+            f"SELECT {value_sql} FROM pb",
+            {"observation": selected[0] if selected else None},
+        ).fetchone()[0]
+        return Decimal(str(result))
+
+    try:
+        yield evaluate
+    finally:
+        connection.close()
+
+
+@pytest.mark.parametrize(
+    ("observation", "expected"),
+    [
+        ("P.B:12.5 cm", "12.5"),
+        ("PB:13.25 cm", "13.3"),
+        ("PB:9 P.B:14.2", "14.2"),
+        ("P.B:", "0"),
+        ("PB:", "0"),
+        ("Sin perímetro braquial", "0"),
+        (None, "0"),
+        ("P.B: 12.5", "0"),
+        ("PB:abc", "0"),
+        ("PB:12..5", "0"),
+        ("PB:10000", "0"),
+        ("PB:0", "0"),
+        ("P.B:123.45678999", "123.5"),
+        ("PB:13 P.B:", "0"),
+        ("PB:13 P.B: 12.5", "0"),
+    ],
+)
+def test_vital_signs_brachial_extraction_examples(brachial_sql, observation, expected) -> None:
+    assert brachial_sql([(7, "2026-01-01", observation)]) == Decimal(expected)
+
+
+@pytest.mark.parametrize("latest", ["PB:16.4", "P.B:", "PB:invalid"])
+def test_vital_signs_brachial_uses_latest_eligible_admission(brachial_sql, latest) -> None:
+    rows = [
+        (7, "2026-01-01", "P.B:12.5"),
+        (7, "2026-01-02", latest),
+        (7, "2026-01-03", "No marker"),
+        (8, "2026-01-04", "PB:99"),
+    ]
+    assert brachial_sql(rows) == (Decimal("16.4") if latest == "PB:16.4" else Decimal("0"))
+
+
+def test_vital_signs_brachial_no_preadmission_defaults_to_zero(brachial_sql) -> None:
+    assert brachial_sql([]) == Decimal("0")
+
+
+async def test_vital_signs_brachial_propagates_through_existing_source() -> None:
+    record = {"sede": "Synthetic", "pso": Decimal("72.5"), "prmtro_brql": Decimal("12.5")}
+    reader = FakeReader([{**record, "total_registros": 1}])
+    source = source_for("vital_signs", reader)
+    filters = DetailedInvoicesFilter(date(2026, 1, 1), date(2026, 1, 31), (), ())
+    page = await source.page(filters, 10, 0)
+    assert page.items == [record] and page.total == 1
+    reader.rows = [record]
+    assert [chunk async for chunk in source.stream(filters)] == [[record]]
+    assert all("AS prmtro_brql" in query.sql for query, _ in reader.calls)
+    assert reader.rows == [record]
+
+
+@pytest.mark.parametrize("http", ["vital_signs"], indirect=True)
+def test_vital_signs_brachial_http_preserves_decimal_json_and_total(http) -> None:
+    client, reader, _, _ = http
+    rows = [
+        {"sede": "Synthetic", "pso": Decimal("72.5"), "prmtro_brql": Decimal("12.5"),
+         "total_registros": 7},
+        {"sede": "Other", "pso": Decimal("60.0"), "prmtro_brql": Decimal("0.0"),
+         "total_registros": 7},
+    ]
+    reader.rows = rows
+    response = client.get(
+        "/statistics/reports/vital-signs",
+        params=DATES,
+        headers={"Authorization": "Bearer test-token"},
+    )
+    assert response.status_code == 200
+    # The existing generic API serializes Decimal values as JSON strings.
+    assert response.json() == [
+        {"sede": "Synthetic", "pso": "72.5", "prmtro_brql": "12.5"},
+        {"sede": "Other", "pso": "60.0", "prmtro_brql": "0.0"},
+    ]
+    assert response.headers["content-type"] == "application/json"
+    assert response.headers["X-Total-Count"] == "7"
+    assert len(reader.calls) == 1
+    assert reader.calls[0][0].name == "statistics.vital_signs"
+    assert reader.rows == rows
+
+
+@pytest.mark.parametrize("http", ["vital_signs"], indirect=True)
+@pytest.mark.parametrize("formato", ["csv", "xlsx"])
+def test_vital_signs_brachial_exports_numeric_values_and_preserves_weight(http, formato) -> None:
+    client, reader, _, _ = http
+    rows = [
+        {"sede": "Synthetic", "pso": Decimal("72.5"), "prmtro_brql": Decimal("12.5")},
+        {"sede": "Other", "pso": Decimal("60.0"), "prmtro_brql": Decimal("0.0")},
+    ]
+    reader.rows = rows
+    response = client.get(
+        "/statistics/reports/vital-signs/export",
+        params={
+            **DATES, "formato": formato,
+            "columnas": ["sede:text", "pso:number", "prmtro_brql:number"],
+        },
+        headers={"Authorization": "Bearer test-token"},
+    )
+    assert response.status_code == 200
+    assert f"signos-vitales_2026-01-01_2026-01-31.{formato}" in response.headers[
+        "content-disposition"
+    ]
+    assert response.headers["cache-control"] == "no-store"
+    if formato == "csv":
+        assert response.headers["content-type"].startswith("text/csv")
+        assert response.content.decode("utf-8-sig") == (
+            "sede;pso;prmtro_brql\r\nSynthetic;72.5;12.5\r\nOther;60;0\r\n"
+        )
+    else:
+        assert "spreadsheetml.sheet" in response.headers["content-type"]
+        with zipfile.ZipFile(io.BytesIO(response.content)) as book:
+            assert book.testzip() is None
+            sheet = ElementTree.fromstring(book.read("xl/worksheets/sheet1.xml"))
+        ns = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        sheet_rows = sheet.findall("s:sheetData/s:row", ns)
+        assert len(sheet_rows) == 3
+        assert [cell.findtext("s:is/s:t", namespaces=ns) for cell in sheet_rows[0]] == [
+            "sede", "pso", "prmtro_brql",
+        ]
+        for row, expected in zip(
+            sheet_rows[1:], [("Synthetic", "72.5", "12.5"), ("Other", "60", "0")],
+            strict=True,
+        ):
+            cells = list(row)
+            assert len(cells) == 3
+            assert cells[0].findtext("s:is/s:t", namespaces=ns) == expected[0]
+            assert [cell.findtext("s:v", namespaces=ns) for cell in cells[1:]] == list(
+                expected[1:]
+            )
+            assert all(cell.get("t") in (None, "n") for cell in cells[1:])
+    assert len(reader.calls) == 1
+    assert reader.calls[0][0].name == "statistics.vital_signs_export"
+    assert "limit" not in reader.calls[0][1] and "offset" not in reader.calls[0][1]
+    assert reader.rows == rows
 
 
 def test_vital_signs_permission_catalog() -> None:

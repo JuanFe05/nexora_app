@@ -1,7 +1,7 @@
 import { createReportColumns, reportExportColumns, type ColumnType } from "../shared/report-columns";
 import type { VitalSignColumnKey } from "./types";
 
-/** All 36 API aliases in source order; identifiers and phone numbers remain text. */
+/** All 37 API aliases in source order; identifiers and phone numbers remain text. */
 const definitions = [
   ["sede", "Sede", "text"],
   ["linea_servicio", "Línea de servicio", "text"],
@@ -31,6 +31,7 @@ const definitions = [
   ["tlla", "Talla", "number"],
   ["imc", "IMC", "number"],
   ["prmtro_crnl", "Perímetro craneal", "number"],
+  ["prmtro_brql", "Perímetro Braquial", "number"],
   ["cdgo_dgnstco", "Código de diagnóstico", "text"],
   ["diagnostico", "Diagnóstico", "longtext"],
   ["cdgo_dgnstco_rl_1", "Código de diagnóstico relacionado 1", "text"],
@@ -42,7 +43,7 @@ const definitions = [
 ] as const satisfies readonly (readonly [VitalSignColumnKey, string, ColumnType])[];
 
 export const defaultVisibleColumns: VitalSignColumnKey[] = [
-  "sede", "linea_servicio", "empresa", "fcha_atncn", "tipo_documento", "nmro_idntfccn", "prmr_nmbre", "prmr_aplldo", "edad", "tnsn_artrl_alta", "tnsn_artrl_bja", "frcnca_crdca", "frcnca_rsprtra", "tmprtra", "pso", "tlla", "imc", "cdgo_dgnstco", "profesional_salud",
+  "sede", "linea_servicio", "empresa", "fcha_atncn", "tipo_documento", "nmro_idntfccn", "prmr_nmbre", "prmr_aplldo", "edad", "tnsn_artrl_alta", "tnsn_artrl_bja", "frcnca_crdca", "frcnca_rsprtra", "tmprtra", "pso", "tlla", "imc", "prmtro_brql", "cdgo_dgnstco", "profesional_salud",
 ];
 export const vitalSignsColumns = createReportColumns<VitalSignColumnKey>(definitions);
 export const vitalSignsExportColumns = reportExportColumns(vitalSignsColumns);

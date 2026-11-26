@@ -2,8 +2,10 @@
 
 Diff respecto al original: SET NOCOUNT ON; fechas enlazadas; filtros de sede,
 empresa y linea en el WHERE final; COUNT(*) OVER (); desempate thc.unco y
-OFFSET/FETCH. Las 36 columnas, calculos, joins y reglas originales se conservan.
-La exportacion se deriva del SQL paginado con el mecanismo compartido.
+OFFSET/FETCH. Las 36 columnas, calculos, joins y reglas originales se conservan;
+prmtro_brql se agrega desde tbPreadmision segun Signos_Vitales_New.sql, sin
+copiar sus fechas de prueba. La exportacion se deriva del SQL paginado con el
+mecanismo compartido.
 """
 
 # ruff: noqa: E501 -- SQL original conservado para permitir auditoria por diff.
@@ -101,6 +103,9 @@ SELECT
     ISNULL(thc.tlla,            0)                                  AS tlla,
     ISNULL(thc.imc,             0)                                  AS imc,
     ISNULL(thc.prmtro_crnl,     0)                                  AS prmtro_crnl,
+    ISNULL(TRY_CAST(
+        LEFT(pb.tk, PATINDEX('%[^0-9.]%', pb.tk + 'X') - 1)
+    AS DECIMAL(5,1)), 0)                                            AS prmtro_brql,
     LTRIM(RTRIM(ISNULL(dg1.cdgo_dgnstco, '')))                      AS cdgo_dgnstco,
     LTRIM(RTRIM(ISNULL(dg1.dscrpcn, '')))                           AS diagnostico,
     LTRIM(RTRIM(ISNULL(dg2.cdgo_dgnstco, '')))                      AS cdgo_dgnstco_rl_1,
@@ -238,6 +243,21 @@ OUTER APPLY (
       AND e.unco_emprsa NOT IN (1, 4, 6, 17, 89, 10, 36, 37, 46, 5, 60, 64, 65, 61, 39, 63, 73, 80, 253, 241)
     ORDER BY a.cnsctvo_admsns DESC
 ) rgm
+-- Perimetro braquial: no es columna, viene en el texto de observaciones de la preadmision (P.B: / PB:), igual que Triage_V5
+OUTER APPLY (
+    SELECT TOP 1 CAST(pre.obsrvcns AS NVARCHAR(MAX)) AS o
+    FROM tbPreadmision pre WITH (NOLOCK)
+    WHERE pre.unco_admsns = thc.unco_admsns
+      AND (CHARINDEX('P.B:', pre.obsrvcns) > 0 OR CHARINDEX('PB:', pre.obsrvcns) > 0)
+    ORDER BY pre.fcha_ingrso DESC
+) ob
+CROSS APPLY (SELECT CHARINDEX('P.B:', ob.o) AS p1, CHARINDEX('PB:', ob.o) AS p2) pbpos
+CROSS APPLY (
+    SELECT CASE
+               WHEN pbpos.p1 > 0 THEN SUBSTRING(ob.o, pbpos.p1 + 4, 10)
+               WHEN pbpos.p2 > 0 THEN SUBSTRING(ob.o, pbpos.p2 + 3, 10)
+           END AS tk
+) pb
 WHERE thc.fcha_atncn >= @fcha_inicio
   AND thc.fcha_atncn <  @fcha_tope
   AND (:filtrar_sedes = 0 OR s.unco IN :sedes)

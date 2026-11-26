@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { httpClient } from "@/lib/http/http-client";
 import { fetchSites, fetchCompanies, fetchProductLines, fetchVitalSigns, downloadVitalSigns } from "./vital-signs-api";
+import { vitalSignsExportColumns } from "../columns";
 vi.mock("@/lib/http/http-client", () => ({ httpClient: { get: vi.fn(), getWithMeta: vi.fn(), getBlob: vi.fn() } }));
 beforeEach(() => vi.resetAllMocks());
 it("loads each dedicated catalog with cancellation", async () => {
@@ -25,6 +26,23 @@ it.each([{ ids: [] }, { ids: [7] }, { ids: [7, 8] }])("passes dates, repeated fi
   expect(params.get("limit")).toBe("25");
   expect(params.get("offset")).toBe("50");
   expect(options).toEqual({ signal });
+});
+it.each([12.5, 0])("keeps the brachial perimeter %s in page data without coercing other indicators", async (prmtro_brql) => {
+  const signal = new AbortController().signal;
+  const row = { prmtro_brql, pso: 72.5, nmro_idntfccn: "00123" };
+  vi.mocked(httpClient.getWithMeta).mockResolvedValue({ data: [row], headers: new Headers({ "X-Total-Count": "1" }) });
+  expect(await fetchVitalSigns({ startDate: "2026-01-01", endDate: "2026-01-31", sites: [], companies: [], productLines: [] }, { limit: 10, offset: 0, signal })).toEqual({ items: [row], total: 1 });
+});
+it.each(["csv", "xlsx"] as const)("exports the brachial numeric alias through the existing %s column path", async (format) => {
+  const signal = new AbortController().signal;
+  vi.mocked(httpClient.getBlob).mockResolvedValue(new Blob(["synthetic"]));
+  await downloadVitalSigns({ startDate: "2026-01-01", endDate: "2026-01-31", sites: [], companies: [], productLines: [] }, vitalSignsExportColumns, format, signal);
+  const params = new URLSearchParams(vi.mocked(httpClient.getBlob).mock.calls[0][0].split("?")[1]);
+  expect(params.getAll("columnas")).toContain("prmtro_brql:number");
+  expect(params.getAll("columnas")).toContain("pso:number");
+  expect(params.getAll("formato")).toEqual([format]);
+  expect(params.has("limit")).toBe(false);
+  expect(params.has("offset")).toBe(false);
 });
 it.each(["csv", "xlsx"] as const)("downloads a single %s blob without pagination", async (format) => {
   const signal = new AbortController().signal;

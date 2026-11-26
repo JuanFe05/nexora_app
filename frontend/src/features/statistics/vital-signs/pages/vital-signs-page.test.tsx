@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { httpClient } from "@/lib/http/http-client";
 import { ApiError } from "@/lib/http/api-error";
+import { downloadBlob } from "@/lib/table-export";
 import VitalSignsPage from "./vital-signs-page";
 vi.mock("@/lib/http/http-client", () => ({ httpClient: { get: vi.fn(), getWithMeta: vi.fn(), getBlob: vi.fn() } }));
 vi.mock("@/lib/table-export", async (original) => ({ ...await original<typeof import("@/lib/table-export")>(), downloadBlob: vi.fn() }));
@@ -74,6 +75,38 @@ it.each([1, 2, 3])("applies %s product lines, omits all, paginates applied filte
   expect(screen.getByLabelText(/Fecha final/)).toHaveValue("");
   expect(screen.getByRole("button", { name: "Limpiar" })).toBeDisabled();
   expect(screen.getByText("Selecciona un período y presiona Consultar.")).toBeVisible();
+}, 15000);
+it.each(["csv", "xlsx"] as const)("shows brachial perimeter by default and exports visible columns as %s", async (format) => {
+  const user = userEvent.setup();
+  const file = new Blob(["synthetic"]);
+  vi.mocked(httpClient.getWithMeta).mockResolvedValue({ data: [{ prmtro_brql: "12.5", pso: 72.5, nmro_idntfccn: "00123" }, { prmtro_brql: "0.0" }], headers: new Headers({ "X-Total-Count": "2" }) });
+  vi.mocked(httpClient.getBlob).mockResolvedValue(file);
+  render(<VitalSignsPage />);
+  await ready();
+  dates();
+  await user.click(consult());
+  expect(await screen.findByRole("columnheader", { name: "Perímetro Braquial" })).toBeVisible();
+  expect(screen.getByRole("cell", { name: "12,5" })).toBeVisible();
+  expect(screen.getByRole("cell", { name: "0" })).toBeVisible();
+  expect(screen.getByText("72,5")).toBeVisible();
+  expect(screen.getByText("00123")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Exportar" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: /Columnas visibles/ }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: format === "csv" ? "CSV" : "Excel (.xlsx)" }));
+  await waitFor(() => expect(downloadBlob).toHaveBeenCalledWith(file, `signos-vitales_2026-01-01_2026-01-31.${format}`));
+  const [url] = vi.mocked(httpClient.getBlob).mock.calls[0];
+  const exported = new URLSearchParams(url.split("?")[1]);
+  expect(url.split("?")[0]).toBe("/statistics/reports/vital-signs/export");
+  expect(exported.getAll("columnas")).toContain("prmtro_brql:number");
+  expect(exported.getAll("columnas")).toContain("pso:number");
+  expect(exported.get("fecha_inicial")).toBe("2026-01-01");
+  expect(exported.get("fecha_final")).toBe("2026-01-31");
+  expect(exported.has("limit")).toBe(false);
+  expect(exported.has("offset")).toBe(false);
+  await user.click(screen.getByRole("button", { name: /Columnas visibles/ }));
+  await user.click(screen.getByRole("checkbox", { name: "Perímetro Braquial" }));
+  expect(screen.queryByRole("columnheader", { name: "Perímetro Braquial" })).not.toBeInTheDocument();
+  await user.keyboard("{Escape}");
 }, 15000);
 it("retries a product-line catalog failure via an icon and enables Consultar", async () => {
   vi.mocked(httpClient.get).mockImplementation(async (url) => {

@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
@@ -207,6 +208,41 @@ def test_consult_runs_one_query_with_dates_and_filters(http: Any) -> None:
         2026, 1, 31
     )
     assert params["sedes"] == [3] and params["filtrar_lineas"] == 0
+
+
+def test_shared_vital_signs_brachial_field_leaves_sivigila_result_unchanged(http: Any) -> None:
+    client, reader, _ = http
+    rows = [
+        record(cdgo_dgnstco="J00X", cdgo_dgnstco_rl_1="A09X", cdgo_dgnstco_rl_2="A90X"),
+        record(cdgo_dgnstco="B019", cdgo_dgnstco_rl_1="W509", gener="M"),
+        record(cdgo_dgnstco="A09X", gener="?"),
+        record(fcha_ncmnto="", edad="", tipo_edad=""),
+        record(cdgo_dgnstco="J00X", especialidad="PEDIATRIA"),
+    ]
+    reader.rows = rows
+    baseline = get(client)
+    assert baseline.status_code == 200
+    body = baseline.json()
+    assert body["total_registros"] == 4
+    assert [len(body["pestanas"][tab]) for tab in (
+        "general", "ira", "eda", "dengue", "varicela", "rabia",
+    )] == [4, 1, 2, 1, 1, 1]
+    assert body["advertencias"]  # Both missing age and unknown sex remain observable.
+    assert reader.rows == rows
+
+    enriched = [
+        {**row, "prmtro_brql": Decimal("12.5") if index % 2 == 0 else Decimal("0.0")}
+        for index, row in enumerate(rows)
+    ]
+    reader.rows = enriched
+    response = get(client)
+    assert response.status_code == 200
+    # Compare the whole public result: tabs, analyses, warnings, titles and counters.
+    assert response.json() == body
+    assert reader.rows == enriched
+    assert len(reader.calls) == 2
+    assert all(query.name == "statistics.vital_signs_export" for query, _ in reader.calls)
+    assert reader.calls[0][1] == reader.calls[1][1]
 
 
 def test_reversed_dates_are_rejected(http: Any) -> None:

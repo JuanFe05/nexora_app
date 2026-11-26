@@ -30,6 +30,7 @@ export type VitalSignColumnKey =
   | "tlla"
   | "imc"
   | "prmtro_crnl"
+  | "prmtro_brql"
   | "cdgo_dgnstco"
   | "diagnostico"
   | "cdgo_dgnstco_rl_1"
