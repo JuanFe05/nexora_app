@@ -132,7 +132,7 @@ export const navigation: NavigationSection[] = [
         ],
       },
       {
-        label: "Administración del Sistema",
+        label: "Administración",
         icon: DocumentTextIcon,
         items: [
           { label: "Cuotas Moderadoras", path: "/configuracion/cuotas-moderadoras", requiredPermission: PERMISSIONS.moderatorFeesView },

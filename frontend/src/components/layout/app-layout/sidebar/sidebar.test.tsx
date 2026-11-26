@@ -17,7 +17,7 @@ function mount(open = true, pathname = "/") {
   return render(<MemoryRouter initialEntries={[pathname]}><SidebarProvider defaultOpen={open}><AppSidebar /></SidebarProvider></MemoryRouter>);
 }
 
-const CONFIGURATION_GROUPS = ["Gestión de Usuarios", "Seguridad y Accesos", "Administración del Sistema"];
+const CONFIGURATION_GROUPS = ["Gestión de Usuarios", "Seguridad y Accesos", "Administración"];
 
 function expandConfiguration() {
   for (const name of CONFIGURATION_GROUPS) {
@@ -67,7 +67,7 @@ it.each([
   expect(screen.getByRole("link", { name: "Perfil de usuario" })).toBeVisible();
   const expectedGroups = ["Gestión de Usuarios"];
   if (visible.some((label) => ["Roles", "Permisos"].includes(label))) expectedGroups.push("Seguridad y Accesos");
-  if (visible.includes("Cuotas Moderadoras")) expectedGroups.push("Administración del Sistema");
+  if (visible.includes("Cuotas Moderadoras")) expectedGroups.push("Administración");
   expect(within(screen.getByRole("navigation", { name: "CONFIGURACIONES" })).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual(expectedGroups);
   for (const label of ["Usuarios", "Permisos", "Roles", "Cuotas Moderadoras"]) {
     if (visible.includes(label)) expect(screen.getByRole("link", { name: label })).toBeVisible();
@@ -108,7 +108,7 @@ it.each([
   ["Gestión de Usuarios", "Usuarios", "usuarios"],
   ["Seguridad y Accesos", "Roles", "roles"],
   ["Seguridad y Accesos", "Permisos", "permisos"],
-  ["Administración del Sistema", "Cuotas Moderadoras", "cuotas-moderadoras"],
+  ["Administración", "Cuotas Moderadoras", "cuotas-moderadoras"],
 ])("abre y destaca la categoría %s y su opción activa %s", (group, label, path) => {
   mount(true, `/configuracion/${path}`);
   const button = screen.getByRole("button", { name: group });
