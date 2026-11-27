@@ -25,6 +25,9 @@ from nexora.statistics.presentation.http.v1.general_consumption_router import (
 from nexora.statistics.presentation.http.v1.lab_consumption_router import (
     create_lab_consumption_router,
 )
+from nexora.statistics.presentation.http.v1.management_secretariat_invoices_router import (
+    router as management_secretariat_router,
+)
 from nexora.statistics.presentation.http.v1.moderator_fees_router import (
     moderator_fees_router as moderator_fees_router,
 )

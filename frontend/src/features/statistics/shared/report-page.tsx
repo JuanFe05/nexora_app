@@ -23,6 +23,7 @@ export type ReportDefinition<TRow> = {
   columns: readonly (DataTableColumn<TRow> & { label: string })[];
   exportColumns: readonly ExportColumn[];
   defaultVisibleColumns: string[];
+  searchable?: boolean;
 };
 const ignoreSearch = () => {};
 
@@ -58,13 +59,13 @@ function ReportResults<TRow>({ report, filters, visibleColumns, onVisibleColumns
       pageSizeOptions={[10, 25, 50, 100]}
       onPageChange={query.setPage}
       onPageSizeChange={query.setPageSize}
-      search=""
-      onSearchChange={ignoreSearch}
-      showSearch={false}
+      search={report.searchable ? query.search : ""}
+      onSearchChange={report.searchable ? query.setSearch : ignoreSearch}
+      showSearch={Boolean(report.searchable)}
       headerAction={<>
         <ColumnVisibilityMenu columns={report.columns} value={visibleColumns} onChange={onVisibleColumnsChange} />
         <ExportMenu columns={report.exportColumns} visibleIds={visibleColumns} exportFile={async (columns, format, signal) => {
-          const file = await report.api.download(filters, columns, format, signal);
+          const file = await report.api.download(filters, columns, format, signal, query.search);
           if (signal.aborted) return;
           downloadBlob(file, `${report.filename}_${filters.startDate}_${filters.endDate}.${format}`);
         }} disabled={query.loading || Boolean(query.error) || query.total === 0} />

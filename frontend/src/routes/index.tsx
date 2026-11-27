@@ -40,6 +40,10 @@ const GeneralBillingPage = lazy(
   () => import("@/features/statistics/general-billing/pages/general-billing-page"),
 );
 
+const ManagementSecretariatPage = lazy(
+  () => import("@/features/statistics/management-secretariat/pages/management-secretariat-page"),
+);
+
 const IncapacitiesPage = lazy(
   () => import("@/features/statistics/incapacities/pages/incapacities-page"),
 );
@@ -121,6 +125,15 @@ export const routes: RouteObject[] = [
               {
                 path: "/estadistica/administrativa/facturacion-general",
                 element: <GeneralBillingPage />,
+              },
+            ],
+          },
+          {
+            element: <RequirePermission permission={PERMISSIONS.managementSecretariatView} />,
+            children: [
+              {
+                path: "/estadistica/administrativa/secretaria-gerencia",
+                element: <ManagementSecretariatPage />,
               },
             ],
           },

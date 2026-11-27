@@ -85,7 +85,7 @@ export const navigation: NavigationSection[] = [
           { label: "Consumo de Laboratorio", path: "/estadistica/administrativa/consumo-laboratorio", requiredPermission: PERMISSIONS.labConsumptionView },
           { label: "Gestión de Incapacidades", path: "/estadistica/administrativa/gestion-incapacidades", requiredPermission: PERMISSIONS.disabilityManagementView },
           { label: "Encuestas de Calidad", path: "/estadistica/administrativa/encuestas-de-calidad", requiredPermission: PERMISSIONS.qualitySurveysView },
-          { label: "Secretaría Gerencia", requiredPermission: PERMISSIONS.managementSecretariatView },
+          { label: "Secretaría Gerencia", path: "/estadistica/administrativa/secretaria-gerencia", requiredPermission: PERMISSIONS.managementSecretariatView },
           { label: "Notificación SIVIGILA", path: "/estadistica/administrativa/notificacion-sivigila", requiredPermission: PERMISSIONS.sivigilaView },
           { label: "BAI Nutrición CYD", requiredPermission: PERMISSIONS.baiNutricionCydView },
         ],
