@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { httpClient } from "@/lib/http/http-client";
 import { ApiError } from "@/lib/http/api-error";
-import { assignUserRole, createUser, deleteUser, listUsers, revokeUserRole, updateUser } from "./users-api";
+import { assignUserRole, createUser, deleteUser, listUsers, resetUserPassword, revokeUserRole, updateUser } from "./users-api";
 import { loadRoleOptions } from "./role-options";
 import { userError } from "./user-error";
 
@@ -31,6 +31,13 @@ describe("users API", () => {
     expect(httpClient.delete).toHaveBeenCalledWith("/users/u");
     expect(httpClient.put).toHaveBeenCalledWith("/users/u/roles/r");
     expect(httpClient.delete).toHaveBeenCalledWith("/users/u/roles/r");
+  });
+  it("posts the temporary password under the reset contract and expects no credential back", async () => {
+    vi.mocked(httpClient.post).mockResolvedValueOnce(undefined);
+    await expect(resetUserPassword("u/1", "Temporal123!")).resolves.toBeUndefined();
+    expect(httpClient.post).toHaveBeenCalledExactlyOnceWith("/users/u%2F1/reset-password", {
+      body: { contrasena_temporal: "Temporal123!" },
+    });
   });
   it("loads all role catalog pages of 100", async () => {
     const first = Array.from({ length: 100 }, (_, i) => ({ id: String(i), codigo: `R${i}`, nombre: `Rol ${i}` }));

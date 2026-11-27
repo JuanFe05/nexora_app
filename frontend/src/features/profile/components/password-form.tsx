@@ -29,11 +29,12 @@ export function PasswordForm() {
       </div>
       <Button variant="outline" size="sm" className="w-full shrink-0 sm:w-auto" onClick={() => setOpen(true)}><LockIcon aria-hidden="true" className="size-5" />Cambiar contraseña</Button>
     </div>
-    {open && <PasswordEditor onClose={() => setOpen(false)} />}
+    {open && <PasswordEditor onSaved={() => setOpen(false)} onClose={() => setOpen(false)} />}
   </>;
 }
 
-function PasswordEditor({ onClose }: { onClose: () => void }) {
+export function PasswordEditor({ onSaved, onClose }: { onSaved: () => void; onClose?: () => void }) {
+  const mandatory = !onClose;
   const [pending, setPending] = useState(false);
   const [evaluation, setEvaluation] = useState(() => evaluatePasswordPolicy(""));
   const [errors, setErrors] = useState<FieldErrors<keyof PasswordValues>>({});
@@ -69,7 +70,7 @@ function PasswordEditor({ onClose }: { onClose: () => void }) {
       data.delete("contrasena_actual"); data.delete("contrasena_nueva"); data.delete("confirmacion");
       await request;
       toast.success("Contraseña actualizada. Se cerraron tus otras sesiones.");
-      onClose();
+      onSaved();
     } catch (error) {
       const failure = passwordFailure(error);
       setErrors(failure.fields);
@@ -78,18 +79,30 @@ function PasswordEditor({ onClose }: { onClose: () => void }) {
     } finally { setPending(false); }
   }
 
+  const form = (
+    <form id="password-form" ref={formRef} noValidate onSubmit={submit} onReset={() => setEvaluation(evaluatePasswordPolicy(""))} aria-label="Cambiar contraseña" aria-busy={pending} className="space-y-5">
+      {fields.map((field) => <PasswordField key={`${generation}-${field.name}`} {...field}
+        label={mandatory && field.name === "contrasena_actual" ? "Contraseña temporal" : field.label}
+        toggleLabel={mandatory && field.name === "contrasena_actual" ? "contraseña temporal" : field.toggleLabel}
+        pending={pending} error={errors[field.name]}
+        requirements={field.name === "contrasena_nueva" ? <PasswordRequirements evaluation={evaluation} /> : undefined}
+        onChange={(event) => {
+          if (field.name === "contrasena_nueva") setEvaluation(evaluatePasswordPolicy(event.currentTarget.value));
+          // New password and confirmation validation depend on each other.
+          setErrors({});
+        }} />)}
+      {mandatory && <Button type="submit" disabled={pending}>{pending ? "Actualizando…" : "Cambiar contraseña"}</Button>}
+    </form>
+  );
+
+  if (!onClose) return <div className="space-y-5">
+    <p className="text-sm text-gray-600 dark:text-gray-300">{description}</p>
+    {form}
+  </div>;
   return (
     <FormDialog open onOpenChange={(open) => { if (!open) onClose(); }} title="Cambiar contraseña"
       description={description} formId="password-form" pending={pending} pendingLabel="Actualizando…">
-      <form id="password-form" ref={formRef} noValidate onSubmit={submit} onReset={() => setEvaluation(evaluatePasswordPolicy(""))} aria-label="Cambiar contraseña" aria-busy={pending} className="space-y-5">
-        {fields.map((field) => <PasswordField key={`${generation}-${field.name}`} {...field} pending={pending} error={errors[field.name]}
-          requirements={field.name === "contrasena_nueva" ? <PasswordRequirements evaluation={evaluation} /> : undefined}
-          onChange={(event) => {
-            if (field.name === "contrasena_nueva") setEvaluation(evaluatePasswordPolicy(event.currentTarget.value));
-            // New password and confirmation validation depend on each other.
-            setErrors({});
-          }} />)}
-      </form>
+      {form}
     </FormDialog>
   );
 }

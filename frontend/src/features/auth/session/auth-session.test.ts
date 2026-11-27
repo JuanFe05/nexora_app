@@ -19,6 +19,33 @@ async function setup() {
 }
 afterEach(() => vi.useRealTimers());
 
+describe("temporary password sessions", () => {
+  it("blocks permissions and refresh until me confirms the password was changed", async () => {
+    const { api, session } = await setup();
+    api.login.mockResolvedValue({ ...tokens, usuario, requiere_cambio_contrasena: true });
+    api.me.mockResolvedValue({ ...principal, requiere_cambio_contrasena: true });
+    await session.login({ identificador: "ana", contrasena: "Temporal123!" });
+    expect(session.getSnapshot()).toMatchObject({ status: "authenticated", passwordChangeRequired: true });
+    expect(session.hasPermission("identity.roles.view")).toBe(false);
+
+    api.me.mockResolvedValue({ ...principal, requiere_cambio_contrasena: false });
+    await session.reloadPrincipal();
+    expect(session.getSnapshot().passwordChangeRequired).not.toBe(true);
+    expect(session.hasPermission("identity.roles.view")).toBe(true);
+    expect(api.refresh).not.toHaveBeenCalled();
+  });
+
+  it("ends an expired restricted session without sending a refresh request", async () => {
+    const { api, session, store } = await setup();
+    api.me.mockResolvedValue({ ...principal, requiere_cambio_contrasena: true });
+    await session.reloadPrincipal();
+    await expect(session.refresh()).rejects.toMatchObject({ status: 401 });
+    expect(api.refresh).not.toHaveBeenCalled();
+    expect(store.getAccessToken()).toBeNull();
+    expect(session.getSnapshot().status).toBe("anonymous");
+  });
+});
+
 describe("reloadPrincipal", () => {
   it("conserva snapshot y suscriptores si el payload no cambia", async () => {
     const { api, store, session } = await setup();

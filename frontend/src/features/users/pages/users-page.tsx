@@ -2,11 +2,12 @@ import { useState } from "react";
 import { DataTable, RowActionButton, usePagedQuery } from "@/components/shared/data-table";
 import { useToast } from "@/components/shared/toast/use-toast";
 import { Button } from "@/components/ui/button";
-import { PlusIcon, UsersIcon } from "@/icons";
+import { LockIcon, PlusIcon, UsersIcon } from "@/icons";
 import { PageHeader } from "@/components/shared/page-header";
 import { listUsers } from "../api/users-api";
 import { userError } from "../api/user-error";
 import { DeleteUserDialog } from "../components/delete-user-dialog";
+import { ResetPasswordDialog } from "../components/reset-password-dialog";
 import { UserDrawer } from "../components/user-drawer";
 import { userColumns } from "../components/user-columns";
 import type { User } from "../types";
@@ -19,6 +20,7 @@ export default function UsersPage() {
   const query = usePagedQuery({ fetcher: listUsers, initialPageSize: 10 });
   const [editor, setEditor] = useState<{ user: User | null } | null>(null);
   const [deleting, setDeleting] = useState<User | null>(null);
+  const [resetting, setResetting] = useState<User | null>(null);
   const toast = useToast();
   return <div className="space-y-6">
     <PageHeader icon={<UsersIcon />} title="Administración de usuarios" description="Gestiona las cuentas, los estados y los roles de acceso." />
@@ -28,8 +30,9 @@ export default function UsersPage() {
       search={query.search} onSearchChange={query.setSearch} searchPlaceholder="Buscar usuarios"
       headerAction={permissions.create ? <Button type="button" onClick={() => { setEditor({ user: null }); }}><PlusIcon aria-hidden="true" />Nuevo usuario</Button> : undefined}
       emptyState={{ title: "No hay usuarios", description: "Crea el primer usuario para comenzar." }}
-      rowActions={canEdit || permissions.delete ? user => <>
+      rowActions={canEdit || permissions.delete || permissions.resetPassword ? user => <>
         {canEdit && <RowActionButton aria-label={`Editar ${user.nombre_usuario}`} onClick={() => { setEditor({ user }); }} />}
+        {permissions.resetPassword && <RowActionButton aria-label={`Restablecer contraseña de ${user.nombre_usuario}`} onClick={() => setResetting(user)}><LockIcon aria-hidden="true" className="size-5" /></RowActionButton>}
         {permissions.delete && <RowActionButton variant="danger" aria-label={`Eliminar ${user.nombre_usuario}`} onClick={() => { setDeleting(user); }} />}
       </> : undefined}
     />
@@ -37,6 +40,10 @@ export default function UsersPage() {
       toast.success(editor.user ? "Usuario actualizado correctamente." : "Usuario creado correctamente.");
       setEditor(null);
       query.reload();
+    }} />}
+    {resetting && permissions.resetPassword && <ResetPasswordDialog user={resetting} onClose={() => setResetting(null)} onReset={() => {
+      toast.success("Contraseña temporal asignada.");
+      setResetting(null);
     }} />}
     {deleting && <DeleteUserDialog user={deleting} onClose={() => setDeleting(null)} onDeleted={() => {
       toast.success("Usuario eliminado correctamente.");

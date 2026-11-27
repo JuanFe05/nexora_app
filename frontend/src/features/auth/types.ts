@@ -16,11 +16,12 @@ export type TokenResponse = {
   warning_seconds?: number;
   session_expires_at?: string;
 };
-export type LoginResponse = TokenResponse & { usuario: AuthUser };
-export type MeResponse = { usuario: AuthUser; roles: string[]; permisos: string[] };
+export type LoginResponse = TokenResponse & { usuario: AuthUser; requiere_cambio_contrasena?: boolean };
+export type MeResponse = { usuario: AuthUser; roles: string[]; permisos: string[]; requiere_cambio_contrasena?: boolean };
 export type AuthState = {
   status: "loading" | "authenticated" | "anonymous";
   user: AuthUser | null;
   roles: string[];
   permissions: string[];
+  passwordChangeRequired?: true;
 };

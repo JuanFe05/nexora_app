@@ -1,4 +1,5 @@
 import { Navigate, Outlet } from "react-router";
+import { RequiredPasswordChange } from "./required-password-change";
 import { useAuth } from "../use-auth";
 
 function SessionLoading() {
@@ -6,9 +7,10 @@ function SessionLoading() {
 }
 
 export function ProtectedRoute() {
-  const { status } = useAuth();
+  const { status, passwordChangeRequired } = useAuth();
   if (status === "loading") return <SessionLoading />;
   if (status === "anonymous") return <Navigate to="/signin" replace />;
+  if (passwordChangeRequired) return <RequiredPasswordChange />;
   return <Outlet />;
 }
 

@@ -98,10 +98,23 @@ Solo `view` abre un módulo: tener `delete`, `create` o `update` no implica cons
 Cada página evalúa sus botones y catálogos auxiliares con `hasPermission` de forma independiente.
 Este filtro y los guards son presentación: **la autorización real corresponde al backend**.
 Si se pierde el permiso de consulta mientras el módulo está abierto, `RequirePermission` redirige a `/` con `replace`.
-No hay registro público, recuperador de contraseña,
+No hay registro público, recuperación de contraseña de autoservicio,
 «mantener la sesión iniciada», login social, perfiles, buscador ni notificaciones de demostración.
 Textos en español, sin i18n. Se usó `es.json` de TailAdmin donde hay traducción; la vista de acceso original
 contiene texto inglés sin claves equivalentes, traducido directamente aquí.
+
+## Restablecimiento de contraseña por un administrador
+
+En **Configuraciones → Usuarios**, la acción **Restablecer contraseña** requiere
+`identity.users.reset_password`, además de `identity.users.view` para entrar al módulo.
+El administrador introduce la contraseña temporal y la comunica por un canal seguro.
+El servidor cierra las sesiones del usuario y devuelve `204` sin la contraseña: la interfaz no
+la muestra después de guardar ni la almacena.
+
+Al iniciar sesión con la contraseña temporal, el usuario debe introducirla otra vez y crear
+una contraseña personal diferente. La pantalla de cambio sustituye al contenido protegido
+hasta que el servidor confirme el cambio. El usuario puede cerrar sesión; si vence el acceso
+antes de completar el cambio, debe iniciar sesión nuevamente.
 
 ## Facturas Detalladas
 

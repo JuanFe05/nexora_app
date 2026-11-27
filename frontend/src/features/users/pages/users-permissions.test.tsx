@@ -13,7 +13,7 @@ import type { User } from "../types";
 import UsersPage from "./users-page";
 
 vi.mock("@/features/auth/use-auth", () => ({ useAuth: vi.fn() }));
-vi.mock("../api/users-api", () => ({ listUsers: vi.fn(), createUser: vi.fn(), updateUser: vi.fn(), deleteUser: vi.fn(), assignUserRole: vi.fn(), revokeUserRole: vi.fn() }));
+vi.mock("../api/users-api", () => ({ listUsers: vi.fn(), createUser: vi.fn(), updateUser: vi.fn(), deleteUser: vi.fn(), resetUserPassword: vi.fn(), assignUserRole: vi.fn(), revokeUserRole: vi.fn() }));
 vi.mock("../api/role-options", () => ({ loadRoleOptions: vi.fn() }));
 const ana: User = { id: "u", nombre_usuario: "ana", correo: "ana@example.org", primer_nombre: "Ana", primer_apellido: "Sol", segundo_nombre: null, segundo_apellido: null, numero_telefono: null, estado: "activo", roles: [] };
 function permissions(codes: string[]) {
@@ -35,6 +35,7 @@ const matrix = [
   { name: "update", codes: [P.usersView, P.usersUpdate] },
   { name: "deactivate", codes: [P.usersView, P.usersDeactivate] },
   { name: "delete only", codes: [P.usersView, P.usersDelete] },
+  { name: "reset only", codes: [P.usersView, P.usersResetPassword] },
   { name: "assign without catalog", codes: [P.usersView, P.usersAssignRoles] },
   { name: "assign with catalog", codes: [P.usersView, P.usersAssignRoles, P.rolesView] },
   { name: "update and deactivate without assignment", codes: [P.usersView, P.usersUpdate, P.usersDeactivate] },
@@ -50,6 +51,7 @@ describe("independent user permissions", () => {
     const has = (code: string) => codes.includes(code as typeof codes[number]);
     expect(!!screen.queryByRole("button", { name: "Nuevo usuario" })).toBe(has(P.usersCreate));
     expect(!!screen.queryByRole("button", { name: "Eliminar ana" })).toBe(has(P.usersDelete));
+    expect(!!screen.queryByRole("button", { name: "Restablecer contraseña de ana" })).toBe(has(P.usersResetPassword));
     const editable = has(P.usersUpdate) || has(P.usersDeactivate) || has(P.usersAssignRoles);
     expect(!!screen.queryByRole("button", { name: "Editar ana" })).toBe(editable);
     if (!editable) {
@@ -128,6 +130,43 @@ describe("independent user permissions", () => {
     expect(api.assignUserRole).not.toHaveBeenCalled();
     expect(api.revokeUserRole).not.toHaveBeenCalled();
   });
+  it("validates a temporary password, submits only the reset and does not render a credential", async () => {
+    permissions([P.usersView, P.usersResetPassword]);
+    vi.mocked(api.resetUserPassword).mockResolvedValue(undefined);
+    render(<ToastProvider><UsersPage /></ToastProvider>);
+    await userEvent.click(await screen.findByRole("button", { name: "Restablecer contraseña de ana" }));
+    const input = screen.getByLabelText("Contraseña temporal");
+    fireEvent.change(input, { target: { value: "short" } });
+    await userEvent.click(screen.getByRole("button", { name: "Restablecer" }));
+    expect(api.resetUserPassword).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toBeVisible();
+
+    const password = "Temporal123!";
+    fireEvent.change(input, { target: { value: password } });
+    await userEvent.click(screen.getByRole("button", { name: "Restablecer" }));
+    expect(api.resetUserPassword).toHaveBeenCalledExactlyOnceWith("u", password);
+    expect(api.updateUser).not.toHaveBeenCalled();
+    expect(await screen.findByText("Contraseña temporal asignada.")).toBeVisible();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByText(password)).not.toBeInTheDocument();
+  });
+
+  it("clears the input and does not expose a rejected temporary password", async () => {
+    permissions([P.usersView, P.usersResetPassword]);
+    const password = "Temporal123!";
+    vi.mocked(api.resetUserPassword).mockRejectedValueOnce(new ApiError(422, password, { detail: password }));
+    render(<ToastProvider><UsersPage /></ToastProvider>);
+    await userEvent.click(await screen.findByRole("button", { name: "Restablecer contraseña de ana" }));
+    const input = screen.getByLabelText("Contraseña temporal");
+    fireEvent.change(input, { target: { value: password } });
+    await userEvent.click(screen.getByRole("button", { name: "Restablecer" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/La contraseña debe tener/);
+    expect(input).toHaveValue("");
+    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(screen.queryByText(password)).not.toBeInTheDocument();
+    expect(screen.queryByText("Contraseña temporal asignada.")).not.toBeInTheDocument();
+  });
+
   it("delete alone confirms and deletes without implying other mutations", async () => {
     permissions([P.usersView, P.usersDelete]);
     vi.mocked(api.deleteUser).mockResolvedValue(undefined);

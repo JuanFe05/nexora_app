@@ -16,6 +16,11 @@ export function updateUser(id: string, body: UserPatch) {
 export function deleteUser(id: string) {
   return httpClient.delete<void>(`/users/${encodeURIComponent(id)}`);
 }
+export function resetUserPassword(id: string, temporaryPassword: string) {
+  return httpClient.post<void>(`/users/${encodeURIComponent(id)}/reset-password`, {
+    body: { contrasena_temporal: temporaryPassword },
+  });
+}
 export function assignUserRole(id: string, roleId: string) {
   return httpClient.put<User>(`/users/${encodeURIComponent(id)}/roles/${encodeURIComponent(roleId)}`);
 }

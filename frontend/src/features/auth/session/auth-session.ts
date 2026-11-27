@@ -95,7 +95,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
         else warningTimer = arm(at, callback);
       } else callback();
     }, Math.min(2_147_483_647, Math.max(0, at - now())));
-    warningTimer = arm(deadlineAt - warningMs, () => {
+    if (!state.passwordChangeRequired) warningTimer = arm(deadlineAt - warningMs, () => {
       warningTimer = undefined;
       publishWarning(true, deadlineAt);
       // The modal requires an explicit choice: keystrokes must not start silent renewal.
@@ -129,7 +129,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
 
   function scheduleRenewal() {
     cancelRenewal();
-    if (!stopWatch || state.status !== "authenticated" || sessionWarning.open || !Number.isFinite(expiresAt)
+    if (!stopWatch || state.status !== "authenticated" || state.passwordChangeRequired || sessionWarning.open || !Number.isFinite(expiresAt)
       || (renewalFailures > 0 && (!active || Date.now() >= expiresAt))) return;
     renewalTimer = setTimeout(() => {
       renewalTimer = undefined;
@@ -141,6 +141,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
 
   function onActivity() {
     if (state.status !== "authenticated") return;
+    if (state.passwordChangeRequired) return;
     // The first activity after renewal must not be lost to the previous cycle's throttle.
     if (active && Date.now() - lastActivity < 1000) return;
     lastActivity = Date.now();
@@ -201,9 +202,16 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
       .every((key) => user[key] === principal.usuario[key]);
     const sameCodes = (previous: string[], next: string[]) => previous.length === next.length
       && next.every((code) => previous.includes(code));
-    if (state.status === "authenticated" && sameUser
+    const wasRestricted = state.passwordChangeRequired === true;
+    const passwordChangeRequired = principal.requiere_cambio_contrasena ?? wasRestricted;
+    if (state.status === "authenticated" && wasRestricted === passwordChangeRequired && sameUser
       && sameCodes(state.roles, principal.roles) && sameCodes(state.permissions, principal.permisos)) return;
-    publish({ status: "authenticated", user: principal.usuario, roles: principal.roles, permissions: principal.permisos });
+    publish({
+      status: "authenticated", user: principal.usuario, roles: principal.roles, permissions: principal.permisos,
+      ...(passwordChangeRequired ? { passwordChangeRequired: true as const } : {}),
+    });
+    if (passwordChangeRequired) cancelRenewal();
+    else if (wasRestricted) scheduleRenewal();
   }
 
   function publish(next: AuthState) {
@@ -235,20 +243,25 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     publish({ status: "anonymous", user: null, roles: [], permissions: [] });
   }
 
-  async function loadPrincipal(current: number, result: TokenResponse, renewing = false, revision = refreshRevision) {
+  async function loadPrincipal(current: number, result: TokenResponse & { requiere_cambio_contrasena?: boolean }, renewing = false, revision = refreshRevision) {
     if (current !== generation) throw new Error("Sesión cancelada");
     acceptToken(result);
     const principal = renewing
       ? await retryTransient(api.me, current, revision, (error) => error instanceof ApiError && error.status === 401)
       : await api.me();
     if (current !== generation) throw new Error("Sesión cancelada");
-    publishPrincipal(principal);
+    publishPrincipal(result.requiere_cambio_contrasena ? { ...principal, requiere_cambio_contrasena: true } : principal);
     renewalFailures = 0;
     onServerActivity();
     scheduleRenewal();
   }
 
   function refresh(): Promise<void> {
+    if (state.passwordChangeRequired) {
+      // The server forbids refresh during a mandatory change. A rejected bearer needs a new login.
+      expire();
+      return Promise.reject(new ApiError(401, "Inicia sesión de nuevo.", null));
+    }
     if (refreshFlight) return refreshFlight;
     // Once anonymous, only an explicit login can establish a new session.
     if (state.status === "anonymous") return Promise.reject(new Error("Sesión no disponible"));
@@ -324,7 +337,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
   }
 
   function onForbidden() {
-    if (state.status !== "authenticated" || Date.now() - lastForbiddenReload < reloadInterval) return;
+    if (state.status !== "authenticated" || state.passwordChangeRequired || Date.now() - lastForbiddenReload < reloadInterval) return;
     cancelForbiddenReload();
     forbiddenTimer = setTimeout(() => {
       forbiddenTimer = undefined;
@@ -337,7 +350,7 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
     stopWatch?.();
     const events = ["pointerdown", "keydown", "wheel", "scroll", "touchstart"];
     const onVisible = () => {
-      if (state.status !== "authenticated" || sessionWarning.open || document.visibilityState !== "visible") return;
+      if (state.status !== "authenticated" || state.passwordChangeRequired || sessionWarning.open || document.visibilityState !== "visible") return;
       // Focus must not bypass a pending transient backoff or revive an expired retry cycle.
       if (renewalFailures > 0) return;
       if (expiresAt - Date.now() <= 30_000) {
@@ -447,6 +460,6 @@ export function createAuthSession(api: AuthApi, store: ReturnType<typeof createT
         // Local logout remains unconditional, including when the server is unavailable.
       }
     },
-    hasPermission: (permission: string) => state.status === "authenticated" && state.permissions.includes(permission),
+    hasPermission: (permission: string) => state.status === "authenticated" && !state.passwordChangeRequired && state.permissions.includes(permission),
   };
 }

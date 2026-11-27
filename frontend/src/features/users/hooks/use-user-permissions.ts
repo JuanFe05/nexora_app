@@ -11,6 +11,7 @@ export function useUserPermissions() {
     update: hasPermission(PERMISSIONS.usersUpdate),
     deactivate: hasPermission(PERMISSIONS.usersDeactivate),
     delete: hasPermission(PERMISSIONS.usersDelete),
+    resetPassword: hasPermission(PERMISSIONS.usersResetPassword),
     assignRoles,
     viewRoles,
     editRoles: assignRoles && viewRoles,
