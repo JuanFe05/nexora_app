@@ -87,7 +87,7 @@ function Sidebar({ side = "left", className, children, dir, ...props }: React.Co
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile}>
         <SheetContent dir={dir} data-sidebar="sidebar" data-slot="sidebar" data-mobile="true" side={side}
-          className="w-(--sidebar-width) border-e border-gray-200 bg-white p-0 text-gray-900 dark:border-gray-800 dark:bg-gray-900 [&>button]:hidden"
+          className="w-(--sidebar-width) border-e border-gray-200 bg-white p-0 text-gray-900 dark:border-gray-800 dark:bg-gray-900"
           style={{ "--sidebar-width": SIDEBAR_WIDTH_MOBILE } as React.CSSProperties}>
           <SheetHeader className="sr-only">
             <SheetTitle>Barra lateral</SheetTitle>
@@ -118,7 +118,7 @@ function Sidebar({ side = "left", className, children, dir, ...props }: React.Co
 }
 
 function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
-  return <main data-slot="sidebar-inset" className={cn("relative flex w-full flex-1 flex-col transition-all duration-300 ease-in-out", className)} {...props} />;
+  return <main data-slot="sidebar-inset" className={cn("relative flex min-w-0 w-full flex-1 flex-col transition-all duration-300 ease-in-out", className)} {...props} />;
 }
 
 function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
