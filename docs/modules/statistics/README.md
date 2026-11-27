@@ -6,6 +6,8 @@ almacena los datos consultados.
 
 ## Informes disponibles
 
+- [Gestión de Incapacidades](incapacities.md): consulta directa, paginación y exportaciones CSV/XLSX.
+
 | Informe | Ruta frontend | Prefijo API | Permiso independiente |
 | --- | --- | --- | --- |
 | Facturas Detalladas | `/estadistica/informes/facturas-detalladas` | `/api/v1/statistics/reports/detailed-invoices` | `statistics.reports.detailed_invoices.view` |
@@ -39,11 +41,10 @@ Menus del sidebar sin vistas todavia, cada opcion con su permiso reservado (desh
 | Circulares | Circular 06 de 2018 | `statistics.circulars.circular_06_2018.view` |
 | Circulares | Circular 21 de 2026 | `statistics.circulars.circular_21_2026.view` |
 | Gestion Administrativa | Facturación General | `statistics.administrative.general_billing.view` |
-| Gestion Administrativa | Gestión de Incapacidades | `statistics.administrative.disability_management.view` |
 | Gestion Administrativa | Encuestas de Calidad | `statistics.administrative.quality_surveys.view` |
 | Gestion Administrativa | Secretaría Gerencia | `statistics.administrative.management_secretariat.view` |
 
-- Cada permiso se comprueba en backend en los cinco endpoints de su informe. Tener uno no
+- Cada permiso se comprueba en backend en todos los endpoints de su informe. Tener uno no
   permite consultar ni exportar el otro. Se siembra en el catalogo y solo se otorga a `ADMINISTRADOR`; los administradores lo
   asignan manualmente a roles. Pertenecer a `ESTADISTICA` no lo concede.
 - La informacion incluye datos personales de pacientes: concederlo es una decision de acceso a

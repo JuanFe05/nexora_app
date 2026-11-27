@@ -63,6 +63,30 @@ def _csv_cell(value: Any, kind: str) -> str:
     return f"'{text}" if _FORMULA_START.match(text) else text
 
 
+async def txt_stream(columns: Sequence[ExportColumn], chunks: Chunks) -> AsyncIterator[bytes]:
+    """Pipe-delimited rows without a header, preserving selected-column order."""
+    async for chunk in chunks:
+        lines = []
+        for row in chunk:
+            values = []
+            for column in columns:
+                value = row.get(column.id)
+                if _is_empty(value):
+                    values.append("")
+                elif column.type == "date":
+                    values.append(_date_text(value))
+                elif column.type == "number" and _number(value) is not None:
+                    values.append(_number(value) or "")
+                else:
+                    text = str(value)
+                    text = text.replace("\\", "\\\\").replace("|", r"\u007C")
+                    text = text.replace("\r", r"\r").replace("\n", r"\n")
+                    values.append(text)
+            lines.append("|".join(values))
+        if lines:
+            yield ("\r\n".join(lines) + "\r\n").encode("utf-8")
+
+
 async def csv_stream(columns: Sequence[ExportColumn], chunks: Chunks) -> AsyncIterator[bytes]:
     """BOM + separador `;` para que Excel regional abra el archivo en columnas y UTF-8."""
     buffer = io.StringIO()
@@ -236,6 +260,7 @@ async def xlsx_stream(columns: Sequence[ExportColumn], chunks: Chunks) -> AsyncI
 Writer = Callable[[Sequence[ExportColumn], Chunks], AsyncIterator[bytes]]
 WRITERS: dict[str, tuple[Writer, str, str]] = {
     "csv": (csv_stream, "text/csv; charset=utf-8", "csv"),
+    "txt": (txt_stream, "text/plain; charset=utf-8", "txt"),
     "xlsx": (
         xlsx_stream,
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
