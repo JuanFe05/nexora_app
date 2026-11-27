@@ -25,6 +25,7 @@ from nexora.identity_access.presentation.http.v1.cookies import (
 )
 from nexora.identity_access.presentation.http.v1.dependencies.auth import (
     ContainerDep,
+    PasswordChangeAllowedPrincipalDep,
     PrincipalDep,
     get_login_use_case,
     get_logout_all_use_case,
@@ -85,6 +86,7 @@ async def login(
         warning_seconds=result.tokens.warning_seconds,
         session_expires_at=result.tokens.session_expires_at,
         usuario=_usuario(result.user),
+        requiere_cambio_contrasena=result.user.password_change_required,
     )
 
 
@@ -164,9 +166,10 @@ async def logout_all(
 
 
 @router.get("/me", response_model=MeResponse, summary="Usuario autenticado y permisos efectivos")
-async def me(principal: PrincipalDep) -> MeResponse:
+async def me(principal: PasswordChangeAllowedPrincipalDep) -> MeResponse:
     return MeResponse(
         usuario=_usuario(principal.user),
         roles=list(principal.roles),
         permisos=sorted(principal.permissions),
+        requiere_cambio_contrasena=principal.user.password_change_required,
     )

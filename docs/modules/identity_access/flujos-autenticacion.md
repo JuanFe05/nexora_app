@@ -65,6 +65,15 @@ revoca y confirma antes del `401`. La actividad desliza la inactividad, nunca el
 Un refresh valido siempre cuenta como actividad; el cliente debe solicitarlo solo ante
 actividad real, no mantener una sesion ilimitada con un temporizador.
 
+## Cambio de contrasena obligatorio
+
+Tras un reset administrativo se revocan todas las sesiones anteriores. Login con la clave
+temporal crea una sesion restringida. Login y `/auth/me` devuelven
+`requiere_cambio_contrasena: true`; solo se habilitan `/auth/me`, `/auth/logout` y el cambio
+`POST /api/v1/profile/password`. No se renueva el access token durante la restriccion: si
+vence antes de completar el cambio, el usuario debe volver a iniciar sesion. Tras un cambio
+valido, la sesion actual recupera acceso normal; las otras sesiones del usuario se revocan.
+
 ## Autorizacion
 
 ```python

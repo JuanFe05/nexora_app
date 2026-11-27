@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from uuid import UUID
+
 import pytest
 
 from nexora.identity_access.application.dto.auth import LoginCommand
 from nexora.identity_access.application.use_cases.authentication.login import LoginUseCase
+from nexora.identity_access.domain.entities.user import User
 from nexora.identity_access.domain.exceptions.identity import (
     AuthenticationThrottled,
     InvalidCredentials,
@@ -89,6 +93,20 @@ async def test_login_accepts_legacy_passwords(password: str) -> None:
     assert len(parts["sessions"].sessions) == 1
     assert parts["transaction"].commits == 1
     assert parts["throttle"].failures == []
+
+
+async def test_login_cannot_create_a_session_if_password_rotated_before_row_lock() -> None:
+    class RotatingUserRepository(FakeUserRepository):
+        async def get_for_update(self, user_id: UUID) -> User | None:
+            user = await super().get_for_update(user_id)
+            assert user is not None
+            return replace(user, password_hash=FakePasswordHasher().hash("Temporal456!"))
+
+    case, parts = build_use_case(users=RotatingUserRepository([build_user()]))
+    with pytest.raises(InvalidCredentials, match="Credenciales invalidas"):
+        await case.execute(LoginCommand(identifier="jperez", password=PASSWORD))
+    assert parts["sessions"].sessions == {}
+    assert parts["transaction"].commits == 0
 
 
 async def test_login_con_correo_identifica_al_mismo_usuario() -> None:

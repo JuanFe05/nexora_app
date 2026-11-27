@@ -62,6 +62,16 @@ class UserCreate(Contract):
         return value
 
 
+class UserPasswordReset(Contract):
+    contrasena_temporal: SecretStr
+
+    @field_validator("contrasena_temporal")
+    @classmethod
+    def _password_policy(cls, value: SecretStr) -> SecretStr:
+        validate_password_policy(value.get_secret_value())
+        return value
+
+
 class PatchContract(Contract):
     @field_validator("*", mode="before")
     @classmethod

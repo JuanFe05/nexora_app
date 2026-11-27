@@ -215,7 +215,12 @@ async def test_signed_expired_refresh_still_persists_session_revocation() -> Non
         RefreshSessionUseCase,
     )
     from nexora.identity_access.domain.entities.session import Session
-    from tests.support.fakes import FakeSessionRepository, FakeTransaction, FixedClock
+    from tests.support.fakes import (
+        FakeSessionRepository,
+        FakeTransaction,
+        FakeUserRepository,
+        FixedClock,
+    )
     from tests.unit.identity_access.test_token_service import build_service
 
     now = datetime.now(UTC)
@@ -233,7 +238,9 @@ async def test_signed_expired_refresh_still_persists_session_revocation() -> Non
         created_at=now - timedelta(hours=12), last_activity_at=now,
         expires_at=expired,
     ))
-    case = RefreshSessionUseCase(sessions=sessions, tokens=tokens, clock=clock, transaction=tx)
+    case = RefreshSessionUseCase(
+        sessions=sessions, users=FakeUserRepository(), tokens=tokens, clock=clock, transaction=tx
+    )
     with pytest.raises(SessionNotActive):
         await case.execute(RefreshCommand(refresh_token=issued.value))
     assert (await sessions.get(sid)).revoked_at == now

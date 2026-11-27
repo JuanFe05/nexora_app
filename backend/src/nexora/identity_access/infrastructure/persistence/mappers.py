@@ -27,6 +27,7 @@ def user_to_domain(model: UserModel) -> User:
         second_last_name=model.second_last_name,
         phone_number=model.phone_number,
         password_changed_at=model.password_changed_at,
+        password_change_required=model.password_change_required,
     )
 
 
@@ -75,6 +76,7 @@ def user_to_model(user: User) -> UserModel:
         second_last_name=user.second_last_name,
         phone_number=user.phone_number,
         password_changed_at=user.password_changed_at,
+        password_change_required=user.password_change_required,
     )
 
 

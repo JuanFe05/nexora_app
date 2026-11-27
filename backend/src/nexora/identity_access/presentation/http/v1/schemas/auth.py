@@ -48,9 +48,11 @@ class TokenResponse(BaseModel):
 
 class LoginResponse(TokenResponse):
     usuario: UsuarioResponse
+    requiere_cambio_contrasena: bool
 
 
 class MeResponse(BaseModel):
     usuario: UsuarioResponse
     roles: list[str]
     permisos: list[str]
+    requiere_cambio_contrasena: bool

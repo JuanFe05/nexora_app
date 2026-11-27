@@ -22,7 +22,7 @@ class UserRepository(Protocol):
         ...
 
     async def update_password(
-        self, user_id: UUID, password_hash: str, changed_at: datetime
+        self, user_id: UUID, password_hash: str, changed_at: datetime, *, change_required: bool
     ) -> None: ...
 
 

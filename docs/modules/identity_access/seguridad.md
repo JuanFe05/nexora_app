@@ -71,11 +71,9 @@ Login y la contrasena **actual** de `POST /api/v1/profile/password` conservan 1-
 no se les exige esta politica, para que claves legacy sigan permitiendo acceso y cambio.
 La contrasena **nueva** ademas debe ser diferente de la actual.
 
-No existe endpoint ni UI de restablecimiento administrativo y no se construye en este cambio.
-Cuando se implemente debe reutilizar el mismo modulo, no copiar las reglas. Si el usuario olvida
-su clave, el procedimiento supervisado por el administrador queda fuera de alcance: el usuario
-debe ingresar personalmente la nueva clave y el administrador nunca debe conocerla ni
-establecerla. No existe recuperacion automatica por correo.
+En un restablecimiento administrativo, se valida la clave temporal con la misma politica y
+solo se almacena su hash Argon2id. El usuario debe sustituirla personalmente; el administrador
+no ingresa ni recibe la nueva clave personal. No existe recuperacion automatica por correo.
 
 ## Autoservicio del perfil
 

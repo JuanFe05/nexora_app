@@ -28,7 +28,11 @@ from nexora.identity_access.application.use_cases.authentication.refresh import 
     RefreshSessionUseCase,
 )
 from nexora.identity_access.application.use_cases.profile import ProfileService
-from nexora.identity_access.domain.exceptions.identity import InvalidToken, PermissionDenied
+from nexora.identity_access.domain.exceptions.identity import (
+    InvalidToken,
+    PasswordChangeRequired,
+    PermissionDenied,
+)
 from nexora.identity_access.infrastructure.persistence.administration_repository import (
     SqlAlchemyAdministrationRepository,
 )
@@ -75,6 +79,7 @@ def get_login_use_case(container: ContainerDep, session: SessionDep) -> LoginUse
 def get_refresh_use_case(container: ContainerDep, session: SessionDep) -> RefreshSessionUseCase:
     return RefreshSessionUseCase(
         sessions=SqlAlchemySessionRepository(session),
+        users=SqlAlchemyUserRepository(session),
         tokens=container.tokens,
         clock=container.clock,
         transaction=SqlAlchemyTransaction(session),
@@ -139,12 +144,27 @@ async def get_current_principal(
     return await use_case.execute(_bearer_token(request))
 
 
-PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
+PasswordChangeAllowedPrincipalDep = Annotated[
+    AuthenticatedPrincipal, Depends(get_current_principal)
+]
+
+
+def get_unrestricted_principal(
+    principal: PasswordChangeAllowedPrincipalDep,
+) -> AuthenticatedPrincipal:
+    if principal.user.password_change_required:
+        raise PasswordChangeRequired
+    return principal
+
+
+PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_unrestricted_principal)]
 
 
 def get_user_administration(container: ContainerDep, session: SessionDep) -> UserAdministration:
     return UserAdministration(
         repository=SqlAlchemyAdministrationRepository(session),
+        users=SqlAlchemyUserRepository(session),
+        sessions=SqlAlchemySessionRepository(session),
         transaction=SqlAlchemyTransaction(session),
         hasher=container.hasher,
         clock=container.clock,

@@ -61,12 +61,16 @@ class SqlAlchemyUserRepository:
         return user_to_domain(model) if model is not None else None
 
     async def update_password(
-        self, user_id: UUID, password_hash: str, changed_at: datetime
+        self, user_id: UUID, password_hash: str, changed_at: datetime, *, change_required: bool
     ) -> None:
         await self._session.execute(
             update(UserModel)
             .where(UserModel.id == user_id)
-            .values(password_hash=password_hash, password_changed_at=changed_at)
+            .values(
+                password_hash=password_hash,
+                password_changed_at=changed_at,
+                password_change_required=change_required,
+            )
         )
 
 

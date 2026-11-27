@@ -1,4 +1,4 @@
-"""Politica unica para claves nuevas, incluido bootstrap y futuros restablecimientos.
+"""Politica unica para claves nuevas, incluidos bootstrap y restablecimientos.
 
 Se cuentan code points Unicode sin recortar ni normalizar la entrada. Login y la
 contrasena actual no usan esta politica, para conservar el acceso con claves legacy.

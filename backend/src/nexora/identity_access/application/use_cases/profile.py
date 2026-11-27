@@ -180,7 +180,7 @@ class ProfileService:
                 self._throttle.register_failure(key)
                 raise IncorrectCurrentPassword
             password_hash = self._hasher.hash(command.new_password)
-            await self._users.update_password(user.id, password_hash, now)
+            await self._users.update_password(user.id, password_hash, now, change_required=False)
             await self._sessions.revoke_all_except(user.id, principal.session_id, now)
             await self._tx.commit()
         except Exception:

@@ -13,6 +13,7 @@ from nexora.identity_access.application.use_cases.profile import (
     ProfileService,
 )
 from nexora.identity_access.presentation.http.v1.dependencies.auth import (
+    PasswordChangeAllowedPrincipalDep,
     PrincipalDep,
     get_profile_service,
 )
@@ -81,7 +82,7 @@ async def update_profile(
     summary="Cambiar mi contrasena y cerrar mis otras sesiones",
 )
 async def change_password(
-    body: PasswordUpdate, principal: PrincipalDep, service: ServiceDep
+    body: PasswordUpdate, principal: PasswordChangeAllowedPrincipalDep, service: ServiceDep
 ) -> Response:
     await service.change_password(
         principal,

@@ -76,6 +76,7 @@ class AuthenticateRequestUseCase:
                 full_name=user.full_name,
                 first_name=user.first_name,
                 last_name=user.last_name,
+                password_change_required=user.password_change_required,
             ),
             session_id=session.id,
             roles=roles,

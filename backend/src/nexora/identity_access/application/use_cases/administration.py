@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 from nexora.identity_access.application.dto.auth import AuthenticatedPrincipal
 from nexora.identity_access.application.dto.page import Page
 from nexora.identity_access.application.ports.administration import AdministrationRepository
+from nexora.identity_access.application.ports.repositories import SessionRepository, UserRepository
 from nexora.identity_access.application.ports.security import Clock, PasswordHasher
 from nexora.identity_access.application.ports.transaction import Transaction
 from nexora.identity_access.domain.entities.role import Permission, Role
@@ -120,11 +121,15 @@ class UserAdministration(_Base):
         self,
         *,
         repository: AdministrationRepository,
+        users: UserRepository,
+        sessions: SessionRepository,
         transaction: Transaction,
         hasher: PasswordHasher,
         clock: Clock,
     ) -> None:
         super().__init__(repository=repository, transaction=transaction)
+        self._users = users
+        self._sessions = sessions
         self._hasher = hasher
         self._clock = clock
 
@@ -186,6 +191,25 @@ class UserAdministration(_Base):
         await self._ensure_not_last_administrator(user.id)
         await self._repo.delete_user(user.id)
         await self._tx.commit()
+
+    async def reset_password(
+        self, user_id: UUID, temporary_password: str, *, actor: AuthenticatedPrincipal
+    ) -> None:
+        try:
+            await self._repo.lock_access_changes()
+            user = await self._users.get_for_update(user_id)
+            if user is None:
+                raise ResourceNotFound("Usuario")
+            await self._ensure_can_manage_user(user_id, actor)
+            now = self._clock.now()
+            await self._users.update_password(
+                user_id, self._hasher.hash(temporary_password), now, change_required=True
+            )
+            await self._sessions.revoke_all_for_user(user_id, now)
+            await self._tx.commit()
+        except Exception:
+            await self._tx.rollback()
+            raise
 
     async def assign_role(
         self, user_id: UUID, role_id: UUID, *, actor: AuthenticatedPrincipal

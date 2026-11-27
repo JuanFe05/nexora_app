@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 from uuid import uuid4
 
@@ -13,6 +14,7 @@ from nexora.identity_access.application.use_cases.authentication.refresh import 
 )
 from nexora.identity_access.domain.entities.session import Session
 from nexora.identity_access.domain.exceptions.identity import (
+    PasswordChangeRequired,
     RefreshTokenReused,
     SessionNotActive,
 )
@@ -20,19 +22,23 @@ from tests.support.fakes import (
     FakeSessionRepository,
     FakeTokenService,
     FakeTransaction,
+    FakeUserRepository,
     FixedClock,
+    build_user,
 )
 
 
 def build_case(clock: FixedClock | None = None) -> tuple[RefreshSessionUseCase, dict[str, object]]:
     parts: dict[str, object] = {
         "sessions": FakeSessionRepository(),
+        "users": FakeUserRepository(),
         "tokens": FakeTokenService(),
         "clock": clock or FixedClock(),
         "transaction": FakeTransaction(),
     }
     use_case = RefreshSessionUseCase(
         sessions=parts["sessions"],
+        users=parts["users"],
         tokens=parts["tokens"],
         clock=parts["clock"],
         transaction=parts["transaction"],
@@ -44,6 +50,7 @@ async def seed_session(parts: dict[str, object], *, revoked: bool = False, ttl_d
     clock = parts["clock"]
     now = clock.now()
     session_id, user_id = uuid4(), uuid4()
+    parts["users"].users.append(build_user(user_id=user_id))
     issued = parts["tokens"].issue_refresh_token(user_id=user_id, session_id=session_id, now=now)
     await parts["sessions"].add(
         Session(
@@ -70,6 +77,20 @@ async def test_refresh_valido_rota_el_jti_y_devuelve_tokens_nuevos() -> None:
     assert str(stored.refresh_token_jti) in tokens.refresh_token
     assert tokens.session_id == session_id
     assert parts["transaction"].commits == 1
+
+
+async def test_pending_password_change_does_not_rotate_or_revoke_refresh() -> None:
+    use_case, parts = build_case()
+    session_id, issued = await seed_session(parts)
+    session = await parts["sessions"].get(session_id)
+    user = await parts["users"].get_by_id(session.user_id)
+    await parts["users"].update_profile(replace(user, password_change_required=True))
+
+    with pytest.raises(PasswordChangeRequired, match="PASSWORD_CHANGE_REQUIRED"):
+        await use_case.execute(RefreshCommand(refresh_token=issued.value))
+
+    assert await parts["sessions"].get(session_id) == session
+    assert parts["transaction"].commits == 0
 
 
 async def test_reutilizar_un_refresh_ya_rotado_revoca_la_sesion() -> None:

@@ -8,11 +8,12 @@ from typing import NoReturn
 from uuid import UUID
 
 from nexora.identity_access.application.dto.auth import IssuedTokens
-from nexora.identity_access.application.ports.repositories import SessionRepository
+from nexora.identity_access.application.ports.repositories import SessionRepository, UserRepository
 from nexora.identity_access.application.ports.security import Clock, TokenService
 from nexora.identity_access.application.ports.transaction import Transaction
 from nexora.identity_access.domain.exceptions.identity import (
     InvalidToken,
+    PasswordChangeRequired,
     RefreshTokenReused,
     SessionNotActive,
 )
@@ -28,6 +29,7 @@ class RefreshSessionUseCase:
         self,
         *,
         sessions: SessionRepository,
+        users: UserRepository,
         tokens: TokenService,
         clock: Clock,
         transaction: Transaction,
@@ -36,6 +38,7 @@ class RefreshSessionUseCase:
         warning_seconds: int = 120,
     ) -> None:
         self._sessions = sessions
+        self._users = users
         self._tokens = tokens
         self._clock = clock
         self._transaction = transaction
@@ -55,6 +58,10 @@ class RefreshSessionUseCase:
             await self._fail_rotation(session.id, now)
         if claims.expires_at <= now:
             raise InvalidToken
+
+        user = await self._users.get_by_id(claims.user_id)
+        if user is not None and user.password_change_required:
+            raise PasswordChangeRequired
 
         refresh = self._tokens.issue_refresh_token(
             user_id=claims.user_id,

@@ -10,7 +10,7 @@ from uuid import UUID
 @dataclass(frozen=True, slots=True)
 class LoginCommand:
     identifier: str
-    password: str
+    password: str = field(repr=False)
     ip_address: str | None = None
     user_agent: str | None = None
 
@@ -23,6 +23,7 @@ class UserView:
     full_name: str
     first_name: str = ""
     last_name: str = ""
+    password_change_required: bool = False
 
 
 @dataclass(frozen=True, slots=True)

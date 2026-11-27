@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, false, func
 from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -43,6 +43,9 @@ class UserModel(Base):
     status: Mapped[str] = mapped_column("estado", String(20), nullable=False, default="activo")
     password_changed_at: Mapped[datetime | None] = mapped_column(
         "fecha_cambio_contrasena", DateTime(timezone=True)
+    )
+    password_change_required: Mapped[bool] = mapped_column(
+        "requiere_cambio_contrasena", nullable=False, server_default=false()
     )
     created_at: Mapped[datetime] = mapped_column(
         "fecha_creacion", DateTime(timezone=True), nullable=False, server_default=func.now()

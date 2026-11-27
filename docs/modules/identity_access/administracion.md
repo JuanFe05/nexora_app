@@ -58,6 +58,7 @@ Los codigos reales conservan el prefijo `identity.` (por ejemplo, `identity.role
 | `PATCH /users/{id}` con perfil y `estado` | Ambos: `identity.users.update` y `identity.users.deactivate` |
 | `PATCH /users/{id}` con `{}` | `identity.users.update`; conserva el comportamiento sin cambios |
 | `DELETE /users/{id}` | `identity.users.delete` |
+| `POST /users/{id}/reset-password` | `identity.users.reset_password` |
 | `PUT`, `DELETE /users/{id}/roles/{role_id}` | `identity.users.assign_roles` |
 | `GET /roles`, `GET /roles/{id}` | `identity.roles.view` |
 | `POST /roles` | `identity.roles.create` |
@@ -147,8 +148,9 @@ Al crear usuarios, `contrasena` debe tener 6-24 code points Unicode, al menos un
 `@ # $ % & !`). No se recortan espacios; no cuentan como especial. Bootstrap y el cambio
 personal usan la misma fuente: `domain/value_objects/password_policy.py`.
 Login y contrasena actual mantienen 1-128 caracteres sin requisitos de composicion.
-No existe endpoint de restablecimiento administrativo; al implementarlo debe usar ese mismo
-modulo. [Politica y compatibilidad legacy](seguridad.md#politica-de-contrasenas).
+El restablecimiento administrativo usa el mismo modulo para validar la clave temporal.
+Solo el rol `ADMINISTRADOR` con el permiso de restablecimiento puede restablecer otro usuario
+con ese rol. [Politica y compatibilidad legacy](seguridad.md#politica-de-contrasenas).
 
 ### Contador de usuarios por rol
 

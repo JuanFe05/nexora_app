@@ -71,6 +71,19 @@ class LoginUseCase:
             raise InvalidCredentials
 
         assert user is not None  # noqa: S101  (garantizado por _is_authentic)
+        # Serialize session creation with resets: no old-password login may insert
+        # a session after the reset has revoked all existing sessions.
+        locked_user = await self._users.get_for_update(user.id)
+        if (
+            locked_user is None
+            or not locked_user.is_active
+            or locked_user.password_hash != user.password_hash
+            or identifier.value not in (locked_user.username.lower(), locked_user.email.lower())
+        ):
+            await self._transaction.rollback()
+            self._throttle.register_failure(throttle_key)
+            raise InvalidCredentials
+        user = locked_user
         now = self._clock.now()
         session_id = uuid4()
         absolute_expires_at = now + self._absolute_timeout
@@ -115,6 +128,7 @@ class LoginUseCase:
                 full_name=user.full_name,
                 first_name=user.first_name,
                 last_name=user.last_name,
+                password_change_required=user.password_change_required,
             ),
         )
 

@@ -81,9 +81,10 @@ La sesion actual permanece viva; los access y refresh tokens de las otras dejan 
 Las sesiones de otros usuarios no cambian. Si falla la escritura o la revocacion, se revierte
 toda la transaccion. Los cambios concurrentes de clave se serializan sobre el usuario.
 
-Tras el cambio, login acepta la clave nueva y rechaza la anterior. No se implementa aqui
-recuperacion de contrasena olvidada ni restablecimiento administrativo. Un futuro reset
-administrativo debe usar el mismo modulo unico de politica.
+Tras el cambio, login acepta la clave nueva y rechaza la anterior. Si hay un cambio obligatorio
+por un restablecimiento administrativo, `contrasena_actual` es la clave temporal. Esta misma
+operacion elimina el estado pendiente en la misma transaccion que guarda el nuevo hash y
+revoca las otras sesiones.
 
 ## Sesiones propias
 

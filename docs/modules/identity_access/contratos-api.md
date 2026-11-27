@@ -23,6 +23,7 @@ Salida `200`:
   "idle_timeout_seconds": 1800,
   "warning_seconds": 120,
   "session_expires_at": "2026-11-07T23:00:00Z",
+  "requiere_cambio_contrasena": false,
   "usuario": {
     "id": "uuid",
     "nombre_usuario": "jperez",
@@ -78,7 +79,8 @@ Cabecera `Authorization: Bearer <access_token>`.
   "usuario": { "id": "uuid", "nombre_usuario": "jperez", "correo": "jperez@nexora.co",
                "nombre_completo": "Juan Perez", "primer_nombre": "Juan", "primer_apellido": "Perez" },
   "roles": ["admin_usuarios"],
-  "permisos": ["identity.users.view"]
+  "permisos": ["identity.users.view"],
+  "requiere_cambio_contrasena": false
 }
 ```
 
@@ -86,6 +88,21 @@ Errores: `401` sin token, token invalido o vencido, sesion revocada, inactiva/ve
 desactivado. Todos los endpoints protegidos aplican inactividad de 30 min y absoluto de 12 h,
 configurables. Actualizan actividad solo cada >= 60 s; alcanzar cualquiera de los limites
 revoca y confirma antes del 401. Un access vencido con sesion activa puede renovarse por refresh.
+
+## POST /api/v1/users/{id}/reset-password
+
+Requiere Bearer y `identity.users.reset_password`. Cuerpo: `{ "contrasena_temporal": "<clave>" }`.
+Salida `204` sin cuerpo. Reemplaza el hash, marca el cambio obligatorio y revoca todas las
+sesiones del usuario en una transaccion. Errores: `401` sin autenticacion valida, `403` sin
+permiso (o al intentar restablecer un administrador sin tener ese rol), `404` si no existe el
+usuario y `422` por un cuerpo invalido. Nunca devuelve la clave temporal.
+
+Login con la clave temporal y `GET /api/v1/auth/me` devuelven `requiere_cambio_contrasena: true`.
+Solo estan permitidos `GET /api/v1/auth/me`, `POST /api/v1/auth/logout` y
+`POST /api/v1/profile/password` (con la clave temporal como `contrasena_actual`). Refresh y
+las demas operaciones autenticadas devuelven `403 {"detail":"PASSWORD_CHANGE_REQUIRED"}`
+para una sesion restringida. Completar el cambio mantiene la sesion actual, revoca las otras
+y restablece el acceso normal. Si vence el access antes del cambio, se requiere otro login.
 
 ## Administracion IAM (permisos por accion)
 

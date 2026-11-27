@@ -22,6 +22,10 @@ from nexora.identity_access.domain.exceptions.identity import ConflictError
 from nexora.identity_access.infrastructure.persistence.administration_repository import (
     SqlAlchemyAdministrationRepository,
 )
+from nexora.identity_access.infrastructure.persistence.repositories import (
+    SqlAlchemySessionRepository,
+    SqlAlchemyUserRepository,
+)
 from nexora.identity_access.infrastructure.persistence.transaction import SqlAlchemyTransaction
 from nexora.identity_access.infrastructure.security.password_hasher import Argon2PasswordHasher
 from nexora.shared_kernel.clock import SystemClock
@@ -710,6 +714,8 @@ async def test_assignment_serializes_with_deletion(
             )
             users_a = UserAdministration(
                 repository=assigning,
+                users=SqlAlchemyUserRepository(session_a),
+                sessions=SqlAlchemySessionRepository(session_a),
                 transaction=SqlAlchemyTransaction(session_a),
                 hasher=Argon2PasswordHasher(),
                 clock=SystemClock(),

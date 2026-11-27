@@ -46,9 +46,18 @@ class SessionNotActive(IdentityError):
 class PermissionDenied(IdentityError):
     """El usuario esta autenticado pero no tiene el permiso exigido."""
 
-    def __init__(self, permission_code: str) -> None:
-        super().__init__("No tiene permisos para ejecutar esta operacion")
+    def __init__(
+        self, permission_code: str, message: str = "No tiene permisos para ejecutar esta operacion"
+    ) -> None:
+        super().__init__(message)
         self.permission_code = permission_code
+
+
+class PasswordChangeRequired(PermissionDenied):
+    """El usuario debe sustituir la contrasena temporal antes de continuar."""
+
+    def __init__(self) -> None:
+        super().__init__("password_change_required", "PASSWORD_CHANGE_REQUIRED")
 
 
 class RefreshTokenReused(IdentityError):

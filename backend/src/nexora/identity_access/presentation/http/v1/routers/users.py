@@ -20,6 +20,7 @@ from nexora.identity_access.presentation.http.v1.dependencies.auth import (
 )
 from nexora.identity_access.presentation.http.v1.schemas.administration import (
     UserCreate,
+    UserPasswordReset,
     UserResponse,
     UserUpdate,
 )
@@ -73,6 +74,19 @@ async def list_users(
     page = await use_case.list(limit=limit, offset=offset, query=q)
     response.headers["X-Total-Count"] = str(page.total)
     return [UserResponse.from_detail(detail) for detail in page.items]
+
+
+@router.post(
+    "/{id}/reset-password",
+    status_code=204,
+    summary="Asigna una contrasena temporal y revoca las sesiones del usuario",
+    dependencies=[Depends(require_permission("identity.users.reset_password"))],
+)
+async def reset_password(
+    id: UUID, payload: UserPasswordReset, principal: PrincipalDep, use_case: UseCase
+) -> Response:
+    await use_case.reset_password(id, payload.contrasena_temporal.get_secret_value(), actor=principal)
+    return Response(status_code=204)
 
 
 @router.get(

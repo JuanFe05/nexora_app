@@ -90,12 +90,17 @@ class FakeUserRepository:
         self.users = [user if stored.id == user.id else stored for stored in self.users]
 
     async def update_password(
-        self, user_id: UUID, password_hash: str, changed_at: datetime
+        self, user_id: UUID, password_hash: str, changed_at: datetime, *, change_required: bool
     ) -> None:
         user = await self.get_by_id(user_id)
         assert user is not None
         await self.update_profile(
-            replace(user, password_hash=password_hash, password_changed_at=changed_at)
+            replace(
+                user,
+                password_hash=password_hash,
+                password_changed_at=changed_at,
+                password_change_required=change_required,
+            )
         )
 
 

@@ -23,6 +23,7 @@ class User:
     second_last_name: str | None = None
     phone_number: str | None = None
     password_changed_at: datetime | None = None
+    password_change_required: bool = False
 
     def __post_init__(self) -> None:
         # Invariante de dominio: ninguna ruta persiste datos personales sin normalizar.

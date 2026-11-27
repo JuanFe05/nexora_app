@@ -142,7 +142,8 @@ sesion sigue activa; el cliente solo debe refrescar ante actividad real.
 
 El cliente usa estos valores para avisar antes del cierre por inactividad, sin duplicar
 configuracion ni aumentar los TTL. El aviso no cambia las reglas de validez del servidor.
-`GET /api/v1/auth/me` conserva su contrato de usuario, roles y permisos.
+`GET /api/v1/auth/me` devuelve usuario, roles, permisos y `requiere_cambio_contrasena`.
+Login tambien devuelve este indicador.
 
 El UPDATE atomico de refresh acepta el JTI vigente o anterior en gracia (30 s inclusivos),
 y guarda vigente como anterior, nuevo JTI, fecha de rotacion y actividad. Esto tolera dos
@@ -183,8 +184,10 @@ La fuente unica del backend es
 `src/nexora/identity_access/domain/value_objects/password_policy.py`. Los errores HTTP son
 422 sin eco de secretos. Login y contrasena **actual** siguen admitiendo claves legacy de
 1-128 caracteres sin exigir esta politica. La nueva ademas debe ser diferente de la actual.
-Argon2id y el almacenamiento no cambian. No hay endpoint de restablecimiento administrativo;
-cuando se implemente, debe reutilizar este mismo modulo. Detalles en
+`POST /api/v1/users/{id}/reset-password` aplica la misma politica a la clave temporal,
+guarda solo su hash Argon2id y revoca todas las sesiones del usuario. Hasta que el usuario
+cambie la clave en `POST /api/v1/profile/password`, solo puede consultar `/auth/me` o cerrar
+la sesion actual con `/auth/logout`. Detalles en
 [seguridad.md](../docs/modules/identity_access/seguridad.md#politica-de-contrasenas).
 
 `NEXORA_JWT_SECRET` se genera con:
@@ -209,6 +212,11 @@ ni se modifica la base a mano.
 necesarios para distinguir concurrencia legitima de reuso. **Las filas existentes conservan
 su `fecha_vencimiento` actual** y reciben la politica idle; nuevos logins usan el absoluto
 configurado. Downgrade elimina solo esas columnas; detener antes la API que las requiere.
+
+`0006_required_password_change` agrega `iam.usuario.requiere_cambio_contrasena` con
+valor inicial `false`. Detener la API antes de revertir la migracion. El downgrade se
+rechaza si queda algun cambio obligatorio pendiente, para no habilitar claves temporales
+sin restriccion.
 
 Para comprobar ida/vuelta, apuntar explicitamente a la base de pruebas mediante
 `alembic -x url=<NEXORA_TEST_DATABASE_URL>` y ejecutar `upgrade head`, `downgrade -1`,
