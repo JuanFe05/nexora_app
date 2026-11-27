@@ -350,6 +350,22 @@ it("habilita Gestión de Incapacidades solo con su permiso independiente", () =>
   expect(screen.queryByText("Facturación General")).not.toBeInTheDocument();
 });
 
+it("habilita Encuestas de Calidad solo con su permiso independiente", () => {
+  const path = "/estadistica/administrativa/encuestas-de-calidad";
+  auth.permissions = ["statistics.administrative.disability_management.view"];
+  const { unmount } = mount();
+  fireEvent.click(screen.getByRole("button", { name: "Gestión Administrativa" }));
+  expect(screen.queryByText("Encuestas de Calidad")).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Gestión de Incapacidades" })).toBeVisible();
+  unmount();
+  auth.permissions = ["statistics.administrative.quality_surveys.view"];
+  mount(true, path);
+  const link = screen.getByRole("link", { name: "Encuestas de Calidad" });
+  expect(link).toHaveAttribute("href", path);
+  expect(link).toHaveAttribute("aria-current", "page");
+  expect(screen.queryByText("Gestión de Incapacidades")).not.toBeInTheDocument();
+});
+
 it("oculta Consumo General sin su permiso independiente", () => {
   auth.permissions = ["statistics.administrative.general_billing.view"];
   mount();
