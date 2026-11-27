@@ -40,6 +40,10 @@ const GeneralBillingPage = lazy(
   () => import("@/features/statistics/general-billing/pages/general-billing-page"),
 );
 
+const IncapacitiesPage = lazy(
+  () => import("@/features/statistics/incapacities/pages/incapacities-page"),
+);
+
 const SivigilaPage = lazy(
   () => import("@/features/statistics/sivigila/pages/sivigila-page"),
 );
@@ -113,6 +117,15 @@ export const routes: RouteObject[] = [
               {
                 path: "/estadistica/administrativa/facturacion-general",
                 element: <GeneralBillingPage />,
+              },
+            ],
+          },
+          {
+            element: <RequirePermission permission={PERMISSIONS.disabilityManagementView} />,
+            children: [
+              {
+                path: "/estadistica/administrativa/gestion-incapacidades",
+                element: <IncapacitiesPage />,
               },
             ],
           },

@@ -1,5 +1,5 @@
 /** One file per operation: the backend streams the export, so the client only picks the format. */
-export type ExportFormat = "csv" | "xlsx";
+export type ExportFormat = "csv" | "xlsx" | "txt";
 export type ExportColumn = {
   /** Original SQL Server column alias; it is written verbatim as the exported header. */
   id: string;

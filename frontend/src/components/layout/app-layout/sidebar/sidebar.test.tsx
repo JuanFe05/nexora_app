@@ -334,6 +334,22 @@ it("habilita Consumo de Laboratorio solo con su permiso y conserva Consumo Gener
   expect(screen.queryByText("Consumo de Laboratorio")).not.toBeInTheDocument();
 });
 
+it("habilita Gestión de Incapacidades solo con su permiso independiente", () => {
+  const path = "/estadistica/administrativa/gestion-incapacidades";
+  auth.permissions = ["statistics.administrative.general_billing.view"];
+  const { unmount } = mount();
+  fireEvent.click(screen.getByRole("button", { name: "Gestión Administrativa" }));
+  expect(screen.queryByText("Gestión de Incapacidades")).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Facturación General" })).toHaveAttribute("href", "/estadistica/administrativa/facturacion-general");
+  unmount();
+  auth.permissions = ["statistics.administrative.disability_management.view"];
+  mount(true, path);
+  const link = screen.getByRole("link", { name: "Gestión de Incapacidades" });
+  expect(link).toHaveAttribute("href", path);
+  expect(link).toHaveAttribute("aria-current", "page");
+  expect(screen.queryByText("Facturación General")).not.toBeInTheDocument();
+});
+
 it("oculta Consumo General sin su permiso independiente", () => {
   auth.permissions = ["statistics.administrative.general_billing.view"];
   mount();

@@ -83,7 +83,7 @@ export const navigation: NavigationSection[] = [
           { label: "Consumo General", path: "/estadistica/administrativa/consumo-general", requiredPermission: PERMISSIONS.generalConsumptionView },
           { label: "Facturación General", path: "/estadistica/administrativa/facturacion-general", requiredPermission: PERMISSIONS.generalBillingView },
           { label: "Consumo de Laboratorio", path: "/estadistica/administrativa/consumo-laboratorio", requiredPermission: PERMISSIONS.labConsumptionView },
-          { label: "Gestión de Incapacidades", requiredPermission: PERMISSIONS.disabilityManagementView },
+          { label: "Gestión de Incapacidades", path: "/estadistica/administrativa/gestion-incapacidades", requiredPermission: PERMISSIONS.disabilityManagementView },
           { label: "Encuestas de Calidad", requiredPermission: PERMISSIONS.qualitySurveysView },
           { label: "Secretaría Gerencia", requiredPermission: PERMISSIONS.managementSecretariatView },
           { label: "Notificación SIVIGILA", path: "/estadistica/administrativa/notificacion-sivigila", requiredPermission: PERMISSIONS.sivigilaView },

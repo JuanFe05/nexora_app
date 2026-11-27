@@ -15,7 +15,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { ChevronDownIcon } from "@/icons";
 import { ExportError, type ExportColumn, type ExportFormat } from "@/lib/table-export";
 
-const formats: { format: ExportFormat; label: string }[] = [
+const defaultFormats: { format: ExportFormat; label: string }[] = [
   { format: "csv", label: "CSV" },
   { format: "xlsx", label: "Excel (.xlsx)" },
 ];
@@ -27,8 +27,10 @@ export function ExportMenu({
   exportFile,
   disabled = false,
   label = "Exportar",
+  formats = defaultFormats,
 }: {
   label?: string;
+  formats?: readonly { format: ExportFormat; label: string }[];
   columns: readonly ExportColumn[];
   visibleIds: readonly string[];
   exportFile: (

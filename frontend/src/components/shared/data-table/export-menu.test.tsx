@@ -36,7 +36,10 @@ it("offers exactly one format per operation and exports the chosen columns in it
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   await user.click(screen.getByRole("button", { name: "Exportar" }));
   fireEvent.click(await screen.findByRole("menuitem", { name: /Columnas visibles \(2\)/ }));
-  expect(await screen.findAllByRole("menuitem", { name: /CSV|Excel/ })).toHaveLength(2);
+  expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent?.trim())).toEqual([
+    "CSV",
+    "Excel (.xlsx)",
+  ]);
   expect(screen.queryByRole("menuitem", { name: /CSV y Excel/ })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("menuitem", { name: "CSV" }));
   await waitFor(() => expect(exportFile).toHaveBeenCalledTimes(1));
@@ -44,6 +47,14 @@ it("offers exactly one format per operation and exports the chosen columns in it
   await choose(/Todas las columnas \(3\)/, "Excel (.xlsx)");
   await waitFor(() => expect(exportFile).toHaveBeenCalledTimes(2));
   expect(exportFile).toHaveBeenLastCalledWith(columns, "xlsx", expect.any(AbortSignal));
+});
+
+it("offers opt-in TXT without changing the default formats", async () => {
+  const exportFile = vi.fn().mockResolvedValue(undefined);
+  render(<ExportMenu columns={columns} visibleIds={["b", "a"]} exportFile={exportFile}
+    formats={[{ format: "csv", label: "CSV" }, { format: "xlsx", label: "Excel (.xlsx)" }, { format: "txt", label: "Texto (.txt)" }]} />);
+  await choose(/Columnas visibles/, "Texto (.txt)");
+  await waitFor(() => expect(exportFile).toHaveBeenCalledWith([columns[0], columns[1]], "txt", expect.any(AbortSignal)));
 });
 
 it("shows safe errors, keeps the button usable and supports being disabled", async () => {
