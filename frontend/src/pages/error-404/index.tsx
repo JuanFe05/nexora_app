@@ -7,7 +7,7 @@ import { Link } from "react-router";
 export default function Error404Page() {
   return (
     <div className="relative z-1 flex min-h-screen flex-col items-center justify-center overflow-hidden p-6">
-      <PageMeta title={`Error 404 | ${env.appName}`} description="Página no encontrada" />
+      <PageMeta description="Página no encontrada" />
       <GridShape />
       <div className="mx-auto w-full max-w-60.5 text-center sm:max-w-118">
         <h1 className="mb-8 text-heading-three font-bold text-gray-800 dark:text-white/90">ERROR</h1>

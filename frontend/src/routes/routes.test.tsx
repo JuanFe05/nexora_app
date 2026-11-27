@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { ToastProvider } from "@/components/shared/toast/toast-provider";
 import "@testing-library/jest-dom/vitest";
+import html from "../../index.html?raw";
 import { Suspense } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { HelmetProvider } from "react-helmet-async";
@@ -61,6 +62,34 @@ function mount(path: string) {
   );
   return router;
 }
+
+describe("título global de la pestaña", () => {
+  it("muestra solo Nexora antes de cargar React", () => {
+    expect(new DOMParser().parseFromString(html, "text/html").title).toBe("Nexora");
+  });
+
+  it.each([
+    ["/", "authenticated", "heading", "Inicio", "Inicio"],
+    ["/signin", "anonymous", "button", "Iniciar sesión", "Iniciar sesión"],
+    ["/ruta-inexistente", "authenticated", "heading", "ERROR", "Página no encontrada"],
+  ])("conserva el título global y la descripción en %s", async (path, status, role, name, description) => {
+    auth.status = status;
+    const title = document.createElement("title");
+    title.textContent = new DOMParser().parseFromString(html, "text/html").title;
+    document.head.append(title);
+    try {
+      const router = mount(path);
+      expect(await screen.findByRole(role, { name })).toBeVisible();
+      expect(router.state.location.pathname).toBe(path);
+      expect(document.title).toBe("Nexora");
+      expect(document.querySelectorAll("title")).toHaveLength(1);
+      expect(document.head.querySelector('meta[name="description"]')).toHaveAttribute("content", description);
+    } finally {
+      cleanup();
+      title.remove();
+    }
+  });
+});
 
 const settings = [
   ["perfil", "Perfil de usuario"],
