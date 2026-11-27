@@ -48,6 +48,7 @@ from nexora.statistics.presentation.http.v1.router import (
     general_consumption_router,
     lab_consumption_router,
     moderator_fees_router,
+    quality_surveys_router,
     sivigila_router,
     statistics_router,
     triage_router,
@@ -190,6 +191,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(general_billing_router, prefix=settings.api_prefix)
     app.include_router(incapacities_router, prefix=settings.api_prefix)
     app.include_router(general_consumption_router, prefix=settings.api_prefix)
+    app.include_router(quality_surveys_router, prefix=settings.api_prefix)
     app.include_router(lab_consumption_router, prefix=settings.api_prefix)
     app.include_router(moderator_fees_router, prefix=settings.api_prefix)
 

@@ -7,6 +7,7 @@ from nexora.statistics.application.detailed_invoices import DetailedInvoicesRepo
 from nexora.statistics.application.general_billing import COLUMNS
 from nexora.statistics.application.general_consumption import GeneralConsumptionReport
 from nexora.statistics.application.lab_consumption import LabConsumptionReport
+from nexora.statistics.application.quality_surveys import QualitySurveysReport
 from nexora.statistics.application.report import Report
 from nexora.statistics.application.sivigila import SivigilaReport
 from nexora.statistics.infrastructure.admissions_source import SqlServerAdmissionsSource
@@ -27,6 +28,9 @@ from nexora.statistics.presentation.http.v1.lab_consumption_router import (
 from nexora.statistics.presentation.http.v1.moderator_fees_router import (
     moderator_fees_router as moderator_fees_router,
 )
+from nexora.statistics.presentation.http.v1.quality_surveys_router import (
+    create_quality_surveys_router,
+)
 from nexora.statistics.presentation.http.v1.report_router import create_report_router
 from nexora.statistics.presentation.http.v1.sivigila_router import create_sivigila_router
 
@@ -45,6 +49,16 @@ def get_general_consumption_report(request: Request) -> GeneralConsumptionReport
 general_consumption_router = create_general_consumption_router(
     provider=get_general_consumption_report
 )
+
+
+def get_quality_surveys_report(container: ContainerDep) -> QualitySurveysReport:
+    return QualitySurveysReport(
+        SqlServerDetailedInvoicesSource(container.sqlserver),
+        SqlServerAdmissionsSource(container.sqlserver),
+    )
+
+
+quality_surveys_router = create_quality_surveys_router(provider=get_quality_surveys_report)
 
 
 def get_general_billing_report(request: Request) -> Report:

@@ -7,6 +7,7 @@ almacena los datos consultados.
 ## Informes disponibles
 
 - [Gestión de Incapacidades](incapacities.md): consulta directa, paginación y exportaciones CSV/XLSX.
+- [Encuestas de Calidad](quality-surveys.md): consulta unificada y exportación por columnas.
 
 | Informe | Ruta frontend | Prefijo API | Permiso independiente |
 | --- | --- | --- | --- |
