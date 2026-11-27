@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ColumnVisibilityMenu, DataTable, ExportMenu, usePagedQuery, type PagedQueryParams } from "@/components/shared/data-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card } from "@/components/ui/card";
-import { ChartBarIcon } from "@/icons";
+import { PulseIcon } from "@/icons";
 import { downloadBlob } from "@/lib/table-export";
 import { reportError } from "../../shared/report-utils";
 import type { ReportFilters } from "../../shared/types";
@@ -74,7 +74,7 @@ export default function IncapacitiesPage() {
 
   return (
     <div className="min-w-0 space-y-6">
-      <PageHeader icon={<ChartBarIcon />} title="Gestión de Incapacidades" description="Consulta las incapacidades por fecha de inicio y empresa." />
+      <PageHeader icon={<PulseIcon />} title="Gestión de Incapacidades" description="Consulta las incapacidades por fecha de inicio y empresa." />
       <IncapacityFilters
         fetchCompanies={api.fetchCompanies}
         consulting={consulting}
